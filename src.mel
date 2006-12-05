@@ -1,0 +1,21 @@
+zooArrays_str;
+zooUtils;
+
+
+global proc src( string $tool ) {
+	string $proj = `thq_getProject`;
+	string $home = `getenv HOME` +"/scripts/";
+	string $perforceBase = "d:/studiooz/";
+	string $repos[] = {};
+	string $subs[] = {};
+
+	$repos[( `size $repos` )] = $perforceBase+$proj+"/pipeline_tools/maya_scripts/";
+	$repos[( `size $repos` )] = $perforceBase+"studiooz/pipeline_tools/maya_scripts/";
+	$repos[( `size $repos` )] = $home;
+	for( $repo in $repos ) $subs = zooAddArray_str($subs,`zooGetRecursedSubDirs $repo`);
+	//$subs = `zooAddArray_str $repos $subs`;
+
+	string $loc = `zooGetFileLocation $subs $tool mel`;
+	print( "source \""+ $loc + $tool +".mel\";\n" );
+	eval( "source \""+ $loc + $tool +".mel\";" );
+	}

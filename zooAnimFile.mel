@@ -1,0 +1,623 @@
+//
+// zAnim Loader
+//
+// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created : 27 July 2003
+//
+// Description:
+// zooAnim is the macaroniKazoo animation file format for storing and transfering
+// animation data between characters in maya.  It is designed as an addon script
+// for zooXferAnim, but can be used standalone, although internally there is no
+// support for object matching, which is handled externally (see below in the
+// zooAnimFileLoad proc).
+//
+// To use as stand alone, use the zooAnimFileLoad proc to load the contents of a
+// .znm file on to a selection of objects.
+//
+// Hamish McKenzie ©2006...
+// macaroniKazoo Productions ©2006...
+
+
+//load dependencies
+zooArrays_str;
+zooArrays_float;
+zooFlags;
+zooStrUtils;
+zooUtils;
+
+
+//dummy proc used to load this script without sourcing it
+global proc zooAnimFile() {
+	return;
+	}
+
+
+//------
+//takes a filepath to write animation of all keyable attributes from the current selection
+//
+// -world [bool]				**export keys in world space - default is false - not yet implemented!!!**
+// -strip [bool]				if true, strips the prefix from object names - prefixes come from importing (namespaces only) and referencing - default is false
+// -start [float]				specify a start time - keys before this time are not exported
+// -end [float]				specify an end frame - keys beyond this time are not exported
+// -abs [bool]				export key time values as absolute?  Or consider the first key to be zero - default is false
+// -offset [float]			manually specify an time offset for the keys exported
+//------
+global proc zooAnimFileWrite( string $filename, string $optionStr ){
+	//------
+	//parse optionStr to determine which flags are enabled for this proc
+	//------
+	string $selObjs[] = `ls -sl -o`;
+	string $offsetStr = "*";
+	int $strip = 1;
+	int $world = 0;
+	int $abs = 0;
+
+	$optionTemp = `zooGetFlagArguments $optionStr strip`; if( `size $optionTemp` ) $strip = $optionTemp[0];
+	$optionTemp = `zooGetFlagArguments $optionStr world`; if( `size $optionTemp` ) $world = $optionTemp[0];
+	$optionTemp = `zooGetFlagArguments $optionStr abs`; if( `size $optionTemp` ) $abs = $optionTemp[0];
+	$optionTemp = `zooGetFlagArguments $optionStr offset`; if( `size $optionTemp` ) $offsetStr = $optionTemp[0];
+	$optionTemp = `zooGetFlagArguments $optionStr objs`; if( `size $optionTemp` ) $selObjs = $optionTemp;
+
+	//make sure the filename has an extension
+	if( `match ".znm$" $filename` == "" ) $filename += ".znm";
+
+	//------
+	//initialise relevant variables, and open the file for writing
+	//------
+	string $sourceFile = `file -q -sn`;
+	if( !`filetest -r $sourceFile` ) $sourceFile = "<-scene not saved->";
+	string $fileData = ".znm Anim File Format v"+ `zooAnimFileInfo version` +"\nExported by: "+ `getenv USER` +"\nSource file: "+ $sourceFile +"\nOptionStr: -anim 1 "+ $optionStr +"\n";
+	if( !`size $selObjs` ) { warning "you have no objects selected - select the objects you want to export animation from"; return; }
+
+	//------
+	//make sure there are some keyable channels in the list of selected objects
+	//------
+	string $allAttribs[] = `listAttr -keyable -visible -scalar -multi $selObjs`;
+	if( !`size $allAttribs` ) { warning "there are no keyable channels on any selected objects"; return; }
+
+	//------
+	//figure out the start and end times - if no start and end time is specified, use the time for the first key
+	//as the start and the time of the last key as the end time
+	//------
+	float $allKeys[] = sort(`keyframe -q $selObjs`);
+	if( !`size $allKeys` ) { warning "there are no keyframes on any of the selected objects"; progressWindow -endProgress; return; }
+
+	float $start = $allKeys[0];
+	float $end = $allKeys[( `size $allKeys`-1 )];
+	float $offset = $start;
+
+	$optionTemp = `zooGetFlagArguments $optionStr start`; if( `size $optionTemp` ) $start = $optionTemp[0];
+	$optionTemp = `zooGetFlagArguments $optionStr end`; if( `size $optionTemp` ) $end = $optionTemp[0];
+	if( $offsetStr == "*" ) $offset = zooGetElement_float(0,`zooCropArray_float $allKeys $start $end`);
+	else if( !$abs ) $offset = $start;
+
+	//------
+	//if the animation is to be exported as world space transforms, then we have to convert all transform data to worldspace
+	//this is done using the world space trace function in zooXferAnim
+	//------
+	string $transformedObjs[] = $selObjs;  //this array holds the names of the objects to get transform data from
+	string $xformObjs[] = {};
+	string $srcs[] = {};  //this holds the original controls that are to be traced
+	string $tgts[] = {};  //this holds the locators that will be traced to the original controls
+	int $useTransformed[] = {};  //this array holds which objects have been substituted with locators
+
+	if( $world ) {
+		for( $a in $selObjs ) $useTransformed[( `size $useTransformed` )] = 0;  //init this array
+		for( $n=0; $n<`size $selObjs`; $n++ ) if( `zooIsObjAnimatedTransform $selObjs[$n]` ) {
+			$transformedObjs[$n] = zooGetElement_str(0,`spaceLocator -n ( $selObjs[$n] +"_in_worldspace" )`);
+			$useTransformed[$n] = 1;
+			$srcs[( `size $srcs` )] = $selObjs[$n];
+			$tgts[( `size $tgts` )] = $transformedObjs[$n];
+			}
+		if( `size $tgts` ) zooXferBatch ( "-mode 2 -keys 2 -matchRo 1 -range "+ $start +" "+ $end ) $srcs $tgts;
+		}
+
+	//------
+	//initialise the progress window
+	//------
+	float $increment = 100/((float)(`size $allAttribs`));
+	float $progress = 0;
+	progressWindow -title "Writing File" -progress ((int)$progress) -status "Progress: 0%" -isInterruptable 1;
+
+	//------
+	//now go through all selected objects
+	//------
+	for( $x=0; $x<`size $selObjs`; $x++ ){
+		string $objFileInfo = "";
+		string $obj = $selObjs[$x];
+		string $miscInfo = "@";
+		string $attribs[] = `listAttr -keyable -visible -scalar -multi $obj`;
+		int $rotationOrder = ( `objExists ( $obj +".rotateOrder" )` )?`getAttr ( $obj +".rotateOrder" )`:-1;
+
+		if( !`size $attribs` ) continue;
+		if( !`size (keyframe("-q"))`) continue;
+		string $exportName = $obj;
+		if( $strip ) $exportName = `match "[^:]+$" $obj`;
+
+		for( $attrib in $attribs ) {
+			//update progress window
+			$progress += $increment;
+			progressWindow -e -progress ((int)$progress) -status ( "Progress: "+ ((int)$progress) +"%" );
+			if( `progressWindow -q -isCancelled` ) break;
+
+			//make sure we're reading values from the correct object - if the attr is a transform attr, then we need to read animation data from the traced locator
+			if( $attrib == "translateX" || $attrib == "translateY" || $attrib == "translateZ" || $attrib == "rotateX" || $attrib == "rotateY" || $attrib == "rotateZ" ) $obj = $transformedObjs[$x];
+			else $obj = $selObjs[$x];
+			if( size(`listConnections -d 0 -type animCurve ( $obj +"."+ $attrib )`)) {  //only proceed if connected to animCurve
+				string $animCurveInfo = "!";
+				string $valTimes = "=";
+				string $lock = "$";
+				string $tTypes = "<";
+				string $tSize = ">";
+				float $keyTimes[] = zooCropArray_float( `keyframe -q ( $obj +"."+ $attrib )`,$start,$end );
+				int $weightInfo[] = `keyTangent -q -wt ( $obj +"."+ $attrib )`;
+				int $numKeys = `size $keyTimes`;
+
+				$animCurveInfo += $weightInfo[0];
+				$objFileInfo += "^"+ $attrib +"\n"+ $animCurveInfo +"\n";
+				for( $n=0; $n<$numKeys; $n++ ){
+					float $t = $keyTimes[$n];
+					string $keytt[2] = `keyTangent -t $t -q -itt -ott ( $obj +"."+ $attrib )`;
+					float $keyVal[2] = `keyframe -t $t -q -vc ( $obj +"."+ $attrib )`;
+					float $itt[2] = `keyTangent -t $t -q -ia -iw ( $obj +"."+ $attrib )`;
+					float $ott[2] = `keyTangent -t $t -q -oa -ow ( $obj +"."+ $attrib )`;
+					float $curKeyTime = $t-$offset;
+					int $lockState[] = `keyTangent -t $t -q -l ( $obj +"."+ $attrib )`;
+
+					//if the tangent type is fixed, change it to spline, as the keyTangent command doesn't
+					//recognise the "fixed" tangent type, even thought its a valid tangent type.  go figure...
+					for( $i=0; $i<`size $keytt`; $i++ ) if( $keytt[$i] == "fixed" ) $keytt[$i] = "linear";
+
+					//now string all the times, values, tangent types, and tangent sizes together into their respective strings
+					$valTimes += $keyVal[0] +","+ $curKeyTime +",";
+					$lock += $lockState[0] +",";
+					$tTypes += $keytt[0] +","+ $keytt[1] +",";
+					$tSize += $itt[0] +","+ $itt[1] +","+ $ott[0] +","+ $ott[1] +",";
+					}
+
+				//add the strings obtained from the previous loop to the string to write out to the file
+				$objFileInfo += $valTimes +"\n"+ $lock +"\n"+ $tTypes +"\n"+ $tSize +"\n&endAttr\n";
+				}
+			}
+
+		if( $objFileInfo != "" ) {
+			$miscInfo += $rotationOrder;
+			$objFileInfo = "*"+ $exportName +"\n"+ $miscInfo +"\n"+ $objFileInfo +"&endObj\n";
+			}
+
+		//add the end of object descriptor to the fileData string
+		$fileData += $objFileInfo;
+		}
+
+	//now write all the data to the file, and force write to disk
+	int $fileId = `fopen $filename "w"`;
+	fprint $fileId $fileData;
+	fflush $fileId;
+	fclose $fileId;
+
+	//cleanup
+	progressWindow -endProgress;
+	if( $world ) delete $tgts;
+	select $selObjs;
+	}
+
+
+//------
+//writes only keyable attribs' values from the current frame into a file
+//
+//uses options from the write file proc
+//------
+global proc zooAnimFileWritePose( string $filename, string $optionStr ){
+	//------
+	//parse optionStr to determine which flags are enabled for this proc
+	//------
+	string $selObjs[] = `ls -sl`;
+	float $offset = 0;
+	int $strip = 1;
+	int $world = 0;
+
+	$optionTemp = `zooGetFlagArguments $optionStr strip`; if( `size $optionTemp` ) $strip = $optionTemp[0];
+	$optionTemp = `zooGetFlagArguments $optionStr world`; if( `size $optionTemp` ) $world = $optionTemp[0];
+	$optionTemp = `zooGetFlagArguments $optionStr objs`; if( `size $optionTemp` ) $selObjs = $optionTemp;
+
+	//make sure the filename has an extension
+	if( `match ".znm$" $filename` == "" ) $filename += ".znm";
+
+	//------
+	//initialise relevant variables, and open the file for writing
+	//------
+	string $sourceFile = `file -q -sn`;
+	if( !`filetest -r $sourceFile` ) $sourceFile = "<-scene not saved->";
+	string $fileData = ".znm Anim File Format v"+ `zooAnimFileInfo version` +"\nExported by: "+ `getenv USER` +"\nSource file: "+ $sourceFile +"\nOptionStr: -pose 1 "+ $optionStr +"\n";
+	if( !`size $selObjs` ) { warning "you have no objects selected - select the objects you want to export animation from"; return; }
+
+	//------
+	//make sure there are some keyable channels in the list of selected objects
+	//------
+	string $allAttribs[] = `listAttr -keyable -visible -scalar -multi $selObjs`;
+	if( !`size $allAttribs` ) { warning "there are no keyable channels on any selected objects"; return; }
+
+	//------
+	//if the animation is to be exported as world space transforms, then we have to convert all transform data to worldspace
+	//this is done using the world space trace function in zooXferAnim
+	//------
+	string $transformedObjs[] = $selObjs;  //this array holds the names of the objects to get transform data from
+	string $xformObjs[] = {};
+	string $srcs[] = {};  //this holds the original controls that are to be traced
+	string $tgts[] = {};  //this holds the locators that will be traced to the original controls
+	int $useTransformed[] = {};  //this array holds which objects have been substituted with locators
+
+	if( $world ) {
+		for( $a in $selObjs ) $useTransformed[( `size $useTransformed` )] = 0;  //init this array
+		for( $n=0; $n<`size $selObjs`; $n++ ) if( `zooIsObjAnimatedTransform $selObjs[$n]` ) {
+			$transformedObjs[$n] = zooGetElement_str(0,`spaceLocator -n ( $selObjs[$n] +"_in_worldspace" )`);
+			$useTransformed[$n] = 1;
+			$srcs[( `size $srcs` )] = $selObjs[$n];
+			$tgts[( `size $tgts` )] = $transformedObjs[$n];
+			}
+		if( `size $tgts` ) zooXferBatch "-mode 2 -keys 2 -matchRo 1 -range . ." $srcs $tgts;
+		}
+
+	//------
+	//initialise the progress window
+	//------
+	float $increment = 100/((float)(`size $allAttribs`));
+	float $progress = 0;
+	progressWindow -title "Writing File" -progress ((int)$progress) -status "Progress: 0%" -isInterruptable 1;
+
+	//------
+	//now go through all selected objects
+	//------
+	for( $x=0; $x<`size $selObjs`; $x++ ){
+		string $obj = $selObjs[$x];
+		string $miscInfo = "@";
+		string $attribs[] = `listAttr -keyable -visible -scalar -multi $obj`;
+		int $rotationOrder = ( `objExists ( $obj +".rotateOrder" )` )?`getAttr ( $obj +".rotateOrder" )`:0;
+
+		if( !`size $attribs` ) continue;
+		string $exportName = $obj;
+		if( $strip ) $exportName = `match "[^:]+$" $obj`;
+
+		$miscInfo += $rotationOrder +",";
+		$fileData += "*"+ $exportName +"\n"+ $miscInfo +"\n";
+		for( $attrib in $attribs ) {
+			//update progress window
+			$progress += $increment;
+			progressWindow -e -progress ((int)$progress) -status ( "Progress: "+ ((int)$progress) +"%" );
+			if( `progressWindow -query -isCancelled` ) break;
+
+			//make sure we're reading values from the correct object - if the attr is a transform attr, then we need to read animation data from the traced locator
+			if( $attrib == "translateX" || $attrib == "translateY" || $attrib == "translateZ" || $attrib == "rotateX" || $attrib == "rotateY" || $attrib == "rotateZ" ) $obj = $transformedObjs[$x];
+			else $obj = $selObjs[$x];
+			string $valTimes = "=";
+			string $tTypes = "<";
+			string $tSize = ">";
+
+			$fileData += "^"+ $attrib +"\n!0\n";
+
+			//now string all the times, values, tangent types, and tangent sizes together into their respective strings
+			$valTimes += `getAttr ( $obj +"."+ $attrib )` +",0,";  //key time for a pose is always zero - so the offset import feature works properly
+			$tTypes += "global,global,";
+			$tSize += "-1,-1,-1,-1,";
+
+			//add the strings obtained from the previous loop to the string to write out to the file
+			$fileData += $valTimes +"\n$1,1\n"+ $tTypes +"\n"+ $tSize +"\n&endAttr\n";
+			}
+
+		//add the end of object descriptor to the fileData string
+		$fileData += "&endObj\n";
+		}
+
+	//now write all the data to the file, and force write to disk
+	int $fileId = `fopen $filename "w"`;
+	fprint $fileId $fileData;
+	fflush $fileId;
+	fclose $fileId;
+
+	//cleanup
+	progressWindow -endProgress;
+	if( $world ) delete $tgts;
+	select $selObjs;
+	}
+
+
+//------
+//given a file, a list of source objects and a list of target objects, this proc
+//reads in animation data from the file from the objects in the source list if they
+//exist, and applies the data to the corresponding target
+//
+//so the anim file might have 3 objects in it:  objA, objB and objC
+//if the source list has objA and objD
+//and the target list has objB and objD
+//then the animation from objA in the file will get applied to the target objB
+//and because objD doesn't exist in the file, it gets ignored
+//------
+global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $tgts[] ) {
+	string $objs[] = {};
+	string $temp[] = {};
+	string $fileContents[] = {};
+	string $filename = "";
+	float $timeOffset = 0;
+	float $incrementalApply = 1.0;
+	int $incrementOn = 0;
+	int $additive = 0;
+	int $numSrcs = `size $srcs`;
+	int $numTgts = `size $tgts`;
+
+	$temp = `zooGetFlagArguments $optionStr filename`; if( `size $temp` ) $filename = `zooArrayToStr_str $temp " "`;
+	$temp = `zooGetFlagArguments $optionStr offset`; if( `size $temp` ) { if( $temp[0] == "*" ) $timeOffset = `currentTime -q`; else $timeOffset = $temp[0]; }
+	$temp = `zooGetFlagArguments $optionStr incrementOn`; if( `size $temp` ) if( `size $temp` ) $incrementOn = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr increment`; if( `size $temp` ) if( `size $temp` ) $incrementalApply = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr additive`; if( `size $temp` ) $additive = $temp[0];
+
+	//look for problems
+	if( !`filetest -r $filename` ) { warning "the specified file doesn't exist"; return; }
+	if( !$numSrcs ) { warning "there are no source objects specified"; return; }
+	if( !$numTgts ) { warning "there are no target objects specified"; return; }
+
+	//prepare the object lists - ie strip namespaces if they exist, and determine the namespace for the target list
+	string $namespace = `zooGetNamespace $tgts[0]`;
+	for( $n=0; $n<$numTgts; $n++ ) if( $namespace == "" ) $namespace = `zooGetNamespace $tgts[$n]`;
+	for( $n=0; $n<$numTgts; $n++ ) $tgts[$n] = `match "[^:]+$" $tgts[$n]`;
+
+	string $globalItt = zooGetElement_str(0,`keyTangent -q -global -itt`);
+	string $globalOtt = zooGetElement_str(0,`keyTangent -q -global -ott`);
+	int $fileID = `fopen $filename "r"`;
+	int $x = 0;
+
+	//init the progress window
+	float $progress = 0;
+	float $increment = $numSrcs? 100/(float)$numSrcs: 1;
+	progressWindow -title "Importing From File" -progress ((int)$progress) -status "Progress: 0%" -isInterruptable 1;
+
+	//now iterate through all the objects in the file, see if the exist in the target array and if so, apply the animation
+	while( !`feof $fileID` ) {
+		//update progress window
+		$progress += $increment;
+		if( `progressWindow -q -ic` ) break;
+		progressWindow -e -progress ((int)$progress) -status ( "Progress: " + ((int)$progress) + "%" );
+
+		//get the info for the next object
+		string $objInfo[] = {};
+		zooGetNextObj $fileID $objInfo;
+		if( !`size $objInfo` ) break;
+
+		//see if the object we're currently reading from the file exists in the source list
+		//if it does, find out its index, and get the associated target, otherwise, keep on loopin
+		string $obj = $objInfo[0];
+		string $tgt;
+		int $rotOrder = $objInfo[1];
+		int $cont = 1;
+
+		//this simple loop does two things - first it checks to see if the object exists
+		//if it does, the loop breaks and the $x holds the index for the object, if it
+		//doesn't, it sets a variable to ignore this object in the file
+		for( $x=0; $x<$numSrcs; $x++ ) if( $srcs[$x] == $obj ) {
+			$cont = 0;
+			break;
+			}
+
+		$tgt = $tgts[$x];
+		if( !`objExists $tgt` ) $tgt = $namespace + $tgts[$x];
+		if( !`objExists $tgt` ) continue;
+		if( $cont ) continue;
+		if( `objExists ( $tgt +".ro " )` ) setAttr ( $tgt +".ro " ) $rotOrder;
+
+		//now that object level info has been loaded, start reading and writing attribute animation
+		while( true ) {
+			string $attrib = `zooGetNextAttr $fileID`;
+			if( $attrib == "" ) break;  //if the next attribute name is empty, then we've hit the end of this object's attributes
+
+			string $weighted[] = {};
+			string $keyData[] = {};
+			string $keyLocks[] = {};
+			string $tangentTypes[] = {};
+			string $tangentValues[] = {};
+			int $proceed = `zooGetNextAttrInfo $fileID $weighted $keyData $keyLocks $tangentTypes $tangentValues`;
+
+			if( $proceed != 1 ) break;
+			if( !`objExists ( $tgt +"."+ $attrib )` ) continue;
+			if( !`getAttr -k ( $tgt +"."+ $attrib )` ) continue;
+			if( !`getAttr -se ( $tgt +"."+ $attrib )` ) continue;
+
+			int $numKeys = `size $keyData`/2;
+			int $weight = $weighted[0];
+
+			keyTangent -e -wt $weight ( $tgt +"."+ $attrib );
+			for( $t=0; $t<$numKeys; $t++ ) {
+				string $ittType = $tangentTypes[( $t*2 )];
+				string $ottType = $tangentTypes[( $t*2+1 )];
+				float $keyVal = $keyData[( $t*2 )];
+				float $keyTime = $keyData[( $t*2+1 )];
+				float $inAngle = $tangentValues[( $t*4 )];
+				float $inWeight = $tangentValues[( $t*4+1 )];
+				float $outAngle = $tangentValues[( $t*4+2 )];
+				float $outWeight = $tangentValues[( $t*4+3 )];
+				int $lock = $keyLocks[$t];
+
+				$keyTime += $timeOffset;
+				//apply the incremental key value
+				if( $incrementOn ) {
+					float $cur = `getAttr ( $tgt +"."+ $attrib )`*(1.0-$incrementalApply);
+					float $fileVal = $keyVal*$incrementalApply;
+					$keyVal = $cur + $fileVal;
+					}
+
+				//process keyframe and tangent information, provided the target attribute exists and is keyable
+				setKeyframe -t $keyTime -v $keyVal ( $tgt +"."+ $attrib );
+				if( $inWeight == -1 && $outWeight == -1 ) $tangents = 0;
+				if( $ittType == "global" ) $ittType = $globalItt;
+				if( $ottType == "global" ) $ottType = $globalOtt;
+				keyTangent -e -t $keyTime -l $lock -ia $inAngle -oa $outAngle -iw $inWeight -ow $outWeight ( $tgt +"."+ $attrib );
+				}
+			}
+		}
+
+	fclose $fileID;
+	progressWindow -endProgress;
+	}
+
+
+//------
+//returns an array containing all information stored in the .znm file header
+//------
+global proc string[] zooReadAnimFileHeader( string $filepath ){
+	string $fileInfo[] = {};
+	int $fileID = `fopen $filepath "r"`;
+
+	while( !`feof $fileID` ) {
+		string $line = `zooGetLine $fileID`;
+		if( `match "^\\*" $line` != "" ) break;
+		$fileInfo[( `size $fileInfo` )] = $line;
+		}
+
+	fclose $fileID;
+	return $fileInfo;
+	}
+
+
+global proc string[] zooAnimFileGetObjs( string $filepath ) {
+	string $objInfo[] = {};
+	string $objs[] = {};
+	int $fileID = `fopen $filepath "r"`;
+
+	while( `zooGetNextObj $fileID $objInfo` ) $objs[( `size $objs` )] = $objInfo[0];
+
+	fclose $fileID;
+	return $objs;
+	}
+
+
+//------
+//
+//------
+global proc int zooGetNextObj( int $fileID, string $objInfo[] ) {
+	string $line = "";
+	string $prefix = "";
+	string $suffix = "";
+
+	clear $objInfo;
+	while( !`feof $fileID` ) {
+		$line = `zooGetLine $fileID`;
+		if( !`size $line` ) return 0;
+		$prefix = `substring $line 1 1`;
+		if( $prefix == "*" ) {
+			string $suffix = "";
+			$objInfo[0] = `substring $line 2 (size($line))`;
+
+			$line = `zooGetLine $fileID`;
+			$suffix = `substring $line 2 (size($line))`;
+			$suffix = `match "^[^,]+" $suffix`;
+			$objInfo[1] = $suffix;
+			return 1;
+			}
+		}
+	return 0;
+	}
+
+
+//------
+//
+//------
+global proc string zooGetNextAttr( int $fileID ) {
+	while( !`feof $fileID` ) {
+		string $line = `zooGetLine $fileID`;
+		string $prefix = `substring $line 1 1`;
+		if( $prefix == "^" ) return `substring $line 2 (size($line))`;
+		if( $line == "&endObj" ) return "";
+		}
+	return "";
+	}
+
+
+//------
+//
+//------
+global proc int zooGetNextAttrInfo( int $fileID, string $weighted[], string $keys[], string $locked[], string $tTypes[], string $tVals[] ) {
+	string $line = "";
+	string $prefix = "";
+	string $suffix = "";
+
+	clear $weighted; clear $keys; clear $locked; clear $tTypes; clear $tVals;
+	if( `feof $fileID` ) return 0;
+	$line = `zooGetLine $fileID`;
+	$suffix = `substring $line 2 (size($line))`;
+	$weighted[0] = $suffix;
+
+	$line = `zooGetLine $fileID`;
+	$suffix = `substring $line 2 (size($line))`;
+	tokenize $suffix "," $keys;
+
+	$line = `zooGetLine $fileID`;
+	$suffix = `substring $line 2 (size($line))`;
+	tokenize $suffix "," $locked;
+
+	$line = `zooGetLine $fileID`;
+	$suffix = `substring $line 2 (size($line))`;
+	tokenize $suffix "," $tTypes;
+
+	$line = `zooGetLine $fileID`;
+	$suffix = `substring $line 2 (size($line))`;
+	tokenize $suffix "," $tVals;
+
+	$line = `zooGetLine $fileID`;
+	if( $line == "&endAttr" ) return 1;
+	return 1;
+	}
+
+
+//------
+//
+//------
+global proc string zooGetLine( int $fileID ) {
+	string $line = `fgetline $fileID`;
+	$line = `substitute "\n" $line ""`;
+	return $line;
+	}
+
+
+//------
+//determine whether an object has animated transforms
+//this means that at least one of the t or r child attributes are connected from an animCurve node
+//------
+global proc int zooIsObjAnimatedTransform( string $obj ) {
+	//are the top level transform attributes keyable and settable?
+	int $isTOpen = 0;
+	int $isROpen = 0;
+	if( `objExists ( $obj +".t" )` && !size(`listConnections -d 0 ( $obj +".t")`)) $isTOpen = 1;
+	if( `objExists ( $obj +".r" )` && !size(`listConnections -d 0 ( $obj +".r")`)) $isROpen = 1;
+	if( !$isTOpen || !$isTOpen ) return 0;
+
+	//are the leaf level transform attributes keyable and connected to with an anim curve - ie animated?
+	int $tx = 0; int $ty = 0; int $tz = 0;
+	int $rx = 0; int $ry = 0; int $rz = 0;
+
+	//an object is considered an animated transform if it has keyable translate or rotate attributes AND is connected by either an animCurve node, or a character node
+	if( `getAttr -k ( $obj +".tx" )` && size(ls("-type","animCurve","-type","character",`listConnections -d 0 ( $obj +".tx")`)) ) $tx = 1;
+	if( `getAttr -k ( $obj +".ty" )` && size(ls("-type","animCurve","-type","character",`listConnections -d 0 ( $obj +".ty")`)) ) $ty = 1;
+	if( `getAttr -k ( $obj +".tz" )` && size(ls("-type","animCurve","-type","character",`listConnections -d 0 ( $obj +".tz")`)) ) $tz = 1;
+	if( `getAttr -k ( $obj +".rx" )` && size(ls("-type","animCurve","-type","character",`listConnections -d 0 ( $obj +".rx")`)) ) $rx = 1;
+	if( `getAttr -k ( $obj +".ry" )` && size(ls("-type","animCurve","-type","character",`listConnections -d 0 ( $obj +".ry")`)) ) $ry = 1;
+	if( `getAttr -k ( $obj +".rz" )` && size(ls("-type","animCurve","-type","character",`listConnections -d 0 ( $obj +".rz")`)) ) $rz = 1;
+	if( $tx || $ty || $tz || $rx || $ry || $rz ) return 1;
+	return 0;
+	}
+
+
+//------
+//simply returns versioning, and date information about this script
+//------
+global proc string zooAnimFileInfo ( string $function ) {
+	string $creationDate = "27 July 2003";
+	string $lastRevision = "07 June 2006";
+	string $currentVersion = "6.06.20";
+
+	if ( $function == "created" ) return $creationDate;
+	if ( $function == "modified" ) return $lastRevision;
+	if ( $function == "version" ) return $currentVersion;
+	return "";
+	}
+
+
+//zoo.end
+//macaroniKazoo ©2006

@@ -1,0 +1,306 @@
+// zooMirror
+//
+// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created : 07 August 2004
+//
+// Hamish McKenzie ©2006...
+// macaroniKazoo Productions ©2006...
+
+
+global proc zooReflecto() {
+	global int $zooReflectoLoaded;
+	if( !$zooReflectoLoaded ) {
+		for( $script in `zooReflectoDependencies -scripts` ) if( catch(eval( "source "+ $script ))) warning( "You don't have "+ $script +" installed" );
+		$zooReflectoLoaded = 1;
+		}
+
+	string $windowName = "zooReflectoWindow";
+	string $windowTitle = "zooReflecto v"+ `zooReflectoInfo version` +"   ::macaroniKazoo::";
+
+	if( `window -exists $windowName` ) deleteUI $windowName;
+	window -title $windowTitle -resizeToFitChildren 1 -maximizeButton 0 -sizeable 1 -width 210 $windowName;
+		menuBarLayout zooReflectoMenuMain;
+			menu -label "File";
+				menuItem -l "Batch Remove" -c ( "zooReflectoWindowFunctions batchRemove n;" ) zooReflectoMenuRemove;
+				menuItem -l "Check Mapping" -c ( "zooReflectoWindowFunctions mappingCheck 0" ) zooReflectoMenuCheck;
+			menu -label "Load Items";
+				menuItem -l "Load Objects" -c( "zooReflectoWindowFunctions load n" );
+			menu -label "Help";
+				menuItem -l "Help..." -c ( "zooHelp zooReflecto 1" );
+				menuItem -l "Scripting zooReflecto" -c ( "zooHelp zooReflecto 3" );
+				menuItem -divider 1;
+				menuItem -l "About" -c ( "zooHelp zooReflecto 2" );
+			setParent ..;
+
+		formLayout -p $windowName zooReflectoForm;
+			string $loadButt = `button -l "load" -c( "zooReflectoWindowFunctions load n" )`;
+			string $reloadButt = `button -l "reorder" -c( "zooReflectoWindowFunctions reorder n" )`;
+			string $tslSrc = `textScrollList -ams 0 -sc( "zooReflectoWindowFunctions srcChange n" ) zooMirrorTSLSrc`;
+			string $tslTgt = `textScrollList -ams 0 -sc( "zooReflectoWindowFunctions tgtChange n" ) zooMirrorTSLTgt`;
+			string $goButt = `button -l "Mirror Animation" -c ( "zooReflectoWindowFunctions mappingCheck 1" ) zooReflectoButtonXfer`;
+			string $image = `image -p zooReflectoForm -width 300 -height 8 -backgroundColor ((float)1) ((float)0) ((float)0) -image(zooGetFileLocation(zooListEnv("XBMLANGPATH"),"zoo_sig","tga") +"zoo_sig.tga" )`;
+				popupMenu -p $image -b 1 -pmc ( "showHelp -a \"http://www.macaronikazoo.com/\"" );
+		setParent ..;
+
+	formLayout -e
+		-af $loadButt "top" 2
+		-af $loadButt "left" 2
+		-ap $loadButt "right" 1 50
+		-an $loadButt "bottom"
+
+		-af $reloadButt "top" 2
+		-ap $reloadButt "left" 1 50
+		-af $reloadButt "right" 2
+		-an $reloadButt "bottom"
+
+		-ac $tslSrc "top" 2 $loadButt
+		-af $tslSrc "left" 2
+		-ap $tslSrc "right" 1 50
+		-ac $tslSrc "bottom" 2 $goButt
+
+		-ac $tslTgt "top" 2 $reloadButt
+		-ap $tslTgt "left" 1 50
+		-af $tslTgt "right" 2
+		-ac $tslTgt "bottom" 2 $goButt
+
+		-an $goButt "top"
+		-af $goButt "left" 2
+		-af $goButt "right" 2
+		-ac $goButt "bottom" 2 $image
+
+		-an $image "top"
+		-af $image "left" 2
+		-af $image "right" 2
+		-af $image "bottom" 2
+		zooReflectoForm;
+	showWindow $windowName;
+	}
+
+
+//------
+//just about all UI controls use this function in some way.  This is the layer between the UI, and the actual command engine
+//almost all script functionality can be accessed through the command engine, without using the UI.  This makes it useful to other scripts
+//------
+global proc zooReflectoWindowFunctions ( string $function, string $variable01 ) {
+	string $srcUI = "zooMirrorTSLSrc";
+	string $tgtUI = "zooMirrorTSLTgt";
+
+	switch ( $function ) {
+		case "update":  //handles all updates of the UI
+			break;
+
+		case "load":  //called to load selected objects into the source pane
+			string $selObjs[] = `ls -sl -dep`;
+
+			textScrollList -e -ra $srcUI;
+			//textScrollList -e -ra $tgtUI;
+
+			for( $s in $selObjs ) {
+				textScrollList -e -a $s $srcUI;
+				textScrollList -e -a $s $tgtUI;
+				}
+
+			zooReflectoWindowFunctions matchSrcTgt n;
+			zooReflectoWindowFunctions reorder n;
+			break;
+
+		case "matchSrcTgt":  //used to do start the auto object mapping process
+			string $srcs[] = `textScrollList -q -ai $srcUI`;
+			string $tgts[] = `zooMatchNames $srcs $srcs "-parity 1 -opposite 1"`;
+			string $matchStr = "";
+
+			for( $n=0; $n<`size $srcs`; $n++ ) {
+				$matchStr += $srcs[$n] +"^"+ $tgts[$n] +";";
+				zooSetMirrorTarget $srcs[$n] $tgts[$n] 0;
+				}
+			control -e -docTag $matchStr $srcUI;
+			break;
+
+		case "srcChange":  //called when an object is "selected" in the source pane.  Its only a UI update function, to display the source's target
+			string $selSrc = zooGetElement_str(0,`textScrollList -q -si $srcUI`);
+			string $tgts[] = `textScrollList -q -ai $tgtUI`;
+			string $customTgt = "";
+
+			if( `objExists ( $selSrc +".zooMirrorTgt" )` ) $customTgt = `getAttr ( $selSrc +".zooMirrorTgt" )`;
+			for( $t in $tgts ) if( $t == $customTgt ) { textScrollList -e -si $t $tgtUI; return; }
+
+			string $mappingStr = `textScrollList -q -docTag $srcUI`;
+			string $mappings[] = {};
+			string $srcs[] = {};
+			string $tgts[] = {};
+			int $max = 0;
+			int $n = 0;
+
+			$max = `tokenize $mappingStr ";" $mappings`;
+			for( $n=0; $n<$max; $n++ ) {
+				$srcs[$n] = `match "^[^\^]+" $mappings[$n]`;
+				$tgts[$n] = `match "[^\^]+$" $mappings[$n]`;
+				}
+
+			textScrollList -e -da $tgtUI;
+			for( $n=0; $n<`size $srcs`; $n++ ) if( $srcs[$n] == $selSrc ) { textScrollList -e -si $tgts[$n] $tgtUI; return; }
+			break;
+
+		case "tgtChange":  //called when a new target is selected for a given source object
+			string $selSrc = zooGetElement_str(0,`textScrollList -q -si $srcUI`);
+			string $selTgt = zooGetElement_str(0,`textScrollList -q -si $tgtUI`);
+			zooSetMirrorTarget $selSrc $selTgt 1;
+			zooReflectoWindowFunctions reorder n;
+			break;
+
+		case "reorder":
+			string $objs[] = `textScrollList -q -ai $srcUI`;
+			textScrollList -e -ra $tgtUI;
+			for( $o in $objs ) {
+				string $tgt = "";
+				if( `objExists ( $o +".zooMirrorTgt" )` ) $tgt = `getAttr ( $o +".zooMirrorTgt" )`;
+				if( $tgt == "" ) $tgt = zooGetElement_str( 0,`zooMatchNames { $o } $objs "-parity 1 -opposite 1"` );
+				if( $tgt != "" ) textScrollList -e -a $tgt $tgtUI;
+				}
+			break;
+
+		case "select":  //select a target object
+			break;
+
+		case "selectAll":
+			break;
+
+		case "timePopup":
+			string $parent = $variable01;
+
+			menu -e -dai $parent;
+			setParent -m $parent;
+
+			menuItem -l "current frame"-c( "intField -e -v "+ `currentTime -q` +" zooReflectoIntTraceStart; intField -e -v "+ `currentTime -q` +" zooReflectoIntTraceEnd;" );
+			menuItem -l "range to current" -c( "intField -e -v "+ `playbackOptions -q -min` +" zooReflectoIntTraceStart; intField -e -v "+ `playbackOptions -q -max` +" zooReflectoIntTraceEnd;" );
+			menuItem -l "range to min/max" -c( "intField -e -v "+ `playbackOptions -q -ast` +" zooReflectoIntTraceStart; intField -e -v "+ `playbackOptions -q -aet` +" zooReflectoIntTraceEnd;" );
+			break;
+
+		case "batchRemove":
+			string $windowName = "zooReflectoBatchSourceDelete";
+			string $windowTitle = "Batch Remove Sources";
+
+			if( `window -exists $windowName` ) deleteUI $windowName;
+			window -title $windowTitle -resizeToFitChildren 1 -maximizeButton 0 -sizeable 1 -width 200 $windowName;
+				string $form1 = `formLayout`;
+					string $objList = `textScrollList -ams 1`;
+					string $remButt = `button -l "remove selected" -c( "{for( $a in `textScrollList -q -si "+ $objList +"` ) { deleteUI ( \"src\"+ $a ); deleteUI ( \"status\"+ $a ); } deleteUI "+ $windowName +"; zooReflectoWindowFunctions update n;}" )`;
+				setParent ..;
+
+			formLayout -e
+				-af $objList "top" 0
+				-af $objList "left" 0
+				-af $objList "right" 0
+				-ac $objList "bottom" 0 $remButt
+
+				-an $remButt "top"
+				-af $remButt "left" 0
+				-af $remButt "right" 0
+				-af $remButt "bottom" 0
+				$form1;
+
+			string $srcObjUIs[] = `columnLayout -q -ca zooReflectoColSrc`;
+			for( $n=0; $n<`size $srcObjUIs`; $n++ ) {
+				$srcObjUIs[$n] = `substitute "^src" $srcObjUIs[$n] ""`;
+				textScrollList -e -a $srcObjUIs[$n] $objList;
+				}
+
+			showWindow $windowName;
+			break;
+
+		case "mappingCheck":  //check to see if there are any targets being mapped to by multiple source objects...  this would cause weirdness
+			string $mappingStr = `textScrollList -q -docTag $srcUI`;
+			string $sameStr = "";
+			string $mappings[] = {};
+			string $srcs[] = {};
+			string $tgts[] = {};
+			int $mirrorAfterConfirm = $variable01;
+			int $counts[] = {};
+			int $max = 0;
+			int $n = 0;
+
+			$max = `tokenize $mappingStr ";" $mappings`;
+			for( $n=0; $n<$max; $n++ ) {
+				$srcs[$n] = `match "^[^;]+" $mappings[$n]`;
+				$tgts[$n] = `match "[^;]+$" $mappings[$n]`;
+				}
+
+			for( $src in $srcs ) for( $n=0; $n<$max; $n++ ) if( $src == $tgts[$n] ) $counts[$n]+=1;
+			for( $n=0; $n<$max; $n++ ) if( $counts[$n]>1 ) $sameStr += $tgts[$n] +"\n";
+
+			if( $mirrorAfterConfirm ) {
+				if( `size $sameStr` ) $proceed = `confirmDialog -title "Oh, By the way..." -message ( "The following source objects are mapped to the same targets:\n"+ $sameStr +"\nContinue anyway?  Weirdness may ensue..." ) -button "Yes" -button "No" -defaultButton "Yes" -cancelButton "No" -dismissString "No"`;
+				if( $proceed != "No" ) zooXferAnimWindowFunctions xferAnim n;
+				}
+			else {
+				if( $sameStr != "" ) confirmDialog -title "Oh, By the way..." -message ( "The following source objects are mapped to the same targets:\n"+ $sameStr ) -button "gee, thanks";
+				else confirmDialog -title "You are good to go!" -message "There are no duplicate mappings" -button "rockin!";
+				}
+			break;
+		}
+	}
+
+
+//------
+//builds the qss menus - this is a separate proc so that it can be called when the popupMenu are built, so they're always current
+//------
+global proc zooReflectoBuildQssMenu( string $subCmd, string $parent ) {
+	string $sets[] = `ls -sets`;
+	string $qssSets[] = {};
+	string $selectAllFlag = $subCmd=="loadSrc"? "Src": "Tgt";
+
+	menu -e -dai $parent;
+	menuItem -l "Load Selected" -p $parent -c ( "zooReflectoWindowFunctions "+ $subCmd +" n" );
+	menuItem -divider 1 -p $parent;
+
+	for( $set in $sets ) if( `sets -q -t $set` == "gCharacterSet" ) $qssSets[( `size $qssSets` )] = $set;
+	for( $set in $qssSets ) menuItem -l $set -p $parent -c ( "{string $selObjs[] = `ls -sl`; select `sets -q "+ $set +"`; zooReflectoWindowFunctions "+ $subCmd +" n; select $selObjs; }" );
+
+	menuItem -divider 1 -p $parent;
+	menuItem -l "Select all Objects" -p $parent -c ( "zooReflectoWindowFunctions selectAll "+ $selectAllFlag );
+	}
+
+
+global proc string zooReflectoInfo ( string $function ) {
+	string $creationDate = "13 March 2005";
+	string $lastRevision = "13 March 2005";
+	string $currentVersion = "1.0.0";
+
+	if( $function == "created" ) return $creationDate;
+	if( $function == "modified" ) return $lastRevision;
+	if( $function == "version" ) return $currentVersion;
+	}
+
+
+//------
+//these dependencies allow the zooZipScript to package this script easily for distribution
+//------
+global proc string[] zooReflectoDependencies( string $mode ) {
+	string $melDependencies[] = {};
+	string $helpDependencies[] = {};
+	string $iconDependencies[] = {};
+	string $return[] = {};
+
+	$melDependencies[( `size $melDependencies` )] = "zooAlign";
+	$melDependencies[( `size $melDependencies` )] = "zooArrays";
+	$melDependencies[( `size $melDependencies` )] = "zooFlags";
+	$melDependencies[( `size $melDependencies` )] = "zooHelp";
+	$melDependencies[( `size $melDependencies` )] = "zooMatchNames";
+	$melDependencies[( `size $melDependencies` )] = "zooReflectoUtils";
+	$melDependencies[( `size $melDependencies` )] = "zooShelveIt";
+	$melDependencies[( `size $melDependencies` )] = "zooSortToHeirarchy";
+	$melDependencies[( `size $melDependencies` )] = "zooUtils";
+	$helpDependencies[( `size $helpDependencies` )] = "zooReflecto_help";
+	$helpDependencies[( `size $helpDependencies` )] = "zooReflecto_history";
+	$iconDependencies[( `size $iconDependencies` )] = "zoo_sig.tga";
+	$iconDependencies[( `size $iconDependencies` )] = "zooReflecto.xpm";
+
+	if( $mode == "-scripts" ) $return = $melDependencies;
+	if( $mode == "-docs" ) $return = $helpDependencies;
+	if( $mode == "-icons" ) $return = $iconDependencies;
+	return $return;
+	}
+
+
+//zoo.end
+//macaroniKazoo ©2006

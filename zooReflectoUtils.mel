@@ -1,0 +1,357 @@
+global proc zooSetMirrorTarget( string $src, string $tgt, int $force ) {
+	if( !`objExists ( $src +".zooMirrorTgt" )` ) { addAttr -ln "zooMirrorTgt" -dt "string" $src; $force = 1; }
+	if( $tgt == "" || !`objExists $tgt` ) { deleteAttr ( $src +".zooMirrorTgt" ); return; }
+	if( $force ) setAttr -type "string" ( $src +".zooMirrorTgt" ) $tgt;
+	}
+
+
+global proc zooMirror() {
+	string $selObjs[] = `ls -sl`;
+	string $controls_L[] = {};
+	string $controls_R[] = {};
+	string $controlsAffected[] = {};
+	string $charQss = `zooMirrorGetCurrentQss`;
+
+	if( !`objExists $charQss` ) return;
+	string $charName = `zooQueryBrand $charQss name`;
+	string $charControls[] = `sets -q $charQss`;
+	string $axis = "yz";
+
+	//source all dependencies
+	string $deps[] = `zooMirrorDependencies -scripts`;
+	for( $script in $deps ) if( `exists $script` ) eval( "source " + $script );
+
+	print( "acting on character: " + $charName + "\n" );
+	$charControls = `zooSortToHeirarchy $charControls`;
+
+	$controls_L[( `size $controls_L` )] = zooGetElement_str(0,`zooGetBrandedWithList { "name", "arm" } { $charName, "_L" }`);
+	$controls_L[( `size $controls_L` )] = zooGetElement_str(0,`zooGetBrandedWithList { "name", "clav" } { $charName, "_L" }`);
+	$controls_L[( `size $controls_L` )] = zooGetElement_str(0,`zooGetBrandedWithList { "name", "elbow" } { $charName, "_L" }`);
+	$controls_L[( `size $controls_L` )] = zooGetElement_str(0,`zooGetBrandedWithList { "name", "leg" } { $charName, "_L" }`);
+	$controls_L[( `size $controls_L` )] = zooGetElement_str(0,`zooGetBrandedWithList { "name", "knee" } { $charName, "_L" }`);
+	for( $a in $controls_L ) $controls_R[( `size $controls_R` )] = `zooMirrorGetOpposite $a`;
+
+	//remove the opposable controls from the list of all controls
+	$charControls = `zooSubtractArray_str $charControls $controls_L`;
+	$charControls = `zooSubtractArray_str $charControls $controls_R`;
+
+	//now mirror the non-opposable controls
+	for( $obj in $charControls ) {
+		float $tForm[] = `xform -q -t $obj`;
+		float $rForm[] = `xform -q -os -ro $obj`;
+		float $mirrored[] = `zooGetMirroredXform $axis { $tForm[0], $tForm[1], $tForm[2], $rForm[0], $rForm[1], $rForm[2] }`;
+
+		move -a -ls $mirrored[0] $mirrored[1] $mirrored[2] $obj;
+		rotate -os $mirrored[3] $mirrored[4] $mirrored[5] $obj;
+		}
+
+	//now swap transforms of the opposable controls, and we're done
+	for( $n=0; $n<`size $controls_L`; $n++ ) if( `objExists $controls_L[$n]` && `objExists $controls_R[$n]` ){
+		string $affected[] = `zooSwapTransforms $controls_L[$n] $controls_R[$n] ""`;
+		$controlsAffected = `zooAddArray_str $controlsAffected $affected`;
+		}
+	}
+
+
+global proc string[] zooSwapTransforms( string $obj, string $tgt, string $optionStr ) {
+	//parse the optionString
+	string $temp[] = {};
+	string $axis = "yz";
+	int $mirrorPos = 1;
+	int $mirrorRot = 1;
+	int $mirrorOther = 1;
+
+	$temp = `zooGetFlagArguments $optionStr axis`; if( `size $temp` ) $axis = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr pos`; if( `size $temp` ) $mirrorPos = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr rot`; if( `size $temp` ) $mirrorRot = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr other`; if( `size $temp` ) $mirrorOther = $temp[0];
+
+	if( `objExists $tgt` ) {
+		string $srcMain = `group -em`;
+		string $srcAim = `group -em`;
+		string $srcUp = `group -em`;
+		string $tgtMain = `group -em`;
+		string $tgtAim = `group -em`;
+		string $tgtUp = `group -em`;
+		string $grp = `group -w $srcAim $srcUp $tgtAim $tgtUp`;
+
+		parent $srcAim $srcMain;
+		parent $srcUp $srcMain;
+		parent $tgtAim $tgtMain;
+		parent $tgtUp $tgtMain;
+		parent $srcMain $grp;
+		parent $tgtMain $grp;
+		move -r 0 1 0 $srcUp;
+		move -r 0 0 1 $srcAim;
+		move -r 0 1 0 $tgtUp;
+		move -r 0 0 1 $tgtAim;
+		aimConstraint -aimVector 0 0 1 -upVector 0 1 0 -worldUpType object -worldUpObject $srcUp $srcAim $srcMain;
+		aimConstraint -aimVector 0 0 1 -upVector 0 1 0 -worldUpType object -worldUpObject $tgtUp $tgtAim $tgtMain;
+		zooAlignFast $obj $tgtMain 0 0;
+		zooAlignFast $tgt $srcMain 0 0;
+		//parent $srcAim $grp;
+		//parent $srcUp $grp;
+		//parent $tgtAim $grp;
+		//parent $tgtUp $grp;
+		setAttr ( $grp +".sx" ) -1;
+
+		//transform original
+		if( $mirrorPos ) zooAlignFast $srcMain $obj 0 0;
+
+		//transform target
+		if( $mirrorPos ) zooAlignFast $tgtMain $tgt 0 0;
+
+		//delete temp items
+		//delete $grp;
+
+		//now mirror values of custom attribs
+		//string $srcNonXformAttribNames[] = `listAttr -k -ud $obj`;
+		//string $tgtNonXformAttribNames[] = `listAttr -k -ud $tgt`;
+		//float $srcNonXformAttribValues[] = {};
+		//float $tgtNonXformAttribValues[] = {};
+
+		//save all values for both source and target
+		//for( $attrib in $srcNonXformAttribNames ) $srcNonXformAttribValues[( `size $srcNonXformAttribValues` )] = `getAttr ( $obj + "." + $attrib )`;
+		//for( $attrib in $tgtNonXformAttribNames ) $tgtNonXformAttribValues[( `size $tgtNonXformAttribValues` )] = `getAttr ( $tgt + "." + $attrib )`;
+
+		//now apply values from source to target and vice versa
+		//if( $mirrorOther ) for( $n = 0; $n < `size $srcNonXformAttribNames`; $n++ ) if( `objExists ( $tgt + "." + $srcNonXformAttribNames[$n] )` ) setAttr -clamp ( $tgt + "." + $srcNonXformAttribNames[$n] ) $srcNonXformAttribValues[$n];
+		//if( $mirrorOther ) for( $n = 0; $n < `size $tgtNonXformAttribNames`; $n++ ) if( `objExists ( $obj + "." + $tgtNonXformAttribNames[$n] )` ) setAttr -clamp ( $obj + "." + $tgtNonXformAttribNames[$n] ) $tgtNonXformAttribValues[$n];
+		}
+
+	return { $obj, $tgt };
+	}
+
+
+//this proc deals with mirroring an object.  it discovers the opposite control, stores xforms, and swaps them.  it returns the names of the objects it affects
+global proc string[] zooSwapTransforms2( string $obj, string $optionStr ) {
+	//parse the optionString
+	string $temp[] = {};
+	string $axis = "yz";
+	string $tgt = `zooMirrorGetOpposite $obj`;
+	int $mirrorPos = 1;
+	int $mirrorRot = 1;
+	int $mirrorOther = 1;
+
+	$temp = `zooGetFlagArguments $optionStr tgt`; if( `size $temp` ) $tgt = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr axis`; if( `size $temp` ) $axis = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr pos`; if( `size $temp` ) $mirrorPos = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr rot`; if( `size $temp` ) $mirrorRot = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr other`; if( `size $temp` ) $mirrorOther = $temp[0];
+
+	if( `objExists $tgt` ) {
+		float $srcTForm[] = `xform -q -ws -rp $obj`;
+		float $srcRForm[] = `xform -q -os -ro $obj`;
+		float $tgtTForm[] = `xform -q -ws -rp $tgt`;
+		float $tgtRForm[] = `xform -q -os -ro $tgt`;
+		float $srcOrgXform[] = { $srcTForm[0], $srcTForm[1], $srcTForm[2], $srcRForm[0], $srcRForm[1], $srcRForm[2] };
+		float $tgtOrgXform[] = { $tgtTForm[0], $tgtTForm[1], $tgtTForm[2], $tgtRForm[0], $tgtRForm[1], $tgtRForm[2] };
+		float $mirroredSrc[] = `zooGetMirroredXform $axis $tgtOrgXform`;
+		float $mirroredTgt[] = `zooGetMirroredXform $axis $srcOrgXform`;
+
+		//transform original
+		if( $mirrorPos ) move -a -ws -rpr $mirroredSrc[0] $mirroredSrc[1] $mirroredSrc[2] $obj;
+		if( $mirrorRot ) rotate -a -ws $mirroredSrc[3] $mirroredSrc[4] $mirroredSrc[5] $obj;
+
+		//transform target
+		if( $mirrorPos ) move -a -ws -rpr $mirroredTgt[0] $mirroredTgt[1] $mirroredTgt[2] $tgt;
+		if( $mirrorRot ) rotate -a -ws $mirroredTgt[3] $mirroredTgt[4] $mirroredTgt[5] $tgt;
+
+		//now mirror values of custom attribs
+		string $srcNonXformAttribNames[] = `listAttr -k -ud $obj`;
+		string $tgtNonXformAttribNames[] = `listAttr -k -ud $tgt`;
+		float $srcNonXformAttribValues[] = {};
+		float $tgtNonXformAttribValues[] = {};
+
+		//save all values for both source and target
+		for( $attrib in $srcNonXformAttribNames ) $srcNonXformAttribValues[( `size $srcNonXformAttribValues` )] = `getAttr ( $obj + "." + $attrib )`;
+		for( $attrib in $tgtNonXformAttribNames ) $tgtNonXformAttribValues[( `size $tgtNonXformAttribValues` )] = `getAttr ( $tgt + "." + $attrib )`;
+
+		//now apply values from source to target and vice versa
+		if( $mirrorOther ) for( $n = 0; $n < `size $srcNonXformAttribNames`; $n++ ) if( `objExists ( $tgt + "." + $srcNonXformAttribNames[$n] )` ) setAttr -clamp ( $tgt + "." + $srcNonXformAttribNames[$n] ) $srcNonXformAttribValues[$n];
+		if( $mirrorOther ) for( $n = 0; $n < `size $tgtNonXformAttribNames`; $n++ ) if( `objExists ( $obj + "." + $tgtNonXformAttribNames[$n] )` ) setAttr -clamp ( $obj + "." + $tgtNonXformAttribNames[$n] ) $tgtNonXformAttribValues[$n];
+		}
+
+	return { $obj, $tgt };
+	}
+
+
+//return the name of the opposing control, if one exists.  otherwise return an empty array
+global proc string zooMirrorGetOpposite( string $obj ) {
+	string $brands[] = `zooListObjBrands $obj`;
+	string $charName = `zooQueryBrand $obj name`;
+	string $opposite = "";
+
+	for( $attr in $brands ) {
+		string $brandString = `zooQueryBrand $obj $attr`;
+		if( $brandString == "_L" || $brandString == "_R" ) {
+			//now we know we're dealing with an opposable control
+			string $oppositeString = ( $brandString == "_R" )? "_L": "_R";
+			string $oppositeControls[] = `zooGetBrandedWith $attr $oppositeString`;
+			for( $control in $oppositeControls ) if( `zooIsBrandedWith $control name $charName` ) $opposite = $control;
+			}
+		}
+
+	return $opposite;
+	}
+
+
+//takes an axis and an input xform and returns a mirrored xform.  all xforms are of the form:  float[]: tx, ty, tz, rx, ry, rz
+global proc float[] zooGetMirroredXform( string $axis, float $xform[] ) {
+	float $mirroredXform[6];
+	$mirroredXform[0] = $axis=="yz"? (-1*$xform[0]): $xform[0];
+	$mirroredXform[1] = $axis=="xz"? (-1*$xform[1]): $xform[1];
+	$mirroredXform[2] = $axis=="xy"? (-1*$xform[2]): $xform[2];
+
+	$mirroredXform[3] = $axis=="yz"? $xform[3]: (-1*$xform[3]);
+	$mirroredXform[4] = $axis=="xz"? $xform[4]: (-1*$xform[4]);
+	$mirroredXform[5] = $axis=="xy"? $xform[5]: (-1*$xform[5]);
+	return $mirroredXform;
+	}
+
+
+//takes a mirror plane of the source object, and mirrors the target object across this plane
+global proc zooMirrorAcrossObject( string $axis, string $src, string $obj ) {
+	float $surfaceNormalFloat[] = `zooMirrorGetSurfaceNormal $axis $src`;
+	float $planePivot[] = `xform -q -ws -rp $src`;
+	vector $surfaceNormal = <<$surfaceNormalFloat[0], $surfaceNormalFloat[1], $surfaceNormalFloat[2]>>;
+	vector $mirrorPlanePivot = <<$planePivot[0], $planePivot[1], $planePivot[2]>>;
+	zooMirrorOpposingObject $surfaceNormal $mirrorPlanePivot $obj;
+	}
+
+
+//mirrors an object across the plane with the normal vector:  $mirrorPlaneNormal
+global proc zooMirrorOpposingObject( vector $mirrorPlaneNormal, vector $mirrorPlanePivot, string $obj ) {
+	float $objRP[] = `getAttr ( $obj + ".rp" )`;
+	float $objScale[] = `getAttr ( $obj + ".scale" )`;
+	float $objXform[] = `xform -q -matrix $obj`;
+	matrix $objMat[4][4] = `zooMirrorMirrorMatrixM $mirrorPlaneNormal $mirrorPlanePivot $objXform`;
+
+	xform -matrix $objMat[0][0] $objMat[0][1] $objMat[0][2] $objMat[0][3] $objMat[1][0] $objMat[1][1] $objMat[1][2] $objMat[1][3] $objMat[2][0] $objMat[2][1] $objMat[2][2] $objMat[2][3] $objMat[3][0] $objMat[3][1] $objMat[3][2] $objMat[3][3] $obj;
+
+	//set the pivot point back to where it should be, and set scale to its pre mirror values
+	xform -piv $objRP[0] $objRP[1] $objRP[2] $obj;
+	}
+
+
+//basically swaps the transforms of two objects.  ie mirrors object 1 applies to object 2, and vice versa
+global proc string[] zooMirrorSwapOpposing( vector $mirrorPlaneNormal, vector $mirrorPlanePivot, string $obj ) {
+	string $tgt = `zooMirrorGetOpposite $obj`;
+	float $objRP[] = `getAttr ( $obj + ".rp" )`;
+	float $tgtRP[] = `getAttr ( $tgt + ".rp" )`;
+	float $objScale[] = `getAttr ( $obj + ".scale" )`;
+	float $tgtScale[] = `getAttr ( $tgt + ".scale" )`;
+	float $objXform[] = `xform -q -matrix $obj`;
+	float $tgtXform[] = `xform -q -matrix $tgt`;
+	matrix $objMat[4][4] = `zooMirrorMirrorMatrixM $mirrorPlaneNormal $mirrorPlanePivot $tgtXform`;
+	matrix $tgtMat[4][4] = `zooMirrorMirrorMatrixM $mirrorPlaneNormal $mirrorPlanePivot $objXform`;
+
+	xform -matrix $objMat[0][0] $objMat[0][1] $objMat[0][2] $objMat[0][3] $objMat[1][0] $objMat[1][1] $objMat[1][2] $objMat[1][3] $objMat[2][0] $objMat[2][1] $objMat[2][2] $objMat[2][3] $objMat[3][0] $objMat[3][1] $objMat[3][2] $objMat[3][3] $obj;
+	xform -matrix $tgtMat[0][0] $tgtMat[0][1] $tgtMat[0][2] $tgtMat[0][3] $tgtMat[1][0] $tgtMat[1][1] $tgtMat[1][2] $tgtMat[1][3] $tgtMat[2][0] $tgtMat[2][1] $tgtMat[2][2] $tgtMat[2][3] $tgtMat[3][0] $tgtMat[3][1] $tgtMat[3][2] $tgtMat[3][3] $tgt;
+
+	//set the pivot point back to where it should be, and set scale to its pre mirror values
+	xform -piv $objRP[0] $objRP[1] $objRP[2] $obj;
+	xform -piv $tgtRP[0] $tgtRP[1] $tgtRP[2] $tgt;
+
+	return { $obj, $tgt };
+	}
+
+
+global proc float[] zooMirrorGetSurfaceNormal( string $axis, string $obj ) {
+	string $selObjs[] = `ls -sl`;
+	string $tempLocator[] = `spaceLocator`;
+	float $pivotPos[] = `xform -q -ws -rp $obj`;
+	float $yVector[] = {};
+	float $normal[] = {};
+
+	parent -r $tempLocator[0] $obj;
+	move -a -ws $pivotPos[0] $pivotPos[1] $pivotPos[2] $tempLocator[0];
+	move -r -os -x ($axis=="yz"? 1: 0) -y ($axis=="zx"? 1: 0) -z ($axis=="xy"? 1: 0);
+	$yVector = `xform -q -ws -rp $tempLocator[0]`;
+	delete $tempLocator[0];
+
+	$normal[0] = $yVector[0]-$pivotPos[0];
+	$normal[1] = $yVector[1]-$pivotPos[1];
+	$normal[2] = $yVector[2]-$pivotPos[2];
+	select -r $selObjs;
+	return $normal;
+	}
+
+
+//mirrors an xform matrix across a plane with nornal $n, and returns a 16 entry float array
+global proc float[] zooMirrorMirrorMatrixF( vector $n, vector $pivot, float $matrix[] ){
+	$n = `zooMirrorNormaliseVector { $n.x, $n.y, $n.z }`;
+	float $d = dot($n, $pivot);
+
+	matrix $inputMatrix[4][4] = <<$matrix[0], $matrix[1], $matrix[2], $matrix[3];
+		$matrix[4], $matrix[5], $matrix[6], $matrix[7];
+		$matrix[8], $matrix[9], $matrix[10], $matrix[11];
+		$matrix[12], $matrix[13], $matrix[14], $matrix[15]>>;
+	matrix $inversionMatrix[4][4] = <<1-2*$n.x*$n.x,  -2*$n.x*$n.y,  -2*$n.x*$n.z, 0;
+		-2*$n.x*$n.y,  1-2*$n.y*$n.y,  -2*$n.y*$n.z, 0;
+		-2*$n.x*$n.z,   -2*$n.y*$n.z, 1-2*$n.z*$n.z, 0;
+		2*$n.x*$d,      2*$n.y*$d,    2*$n.z*$d, 1>>;
+	matrix $result[4][4] = `zooMirrorMultiplyMatrices $inputMatrix $inversionMatrix`;
+	float $resultF[16] = { $result[0][0], $result[0][1], $result[0][2], $result[0][3], $result[1][0], $result[1][1], $result[1][2], $result[1][3], $result[2][0], $result[2][1], $result[2][2], $result[2][3], $result[3][0], $result[3][1], $result[3][2], $result[3][3] };
+	return $resultF;
+	}
+
+
+//mirrors an xform matrix across a plane with nornal $n, and returns a matrix
+global proc matrix zooMirrorMirrorMatrixM( vector $n, vector $pivot, float $matrix[] ){
+	$n = `zooMirrorNormaliseVector { $n.x, $n.y, $n.z }`;
+	float $d = dot($n, $pivot);
+
+	matrix $inputMatrix[4][4] = <<$matrix[0], $matrix[1], $matrix[2], $matrix[3];
+		$matrix[4], $matrix[5], $matrix[6], $matrix[7];
+		$matrix[8], $matrix[9], $matrix[10], $matrix[11];
+		$matrix[12], $matrix[13], $matrix[14], $matrix[15]>>;
+	matrix $inversionMatrix[4][4] = <<1-2*$n.x*$n.x,  -2*$n.x*$n.y,  -2*$n.x*$n.z, 0;
+		-2*$n.x*$n.y,  1-2*$n.y*$n.y,  -2*$n.y*$n.z, 0;
+		-2*$n.x*$n.z,   -2*$n.y*$n.z, 1-2*$n.z*$n.z, 0;
+		2*$n.x*$d,      2*$n.y*$d,    2*$n.z*$d, 1>>;
+
+	return `zooMirrorMultiplyMatrices $inputMatrix $inversionMatrix`;
+	}
+
+
+//takes a 3 element float array, and returns a normalised 3 array float, as if it were a vector
+global proc vector zooMirrorNormaliseVector( float $vector[] ) {
+	float $sqLen = $vector[0]*$vector[0] + $vector[1]*$vector[1] + $vector[2]*$vector[2];
+	float $normalFactor = sqrt($sqLen);
+	vector $normalised;
+
+	$normalised = <<$vector[0]/$normalFactor, $vector[1]/$normalFactor, $vector[2]/$normalFactor>>;
+	return $normalised;
+	}
+
+
+//returns the result of multiplying to matricies together
+global proc matrix zooMirrorMultiplyMatrices( matrix $mat1, matrix $mat2 ){
+	matrix $result[4][4];
+	$result[0][0] = $mat1[0][0]*$mat2[0][0] + $mat1[0][1]*$mat2[1][0] + $mat1[0][2]*$mat2[2][0] + $mat1[0][3]*$mat2[3][0];
+	$result[1][0] = $mat1[1][0]*$mat2[0][0] + $mat1[1][1]*$mat2[1][0] + $mat1[1][2]*$mat2[2][0] + $mat1[1][3]*$mat2[3][0];
+	$result[2][0] = $mat1[2][0]*$mat2[0][0] + $mat1[2][1]*$mat2[1][0] + $mat1[2][2]*$mat2[2][0] + $mat1[2][3]*$mat2[3][0];
+	$result[3][0] = $mat1[3][0]*$mat2[0][0] + $mat1[3][1]*$mat2[1][0] + $mat1[3][2]*$mat2[2][0] + $mat1[3][3]*$mat2[3][0];
+
+	$result[0][1] = $mat1[0][0]*$mat2[0][1] + $mat1[0][1]*$mat2[1][1] + $mat1[0][2]*$mat2[2][1] + $mat1[0][3]*$mat2[3][1];
+	$result[1][1] = $mat1[1][0]*$mat2[0][1] + $mat1[1][1]*$mat2[1][1] + $mat1[1][2]*$mat2[2][1] + $mat1[1][3]*$mat2[3][1];
+	$result[2][1] = $mat1[2][0]*$mat2[0][1] + $mat1[2][1]*$mat2[1][1] + $mat1[2][2]*$mat2[2][1] + $mat1[2][3]*$mat2[3][1];
+	$result[3][1] = $mat1[3][0]*$mat2[0][1] + $mat1[3][1]*$mat2[1][1] + $mat1[3][2]*$mat2[2][1] + $mat1[3][3]*$mat2[3][1];
+
+	$result[0][2] = $mat1[0][0]*$mat2[0][2] + $mat1[0][1]*$mat2[1][2] + $mat1[0][2]*$mat2[2][2] + $mat1[0][3]*$mat2[3][2];
+	$result[1][2] = $mat1[1][0]*$mat2[0][2] + $mat1[1][1]*$mat2[1][2] + $mat1[1][2]*$mat2[2][2] + $mat1[1][3]*$mat2[3][2];
+	$result[2][2] = $mat1[2][0]*$mat2[0][2] + $mat1[2][1]*$mat2[1][2] + $mat1[2][2]*$mat2[2][2] + $mat1[2][3]*$mat2[3][2];
+	$result[3][2] = $mat1[3][0]*$mat2[0][2] + $mat1[3][1]*$mat2[1][2] + $mat1[3][2]*$mat2[2][2] + $mat1[3][3]*$mat2[3][2];
+
+	$result[0][3] = $mat1[0][0]*$mat2[0][3] + $mat1[0][1]*$mat2[1][3] + $mat1[0][2]*$mat2[2][3] + $mat1[0][3]*$mat2[3][3];
+	$result[1][3] = $mat1[1][0]*$mat2[0][3] + $mat1[1][1]*$mat2[1][3] + $mat1[1][2]*$mat2[2][3] + $mat1[1][3]*$mat2[3][3];
+	$result[2][3] = $mat1[2][0]*$mat2[0][3] + $mat1[2][1]*$mat2[1][3] + $mat1[2][2]*$mat2[2][3] + $mat1[2][3]*$mat2[3][3];
+	$result[3][3] = $mat1[3][0]*$mat2[0][3] + $mat1[3][1]*$mat2[1][3] + $mat1[3][2]*$mat2[2][3] + $mat1[3][3]*$mat2[3][3];
+
+	return $result;
+	}
+
+
+//zoo.end
+//macaroniKazoo ©2006

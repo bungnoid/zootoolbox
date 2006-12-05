@@ -1,0 +1,263 @@
+zooArrays_str;
+zooFlags;
+zooStrUtils;
+
+
+//given a list of names, and a list of targets, returns an array of targets that most closely match the source list
+//the optionStr uses the following flags:
+//
+// -strip [int]				automatically strips namespaces, or paths from names if true.  default: 1
+// -parity [int]				makes sure only like parity matches occur - ie arm_L is only ever matched to something with a _L parity.  For a list of possible parities, see the hasParity proc at the end of this script.  default: 0
+// -opposite [int]			matches opposite parities if the parity flag is turned on.  default: 0
+// -unique [int]				will only ever match a single source object to a single target.  If this is set to 1, no two source objects will ever be matched to the same target.  default: 0
+// -threshold [float]		only returns a match if the match threshold is over a certain value.  1 is a complete match, 0.7 matches 70% of tokens, while 0.4 is a rough match.  Its roughly a percentage likeness.  default is 0 - this doesn't mean the matching is less accurate, it simply means the matching algorithm will let very weak matches occur, which means fewer empty matches
+// -sort [int]					will sort both the source list and the target list alphabetically before running the match algorithm.  Sorting before matching can produce slightly different results depending on the name lists.  default: 0
+// -ignoreWordsSrc [int]	ignores the first word in the source name.  default: 0
+// -ignoreWordsTgt [int]	ignores the first word in the target name.  default: 0
+global proc string[] zooMatchNames( string $sources[], string $targets[], string $optionStr ) {
+	string $tgtTemp[] = $targets;  //stores the original array so we can restore it at the end of the proc - remember, arrays are passed by reference
+	string $matchedList[] = {};
+	string $temp[] = {};
+	float $threshold = 0;
+	int $strip = 1;
+	int $parity = 0;
+	int $opposite = 0;
+	int $unique = 0;
+	int $sort = 0;
+	int $ignoreWordsSrc = 0;
+	int $ignoreWordsTgt = 0;
+
+	$temp = `zooGetFlagArguments $optionStr strip`; if( `size $temp` ) $strip = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr parity`; if( `size $temp` ) $parity = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr opposite`; if( `size $temp` ) $opposite = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr unique`; if( `size $temp` ) $unique = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr threshold`; if( `size $temp` ) $threshold = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr sort`; if( `size $temp` ) $sort = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr ignoreWordsSrc`; if( `size $temp` ) $ignoreWordsSrc = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr ignoreWordsTgt`; if( `size $temp` ) $ignoreWordsTgt = $temp[0];
+
+	//setup the token match weights
+	int $exactWeight = 10;  //words match exactly
+	int $closeWeight = 9;  //close matches are when the words are the same but the case is different
+	int $containWeight = 3;  //weight if one token is contained in another (ie arm is in arms or farm)
+	int $vagueWeight = 1;  //only similar letters are found - this test isn't even done anymore...
+
+	string $tgtPrefixes[] = {};  //store prefixes for adding back to matches later
+	if( $strip ) {
+		for( $n=0; $n<`size $sources`; $n++ ) $srcPrefixes[$n] = `match "[^:|]+$" $sources[$n]`;
+		for( $n=0; $n<`size $targets`; $n++ ) {
+			string $name = `match "[^:|]+$" $targets[$n]`;
+			string $prefix = `substring $targets[$n] 1 (size($targets[$n])-size($name))`;
+
+			if( $name == $targets[$n] ) continue;
+			$tgtPrefixes[$n] = $prefix;
+			$targets[$n] = $name;
+			}
+		}
+
+	if( $sort ) { $sources = `sort $sources`; $targets = `sort $targets`; }
+	for( $src in $sources ) {
+		string $srcTokens[] = {};
+		int $srcParity = `zooMatchHasParity $src`;
+		int $numSrcTokens = `tokenize $src "_|:" $srcTokens`;
+		int $tokenMatchCount[] = {};  //this array holds the number of tokens that match between each target
+		int $count = 0;
+
+		if( $ignoreWordsSrc ) {
+			$srcTokens = `zooIndexCrop_str $srcTokens ( $ignoreWordsSrc +":" )`;
+			$numSrcTokens--;
+			}
+
+		clear $tokenMatchCount;
+		//first, initialise the token count array
+		for( $a=0; $a<`size $targets`; $a++ ) $tokenMatchCount[$a] = 0;
+
+		//now start going through each target
+		for( $tgt in $targets ) {
+			string $tgtTokens[] = {};
+			int $numTgtTokens = `tokenize $tgt "_|:" $tgtTokens`;
+			int $tgtParity = `zooMatchHasParity $tgt`;
+
+			//the user can specify the number of words at the beginning of the name to ignore
+			if( $ignoreWordsTgt ) {
+				$tgtTokens = `zooIndexCrop_str $tgtTokens ( $ignoreWordsTgt +":" )`;
+				$numTgtTokens--;
+				}
+
+			//first, check to see if the names are the same
+			if( $src == $tgt && !$opposite ) {
+				$tokenMatchCount[$count] = $exactWeight*$numTgtTokens*3;  //this is the strongest match possible
+				$count++;
+				continue;
+				}
+
+			//are the names the same bar case differences?
+			if( `tolower $src` == `tolower $tgt` && !$opposite ) {
+				$tokenMatchCount[$count] = $closeWeight*$numTgtTokens*2;
+				$count++;
+				continue;
+				}
+
+			//if the user wants opposite parities matched, then swap the parity of the target to simplify additional code
+			if( $opposite ) if( $tgtParity ) $tgtParity = $tgtParity == 1? 2: 1;
+
+			//if the parities on each name don't match, continue looping.  parities must match for the match to succeed
+			if( $parity ) if( $srcParity != $tgtParity ) {
+				$count++;
+				continue;
+				}
+
+			//if not, its time to see how many of the tokens match up
+			for( $srcTok in $srcTokens ) {
+				int $bestTokMatch = 0;
+				for( $tgtTok in $tgtTokens ) {
+					if( $srcTok == $tgtTok ) {
+						//if the tokens match, this is the strongest possible match - so break from the token matching loop
+						$bestTokMatch = $exactWeight;
+						break;
+						}
+
+					//if the tokens are a caseless match, this is a strong match
+					if( $bestTokMatch<$exactWeight ) if( `tolower $srcTok` == `tolower $tgtTok` ) $bestTokMatch = $closeWeight;
+
+					//so now test to see if any of the tokens are "sub-words" of each other - ie if you have something_otherThing another_other
+					//the second token, "otherThing" and "other", the second is a subset of the first, so this is a rough match
+					if( $bestTokMatch<$closeWeight ) if( `size $srcTok` > 1 && `size $tgtTok` > 1 ) {  //make sure the src and tgt tokens are non-trivial (ie at least 2 letters)
+						if( `match (tolower($srcTok)) (tolower($tgtTok))` == tolower($srcTok)) {$bestTokMatch = $containWeight;print( $tgt +"  "+ $srcTok +"   "+ `match (tolower($srcTok)) (tolower($tgtTok))` +"\n");}
+						else if( `match (tolower($tgtTok)) (tolower($srcTok))` == tolower($tgtTok)) $bestTokMatch = $containWeight;
+						}
+					}
+
+				$tokenMatchCount[$count]+=$bestTokMatch;
+				}
+
+			//now increment our counter
+			$count++;
+			}
+
+		//figure out which target has the highest number of token name matches
+		int $high = 0;
+		int $num = 0;
+
+		for( $i=0; $i<`size $tokenMatchCount`; $i++ ) if( $tokenMatchCount[$i] > $high ) {
+			$high = $tokenMatchCount[$i];
+			$num = $i;
+			}
+
+		float $tokenWeight = 1.0/($exactWeight*$numSrcTokens);
+		float $normMatchWeight = $high*$tokenWeight;
+
+		if( $high && $normMatchWeight>=$threshold ) {
+			//add back the prefifxes if we stripped them in the first place
+			if( $strip ) $matchedList[( `size $matchedList` )] = $tgtPrefixes[$num] + $targets[$num];
+			else $matchedList[( `size $matchedList` )] = $targets[$num];
+			if( $unique ) $targets = `zooRemoveArrayIdx_str $targets $num`;  //if the matches are to be unique - remove the matched target from the targets list
+			}
+		else $matchedList[( `size $matchedList` )] = "";
+
+		//debugging line - useful for printing match stats when fine tuning the algorithm
+		for( $x=0; $x<`size $targets`; $x++ ) print( $targets[$x] +" - "+ $tokenMatchCount[$x] +" - "+ $tokenWeight +" - "+ $numSrcTokens +"\n" );
+		}
+
+	$targets = $tgtTemp;
+
+	return $matchedList;
+	}
+
+
+//returns a parity number for a given name.  parity is 0 for none, 1 for left, and 2 for right
+global proc int zooMatchHasParity( string $name ) {
+	string $parityTestsL[] = { "l","left", "lft", "lf" };
+	string $parityTestsR[] = { "r","right", "rgt", "rt" };
+	string $toks[] = `zooTokenize $name "_"`;
+
+	//check to see if the name has token separators, if not, assume its camel case
+	//and rebuild the name with token separators
+	if( `size $toks` == 1 ) {
+		$toks = `zooSplitCamelCase $name`;
+		$name = `zooArrayToStr_str $toks "_"`;
+		}
+
+	//comment this line out if you don't want camel case testing - if if there are
+	//no separators in the name, the script splits by camel case and adds
+	//separators to the toks which usually increases parity matching accuracy,
+	//but it doesn't work with ALL naming conventions
+	$name = `tolower $name`;
+	for( $test in $parityTestsL ) {
+		if( `match ( "_"+ $test +"[0-9]*$" ) $name` != "" ) return 1;
+		if( `match ( "_"+ $test +"[0-9]*_" ) $name` != "" ) return 1;
+		}
+	for( $test in $parityTestsR ) {
+		if( `match ( "_"+ $test +"[0-9]*$" ) $name` != "" ) return 2;
+		if( `match ( "_"+ $test +"[0-9]*_" ) $name` != "" ) return 2;
+		}
+
+	return 0;
+	}
+
+
+//returns the name of the opposing controller
+global proc string zooGetOpposite( string $name ) {
+	int $parity = `zooMatchHasParity $name`;
+	string $tempName = $name;
+	string $parityStrsL[] = { "l","left", "lft", "lf" };
+	string $parityStrsR[] = { "r","right", "rgt", "rt" };
+	string $pStrs[] = $parityStrsL;
+	string $oppStrs[] = $parityStrsR;
+
+	if( $parity == 0 ) return "";
+	if( $parity == 2 ) {
+		$pStrs = $parityStrsR;
+		$oppStrs = $parityStrsL;
+		}
+
+	string $nameToks[] = `zooTokenize $tempName "_"`;
+	string $opp = "";
+	int $numPStrs = `size $pStrs`;
+
+	//if the array is only 1 big - then there are no _ separators in the name, so
+	//lets assume its a camelcase name, so split it into camel case words
+	if( `size $nameToks` == 1 ) $nameToks = `zooSplitCamelCase $name`;
+
+	string $parityMatch = "";
+	string $oppositeParity = "";
+	int $parityIdx = -1;
+
+	for( $n=0; $n<`size $nameToks`; $n++ ) {
+		for( $i=0; $i<$numPStrs; $i++ ) {
+			//if the cases match - solution is easy, simply return the matches
+			if( $nameToks[$n] == $pStrs[$i] ) {
+				$parityIdx = $i;
+				$parityMatch = $pStrs[$parityIdx];
+				$oppositeParity = $oppStrs[$parityIdx];
+				break;
+				}
+			//if the cases differ, then its a bit more complicated - we need to go through each letter in the parity string
+			//check its case, and make the same letter in the opposite parity string the same case - easy to do, but looks
+			//complicated...
+			else if( tolower($nameToks[$n]) == $pStrs[$i] ) {
+				$parityIdx = $i;
+				$parityMatch = $nameToks[$n];
+				$oppositeParity = `zooMatchCase $parityMatch $oppStrs[$parityIdx]`;
+				break;
+				}
+			}
+		if( $parityIdx != -1 ) break;
+		}
+
+	if( $parityIdx != -1 ) $opp = `substitute $parityMatch $name $oppositeParity`;
+	return $opp;
+	}
+
+
+/*
+example:
+zooMatchNames { "arm_L", "char_leg_left" }{ "an_objectName", "leg_left", "char_leg", "head_ctrl_obj", "arm_R", "char_arm_L" } "-parity 1 -threshold 0.8"
+returns the array: { "char_arm_L", "" }
+
+while doing:
+zooMatchNames { "arm_L", "char_leg_left" }{ "an_objectName", "leg_l", "char_leg", "head_ctrl_obj", "arm_R", "char_arm_Left" } "-parity 0 -threshold 0"
+returns the array: { "char_arm_Left", "char_leg" }
+*/
+
+//zoo.end

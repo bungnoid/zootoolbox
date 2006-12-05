@@ -1,0 +1,238 @@
+Created on the 08 March 2003
+zooCST was brought to you by the fine folks @ macaroniKazoo.
+
+Hamish McKenzie ©2006...
+macaroniKazoo Productions ©2006...
+hamish@macaronikazoo.com
+
+
+4.5.0
+-------
+NEW: now includes a reversible spine root primitive
+NEW: elbow positioning control on stretchy limbs
+ALT: the root primitive type has been deprecated - the spine primitive type is now responsible for the root - which allows more versatile spine rigs such as the reversible spine
+ALT: the head primitive type now allows you to explicitly specify the neck joint
+UI: all primitive types now allow you to have multiple types to choose from - and its easy for developers to add a new type to the zooCST UI, so its now easier than ever to write your own primitive and incorporate it into the zooCST UI
+MEL: more robust primitive handling code
+MEL: string, int and float array functions abstracted into separate scripts (zooArrays_str etc)
+MEL: all primitive tools now have dependencies auto-sourced in the file header - making it easier to integrate zooCST primitives into other tools
+
+
+4.3.5
+-------
+NEW: can now add parents to space switching easily
+FIX: if the neck doesn't exist, the head primitive used to die - this has been fixed
+
+
+4.3.3
+-------
+NEW: new place pole tool in the create control tab
+NEW: ik/fk sub-prim pole vectors get a right click menu item on them to place them for a perfect switch to fk
+MEL: the place pole command in the zooCSTUtils proc has been significantly improved.  It should now reliably and sensibly place pole vectors on any slightly bend limb
+FIX: the leg primitive was broken - ARGH!  sorry...
+FIX: triggers on limbs are working again
+FIX: bug in the ik/fk sub-prim tab in the window - adding objects to the window wasn't working properly
+FIX: integrated the zooObjMenu slow menu display bug - thanks to Dave Edwards for the heads up on that one
+
+
+4.3.1
+-------
+NEW: added a sub primitives tab to the UI.  This makes building sub primitives available through the UI
+MEL: moved the main UI code into a separate script that is sourced for window building.  This means the UI code is no longer in a global proc, which saves on memory
+FIX: the head primitive now has an orient flag, to turn on or off orienting of the head and neck controls - thanks to Pramod Shantharam for the heads up on that bug...
+
+
+4.2.13
+-------
+NEW: spaceswitching flag allows you to turn space switching off for all controls
+NEW: buildclav flag allows you to not build a clavicle control for the arm primitive
+ALT: moved the build proxy primitive to the tools menu, and added zooSurgeon and zooWeightSave to the utils menu
+
+
+4.2.11
+-------
+FIX: fixed weird issues with building a proxy primitive through zooCST
+FIX: the make stretchy proc now has an option to register nodes it builds with a primitive.  This is done automatically if you create a stretchy limb primitive in zooCST, but its optional for those that may want to use the makeStretchy proc on their own rigs
+ALT: nodes that are easily gotten to accidentally (such as align transform nodes in the arm, etc) now have their attributes locked.  This makes the rig more invincible
+ALT: the space switching command now locks all attributes of the space node once the constraints are added.  This makes the rig more invincible
+ALT: the stretch network now uses a transform node to calculate distance instead of a distance node.  This is not only more stable, but it allows the rig to be easily scaled.  Its also not dependent on the scene units being used
+ALT: the world node now drives the scale attribute of the parts node, to allow the rig to be easily scaled
+
+
+*v4.2.7
+-------
+NEW: integration of zooSurgeon
+NEW: -useExisting flag allows you to rebuild primitives using the existing controls.  This means any changes to the representation of a control is now preserved when rebuilding a primitive
+MEL: all rebuild procs now return a list of control objects created, just like the creation procs do
+FIX: all control objects for the root, basicSpine, fkSpine, ikSpine, head, eyes, moveableEyes and leg primitives now get properly registered as controls on their relevant primitive
+FIX: finger primitives now no longer hide the pole vector control when their visibility is toggled
+FIX: the root primitive now has a rebuild command.  This command does not deal with child primitives however, so its fairly useless at this stage
+FIX: fixed the primitive creation for the moveable eyes primitive - it wasn't getting its own primitive type
+FIX: fixed a UI bug that stopped the spine type selector working
+FIX: the fk wrist control now has its rotation order set to be the same as the ik control - this makes ik-fk blending more stable
+ALT: the pole vector space node is now created in the BuildIKFK script, instead of the arm and leg primitive build script
+ALT: the finger primitive now adds a select all command to the arm control
+ALT: fk controls now have a right click command to select all fk controls
+
+
+*v4.1.0
+-------
+ALT: the IKFK sub-primitive twist control objects (bicep orient, and wrist orient) are now parented under the relevant fk controls
+UI: new tips window
+
+
+*v4.0.9
+-------
+NEW: there is a new eye primitive - the moveable eye
+ALT: the eye primitive has been tidied up, and slighly simplified
+ALT: the root control no longer has a gimbal attribute - instead has a right click toggle for the gimbal control
+FIX: the controls now all the same scale when built
+FIX: if curves are turned on, the fk controls are automatically set to be curve controls
+UI: the spine type drop down has been moved to sit beside the build primitive button, and a drop down for the eye type has been added
+
+
+*v4.0.6
+-------
+NEW: the fk wrist control now has a switch to IK right click command
+ALT: the eye primitive now assumes the head control as the up vector, unless overridden by the -head flag.  if neither of these object exists, then it assumes the head is the parent of the eye joint
+UI: the additional options field now has a right click popup menu on it listing all the relevant flags for the primitives in the current tab
+
+
+*v4.0.4
+-------
+NEW: the IK/FK switch commands in the arm right click menu
+FIX: the -colour flag now works on all primitives
+
+
+*v4.0.3
+-------
+FIX: minor fixes on miscellaneous rig objects - all objects that shouldn't be animated are now hidden properly
+UI: minor UI changes
+UI: primitive window now has a scroll bar
+
+
+*v4.0.2B
+-------
+NEW: the is now a -parents flag line, for specifying additional objects for dynamic parenting - NOTE this isn't relevant for all primitives
+ALT: stretchy arms can now shrink slightly
+ALT: a limb's maximum stretch is now twice the length of the limb
+FIX: all rig primitives are now rebuildable
+FIX: parity is taken into consideration with finger group creation/finding
+FIX: the hide/show object menu item only gets created once for finger primitives
+FIX: disconnecting constraints was un-reliable using the zooCSTDisconnectObj proc in zooCSTPrimitives
+
+
+*v4.0.1B
+-------
+NEW: you can now rebuild rig primitives!
+NEW: there is now a finger primitive, and a tab to batch create hands using finger primitives
+MEL: a few fairly major changes have been made to the primitive functions, including object registering - for more information, see the technical docs, and the comments in the primitives script
+MEL: the space switching command has changed a bit.  It now creates the switching using condition nodes, instead of an expression.  The node based solution is slightly faster, even if messier.  It also returns a string array now, not a string
+ALT: the rig authoring information is now stored on the world node, not the root - the world node is always created, whereas a root primitive isn't
+FIX: the stretchy script now turns auto stretch off when fk is enabled fully
+FIX: cycle problems from stretch rigs have been fixed - oops
+
+
+*v3.8.3
+-------
+NEW: you can now delete primitives properly...
+ALT: the space transforms are now oriented manually instead of using oriented controls - this means there are fewer weird joints hanging around
+FIX: changed the makeStretch script back to using condition nodes, as the joint limit mode seems to cause un-warranted cycle errors
+
+
+*v3.7.5
+-------
+NEW: added a new flag to the arm and leg primitives (its a flag to control the zooCSTBuildIKFK command)
+NEW: added flag validation to the zooFlags script
+NEW: lines are now drawn from the knee/elbow joint to the actual pole vector control for easier viewing - these lines are used as the triggers if triggers are turned on
+ALT: changed the zooFindPolePosition command to use the optionStr syntax - there is now a multiplier flag which controls how offset the knee control is from the knee
+ALT: changed the makeStretch script use bone limits instead of a condition node - thanks to Kyle Burris for this idea...
+ALT: when you press the "guess all" button, zooCST takes a guess at the character prefix as well
+FIX: fixed the leg primitive - the translate/rotate values weren't being frozen, which made reaching bindpose position difficult
+FIX: fixed a minor basicSpine primitive bug - thanks to Darrell Robinson for the heads up on that one
+
+
+
+*v3.5.1
+-------
+NEW: new method for positioning pole vectors.  The command to place the pole vectors is in zooCSTUtils, and can be used by other procs.  Its a useful command
+NEW: new knee control mode.  I've basically brought back the knee parent mode, because i personally don't like the method used in 3.4
+
+
+*v3.4.9
+-------
+NEW: added a new sub-primitive (buildSplineIK)
+NEW: included the zooStickToCurve utility
+UI: separated the "head" and "eye" primitive creation buttons in the UI (purely a UI change, the rig primitive commands remain the same)
+UI: improved the space switching UI by adding the remove space button
+FIX: fixed minor neck bug - the space node got left behind which meant the neck's dynamic parenting no longer worked
+FIX: fixed help menu, so it now opens the correct tabs
+FIX: fixed alot of old documentation
+FIX: fixed stupid bug with arm primitives - was parenting clavicle and elbow spaces to the root, not the chest
+
+
+*v3.4.6
+-------
+NEW: added options to build hip and neck controls (for root and head primitives)
+NEW: added UI options for hip and neck controls
+
+
+*v3.4.5
+-------
+FIX: the IK spine is a bit more solid now - it also has a new flag (-orient)
+FIX: fixed a cycle bug with the neck in the head primitive
+
+
+*v3.4.4
+-------
+FIX: fixed a bug with the zooCSTUtils that stopped it from working (its actually caused by an obscure mel parsing bug :p)
+
+
+*v3.4.3
+-------
+NEW: additional override flags can now be specified in the UI
+NEW: added a "guess scale" button which tries to figure out what the scale for the controls should be.
+NEW: new flag controls added to alot of the primitive commands for overriding axes etc
+NEW: rigging primitive based operations are now working.  These operations probably won't work on pre 3.2.1 rig primitives.  Check out the "list primitives" window for more
+UI: can manually add space switching to controls
+UI: can manually add control objects to parts of your skeleton - helps with custom rigging operations
+FIX: fixed the cycle problems on stretchy legs (oops, my bad, sorry peeps)
+
+
+*v3.1.2
+-------
+NEW: controls can now be created as either poly object or curve objects
+NEW: manual/automatic limb stretch control
+ALT: the build control command has changed - see the file for more info, or read over the technical docs
+ALT: all primitive creation commands have been changed as well.  scale and offset are now flags specified in the optionStr argument, and are thus, non mandatory.  For more info on the optionStr, check out the "Option Strings" section in the technical docs.
+FIX: couple of fixes to the limb creation procs
+
+
+*v3.0.5
+-------
+NEW: created a flag parsing script (zooFlags) for up-coming primitive creation options
+UI: added stretch options to the UI for arms and legs.
+
+
+*v3.0.35
+-------
+NEW: zooMakeStretchy is now included.  By default, arms are made stretchy, but not legs.  For info on how to use the stretch implementation, see the technical docs
+UI: Guess all button added - guessing works on a naming convention (see intro docs for more info), and uses the prefix to help match names, if one is present
+
+
+*v3.0.3
+-------
+First official public release.
+
+
+*v3.0.xb
+-------
+Major improvements to this script include:
+-early rig primitive implementation
+-keywords in offset strings for control building
+-wrist/ankle rotation matching
+
+
+Background
+-------
+v3.x is essentially a complete re-write of the old zzCharSetupTools script v1, which later became zooCharSetupTools.  It was never made publicly available, because it was a reasonably primitive script.  It didn't really have space switching, or a very good ik/fk switch implementation.  It was also a single, very hard to trawl through script, and wasn't really as modular as it should have been.
