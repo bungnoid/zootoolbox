@@ -423,20 +423,6 @@ global proc zooApplyTriggerPreset( string $preset ) {
 	}
 
 
-//adds the popupMenu to all zooTriggered shelf buttons
-global proc zooTrigInstallShelfPopup() {
-	eval "source zooShelveIt;";
-	string $buttons[] = `zooGetShelfButtonAll zooTriggered`;
-	for( $button in $buttons ) if( `control -exists $button` ) if ( !`shelfButton -q -numberOfPopupMenus $button` ) {
-		popupMenu -p $button;
-		menuItem -l "load control window" -c ( "zooTriggered" );
-		menuItem -d 1;
-		menuItem -l "Help..." -c ( "zooHelp zooTriggered 1" );
-		menuItem -l "About" -c ( "zooHelp zooTriggered 2" );
-		}
-	}
-
-
 //installs a shelf buttons for zooTriggered on the current shelf
 global proc zooTriggeredSetup() {
 	eval "source zooShelveIt;";

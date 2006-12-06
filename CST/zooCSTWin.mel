@@ -61,12 +61,11 @@ window -mb 1 -title $windowTitle -width 520 -sizeable 1 $windowName;
 		menuItem -l "Remove Shelf Button" -c( "zooCSTShelfButton remove" );
 	menu -label "Help";
 		menuItem -l "Donate Now" -c( "showHelp -a \"http://www.macaronikazoo.com/donate.html\";" );
-		menuItem -l "Help..." -c( "zooHelp zooCST 3" );
+		menuItem -l "Help..." -c( "zooHelp zooCST 2" );
 		menuItem -d 1;
-		menuItem -l "About" -c( "zooHelp zooCST 1" );
-		menuItem -l "How It Works" -c( "zooHelp zooCST 5" );
-		menuItem -l "Technical Info" -c( "zooHelp zooCST 4" );
-		menuItem -l "Additional Flags" -c( "zooHelp zooCST 2" );
+		menuItem -l "How It Works" -c( "zooHelp zooCST 4" );
+		menuItem -l "Technical Info" -c( "zooHelp zooCST 3" );
+		menuItem -l "Additional Flags" -c( "zooHelp zooCST 1" );
 		menuItem -d 1;
 		menuItem -l "Show Tips Window" -c( "zooTipsWin zooCST -1" );
 

@@ -317,12 +317,13 @@ global proc string zooGetBoardFromKey( int $key ) {
 //provides an easy way of placing objects in a camera view based on screen
 //space instead of coordinates.  this command takes the following flags:
 //
-//-obj		the object to place
-//-resX		the x-resolution of the camera view - this is optional, and will default to whatever is set in the render globals if not specified
-//-resY		same as the -resX flag but for the y-resolution
-//-aspect	if you don't care what the image resolution is, simply specify the aspect ratio.  this is useful for when you want to work to a screen space smaller than your render area
-//-x			the x position to place the object at
-//-y			the y position to place the object at
+// -obj [str]				the object to place
+// -resX [int]				the x-resolution of the camera view - this is optional, and will default to whatever is set in the render globals if not specified
+// -resY [int]				same as the -resX flag but for the y-resolution
+// -aspect [float]		if you don't care what the image resolution is, simply specify the aspect ratio.  this is useful for when you want to work to a screen space smaller than your render area
+// -x [float]				the x position to place the object at
+// -y [float]				the y position to place the object at
+// -padding [float]		the padding from the edge of the screen border
 //
 //the object is placed in the camera view that has the eazel attached to it
 //------
@@ -334,6 +335,8 @@ global proc zooPlaceInCameraSpace( string $optionStr ) {
 	string $camera = `zooQueryMonkeySee`;
 	float $xPercent = 0;
 	float $yPercent = 0;
+	float $padding = 0;
+	int $coordmode = 1;
 	int $resX = `getAttr ( $resNode+".width")`;
 	int $resY = `getAttr ( $resNode+".height")`;
 
@@ -345,6 +348,8 @@ global proc zooPlaceInCameraSpace( string $optionStr ) {
 	$temp = `zooGetFlagArguments $optionStr resY`; if( `size $temp` ) $resY = $temp[0];
 	float $pixAspect = $resX/(float)$resY;
 	$temp = `zooGetFlagArguments $optionStr aspect`; if( `size $temp` ) $pixAspect = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr coordmode`; if( `size $temp` ) $coordmode = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr padding`; if( `size $temp` ) $padding = $temp[0];
 
 	if( !`objExists $obj` ) return;
 	if( !`objExists $camera` ) return;
@@ -358,6 +363,12 @@ global proc zooPlaceInCameraSpace( string $optionStr ) {
 	if( `nodeType $camShape` != "camera" ) return;
 	parent -r $tempObj $eazel;
 	setAttr ( $tempObj +".tz" ) -2;
+	$xPercent += $padding*(($xPercent-0.5)/-0.5);
+	$yPercent += $padding*(($yPercent-0.5)/-0.5);
+	if( $coordmode == 1 ) {
+		$xPercent = ($xPercent*2)-1;
+		$yPercent = ($yPercent*2)-1;
+		}
 	$xPercent -= ( 0.5/$unitScale );
 	$yPercent -= ( 0.5/$unitScale );
 	$yPercent /= $pixAspect;

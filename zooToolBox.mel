@@ -94,10 +94,10 @@ global proc string[] zooListTools( string $type ) {
 		"zooKeyCommands","zooKeymaster","zooRemind","zooRenamer","zooTriggerator",
 		"zooXferAnim" };
 	string $riggingTools[] = { "zooAutoSave","zooTriggered","zooCST","zooBoltOnIK",
-		"zooBodgeK","zooHeavy","zooNameSpacey","zooRemind","zooRenamer","zooScriptLoader",
+		"zooBodgeK","zooHeavy","zooNameSpacey","zooRemind","zooRenamer",
 		"zooSurgeon","zooWeightSave","zooTriggerator","zooReblender" };
 	string $otherTools[] = { "zooAutoSave","zooChangeLog","zooAssets","zooNameSpacey",
-		"zooRemind","zooRenamer","zooScriptLoader","zooToggleUI","zooPanelCycler" };
+		"zooRemind","zooRenamer","zooToggleUI","zooPanelCycler" };
 	string $hotkeys[] = { "zooTangentWks","zooCam","zooSetMenu","zooSetkey","zooAlign",
 		"toggle_shading","toggle_lights","toggle_texturing" };
 	string $unlisted[] = { "zooAlign","zooCurveLight","zooChangeRoo","zooChangeSpace",
@@ -206,9 +206,6 @@ global proc string zooToolAnnotation( string $tool ) {
 			break;
 		case "zooRenamer":
 			$annotation = "zooRenamer is a batch renaming script.  It also has a command-line interface for easy integration into other tools.";
-			break;
-		case "zooScriptLoader":
-			$annotation = "zooScriptLoader is a tool management script.  It lets you easily re-source scripts you're working on, load them up, setup multiple custom load commands, group tools together, filter tools based on name etc...";
 			break;
 		case "zooSetMenu":
 			$annotation = "zooSetMenu us a marking menu that lets you quickly interact with all quick selection sets in your scene.";

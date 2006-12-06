@@ -534,6 +534,19 @@ global proc zooTrigUpdateUIState() {
 	}
 
 
+//adds the popupMenu to all zooTriggered shelf buttons
+global proc zooTrigInstallShelfPopup() {
+	eval "source zooShelveIt;";
+	string $buttons[] = `zooGetShelfButtonAll zooTriggered`;
+	for( $button in $buttons ) if( `control -exists $button` ) if ( !`shelfButton -q -numberOfPopupMenus $button` ) {
+		popupMenu -p $button;
+		menuItem -l "load control window" -c ( "zooTriggered" );
+		menuItem -d 1;
+		menuItem -l "Help..." -c ( "zooHelp zooTriggered 1" );
+		}
+	}
+
+
 /*
 zooTriggered works by storing mel commands in a string attribute of an object. a selection based scriptJob is loaded. the scriptJob fires of a command that checks all currently selected objects for a zooTriggered command attribute. if one is found, the command is then run through a translation script
 
