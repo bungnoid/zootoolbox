@@ -356,36 +356,5 @@ global proc zooToolBoxSetup() {
 	}
 
 
-//------
-//returns a list all the scripts this script is dependent upon - also stores icon dependencies, and help file dependencies
-//------
-global proc string[] zooToolBoxDependencies( string $mode ) {
-	string $melDependencies[] = {};
-	string $includeFiles[] = {};
-	string $helpDependencies[] = {};
-	string $iconDependencies[] = {};
-	string $return[] = {};
-
-	$melDependencies[( `size $melDependencies` )] = "zooArrays_str";
-	$melDependencies[( `size $melDependencies` )] = "zooFlags";
-	$melDependencies[( `size $melDependencies` )] = "zooTips";
-	$melDependencies[( `size $melDependencies` )] = "zooUtils";
-	$melDependencies[( `size $melDependencies` )] = "zooPosesToSliders";
-	$melDependencies[( `size $melDependencies` )] = "zooKeymaster";
-	$melDependencies[( `size $melDependencies` )] = "zooResetAttrs";
-	$helpDependencies[( `size $helpDependencies` )] = "zooToolBox_help";
-	$helpDependencies[( `size $helpDependencies` )] = "zooToolBox_toolList";
-	$iconDependencies[( `size $iconDependencies` )] = "zooToolBox.xpm";
-	$iconDependencies[( `size $iconDependencies` )] = "zooIcon.xpm";
-	$iconDependencies[( `size $iconDependencies` )] = "zoo_sig.tga";
-
-	if( $mode == "-docs" ) return $helpDependencies;
-	if( $mode == "-icons" ) return $iconDependencies;
-	if( $mode == "-scripts" ) return $melDependencies;
-
-	return $return;
-	}
-
-
 //zoo.end
 //macaroniKazoo ©2006

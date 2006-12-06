@@ -7,6 +7,8 @@ global proc string[] zooCSTDependencies( string $mode ) {
 	$melDependencies[( `size $melDependencies` )] = "zooAlign";
 	$melDependencies[( `size $melDependencies` )] = "zooArrays_str";
 	$melDependencies[( `size $melDependencies` )] = "zooBrandTools";
+	$melDependencies[( `size $melDependencies` )] = "zooBounds";
+	$melDependencies[( `size $melDependencies` )] = "zooBuildControl";
 	$melDependencies[( `size $melDependencies` )] = "zooCSTCtrlType";
 	$melDependencies[( `size $melDependencies` )] = "zooCSTPrimitives";
 	$melDependencies[( `size $melDependencies` )] = "zooCSTValidateFlags";

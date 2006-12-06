@@ -1,3 +1,4 @@
+zooPresetManager;
 zooPickwalk "load";
 zooTips;
 
@@ -451,3 +452,4 @@ global proc zooPickwalkHotkeys() {
 
 
 //zoo.end
+//macaroniKazoo ©2007

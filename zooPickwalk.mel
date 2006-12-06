@@ -1,5 +1,6 @@
-zooUtils;
 zooArrays_str;
+zooFlags;
+zooUtils;
 
 
 //does a basic Pickwalk in the direction given - using the currently selected
@@ -160,6 +161,7 @@ global proc string[] zooListAllPickwalking() {
 
 	return $all;
 	}
+
 
 //zoo.end
 //macaroniKazoo ©2007
