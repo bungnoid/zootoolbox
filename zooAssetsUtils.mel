@@ -599,7 +599,7 @@ global proc zooSetAssetObj( int $slot, string $obj ) {
 	string $node = `zooGetAssetNode`;
 
 	if( !`objExists ($node+".ast"+$slot)` ) error "slot doesn't exist - use: \"zooCreateAsset objectName\"; to create an asset";
-	if( `objExists $obj` ) if( $obj != `zooGetAssetObj $slot` ) connectAttr -f ( $obj +".message" ) ( $node +".ast"+ $slot );
+	if( `objExists $obj` ) if( $obj != `zooGetAssetObj $slot` ) if( !`getAttr -l ( $node +".ast"+ $slot )`) connectAttr -f ( $obj +".message" ) ( $node +".ast"+ $slot );
 	}
 
 

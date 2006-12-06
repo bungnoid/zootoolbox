@@ -3,7 +3,7 @@ zooUtils;
 
 
 global proc src( string $tool ) {
-	string $proj = `thq_getProject`;
+	string $proj = `thq_getProject`;  //get the current user project
 	string $home = `getenv HOME` +"/scripts/";
 	string $perforceBase = "d:/studiooz/";
 	string $repos[] = {};

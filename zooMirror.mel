@@ -27,7 +27,7 @@ global proc zooMirror() {
 
 		string $form = `formLayout`;
 			string $scroll = `scrollLayout -cr 1 -hst 0 -vst 1`;
-				columnLayout -adjustableColumn 1 thq_explorerAssetList;
+				columnLayout -adjustableColumn 1 explorerAssetList;
 				setParent ..;
 			setParent ..;
 

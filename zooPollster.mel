@@ -160,7 +160,7 @@ global proc zooSubmitPoll( string $recipients[] ) {
 	if( $customData != "" ) $body += "additional data:\n**************\n"+ $customData +"\n\n\n";
 	$body += "The question asked was:\n**************\n"+ $preppedQ;
 
-	thq_sendMail ( "-to "+ $recipientStr +" -subject [animation poll] "+ $subject +": "+ $preppedA ) $body;
+	zooSendMail ( "-to "+ $recipientStr +" -subject [animation poll] "+ $subject +": "+ $preppedA ) $body;
 	deleteUI zooPollsterWin;
 	}
 

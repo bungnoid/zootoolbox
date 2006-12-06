@@ -874,7 +874,7 @@ global proc zooAssetsOpenNotesWindow( int $slot ) {
 
 	//if the slot specified is -1, the the notes are to be added to the global slot
 	if( $slot < 0 ) {
-		button -e -l "send email" -c( "zooSetGlobalAttrData notes `scrollField -q -tx "+ $text +"`; deleteUI "+ $windowName +"; thq_sendEmailForSlot `zooGetSelectedAssets` \"-notes 1\";" ) $save;
+		button -e -l "send email" -c( "zooSetGlobalAttrData notes `scrollField -q -tx "+ $text +"`; deleteUI "+ $windowName +"; zooSendEmailForSlot `zooGetSelectedAssets` \"-notes 1\";" ) $save;
 		button -e -l "delete note" -c( "zooSetGlobalAttrData notes \"\"; deleteUI "+ $windowName ) $rem;
 		}
 
@@ -909,8 +909,8 @@ global proc zooAssetsMELWindow( int $slot ) {
 		string $delete = `button -l( $x +"delete cmds" ) -c( "zooChangeDataWrapper "+ $slot +" preMEL \"\"; zooChangeDataWrapper "+ $slot +" postMEL \"\"; deleteUI "+ $windowName +"; zooAssetsWindowFunctionsSel updateMEL "+ $slot )`;
 		string $canc = `button -l "cancel" -c( "deleteUI "+ $windowName )`;
 
-	popupMenu -p $preMELLbl -pmc( "zooPrePostPresetMenu "+ $slot +" zooAssetsPreMELPresetPup thq_assetsPreMEL;" ) zooAssetsPreMELPresetPup;
-	popupMenu -p $postMELLbl -pmc( "zooPrePostPresetMenu "+ $slot +" zooAssetsPostMELPresetPup thq_assetsPostMEL;" ) zooAssetsPostMELPresetPup;
+	popupMenu -p $preMELLbl -pmc( "zooPrePostPresetMenu "+ $slot +" zooAssetsPreMELPresetPup "+ $preMEL +";" ) zooAssetsPreMELPresetPup;
+	popupMenu -p $postMELLbl -pmc( "zooPrePostPresetMenu "+ $slot +" zooAssetsPostMELPresetPup "+ $postMEL +";" ) zooAssetsPostMELPresetPup;
 	formLayout -e
 		-af $preMELLbl "top" 1
 		-af $preMELLbl "left" 0
