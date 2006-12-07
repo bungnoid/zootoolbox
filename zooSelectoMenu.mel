@@ -21,7 +21,7 @@ global proc zooSelectoMenuUI() {
 	menu -e -dai tempMM;
 
 	menuItem -l "toggle triggers vis" -c( "zooToggleSelectoVis;" ) -rp "W";
-	menuItem -l "use current camera" -c( "zooSetLOACamera `getCurrentCam`;" ) -rp "E";
+	menuItem -l "use current camera" -c( "zooSetLookat `getCurrentCam`;" ) -rp "E";
 	menuItem -l "transparency" -sm 1;
 		menuItem -l "0%" -c( "zooSetSelectoTransparency 0;" );
 		menuItem -l "25%" -c( "zooSetSelectoTransparency 0.25" );

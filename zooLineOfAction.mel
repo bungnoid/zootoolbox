@@ -31,7 +31,7 @@ global proc string zooLineOfAction_multi( string $objs[], string $optionStr ) {
 	string $deforms[] = {};
 	string $curveCmd = "curve -d 1 ";
 	string $topLevel = `group -em`;
-	string $lookat = `zooGetLOALookat 1`;
+	string $lookat = `zooGetLookat 1`;
 	float $unitComp = (`currentUnit -q -l`=="m")?10:1;
 
 	$topLevel = `rename $topLevel "zooLine_of_action#"`;
@@ -90,41 +90,9 @@ global proc string zooLineOfAction_multi( string $objs[], string $optionStr ) {
 	//now finally add right click commands for cleanup
 	zooObjMenuAddCmdAll $ext "delete line of action" "delete `listRelatives -f -p #`;";
 	zooObjMenuAddCmdAll $ext "delete all lines of action" "zooLineOfAction;\nstring $reg = `zooGetRegister zoo 1`;\nstring $loas[] = {};\nzooListRegistered $reg linesOfAction {} $loas;\nfor( $l in $loas ) if( `objExists $l` ) delete $l;";
-	zooObjMenuAddCmdAll $ext "use current camera" "zooLineOfAction;\nstring $panel = `getPanel -wf`;\nstring $cam = `modelPanel -q -cam $panel`;\nzooSetLOACamera $cam;";
+	zooObjMenuAddCmdAll $ext "use current camera" "string $panel = `getPanel -wf`;\nstring $cam = `modelPanel -q -cam $panel`;\nzooSetLookat $cam;";
 	select -d;
 	return $topLevel;
-	}
-
-
-global proc zooSetLOACamera( string $camera ) {
-	string $sel[] = `ls -sl`;
-	string $lookat = `zooGetLOALookat 0`;
-	if( !`objExists $lookat` ) return;
-	if( !`objExists $camera` ) return;
-	delete `pointConstraint $camera $lookat`;  //this is an easy way to make sure there are no other targets on the point constraint
-	pointConstraint $camera $lookat;
-	select $sel;
-	}
-
-
-global proc string zooGetLOALookat( int $forceCreate ){
-	string $reg = `zooGetRegister zoo 1`;
-	string $lookats[] = {};
-	string $lookat = "";
-	int $idxs[] = {};
-
-	zooListRegistered $reg lookat $idxs $lookats;
-	for( $l in $lookats ) if( `objExists $l` ) $lookat = $l;
-	if( !`objExists $lookat` ) {
-		if( $forceCreate ) {
-			string $grp = `group -em`;
-			$grp = `rename $grp "zooLookat#"`;
-			zooRegisterObj $reg lookat $grp 1 1;
-			pointConstraint persp $grp;
-			return $grp;
-			}
-		}
-	else return $lookat;
 	}
 
 

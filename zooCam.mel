@@ -101,7 +101,7 @@ global proc zooCamUI() {
 //for example, the selecto stuff, the line of action stuff, etc...  can all be simply added
 //to this simple little proc
 global proc zooDoExtraLookthru( string $camera, string $panel ) {
-	if( `exists zooSetLOACamera` ) zooSetLOACamera $camera;
+	zooSetLookat $camera;
 	int $useForEazel = `optionVar -ex zooCamSetEazel`? `optionVar -q zooCamSetEazel`: 0;
 	if( $useForEazel ) {
 		zooGreaseMonkeyUtils;

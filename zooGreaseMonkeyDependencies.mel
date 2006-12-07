@@ -6,6 +6,8 @@ global proc string[] zooGreaseMonkeyDependencies( string $mode ) {
 	$melDependencies[( `size $melDependencies` )] = "zooArrays_str";
 	$melDependencies[( `size $melDependencies` )] = "zooArrays_int";
 	$melDependencies[( `size $melDependencies` )] = "zooFlags";
+	$melDependencies[( `size $melDependencies` )] = "zooGetLookat";
+	$melDependencies[( `size $melDependencies` )] = "zooSetLookat";
 	$melDependencies[( `size $melDependencies` )] = "zooGreaseMonkeyUtils";
 	$melDependencies[( `size $melDependencies` )] = "zooHelp";
 	$melDependencies[( `size $melDependencies` )] = "zooUtils";

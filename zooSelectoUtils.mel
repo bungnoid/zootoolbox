@@ -137,7 +137,7 @@ global proc zooSelectoUtils() {
 // LOOKAT/SCALE MANAGEMENT
 //sets the node the lookat is constrained to
 	global proc zooCreateSelectoLookat( string $obj ) {
-		string $lookat = `zooGetLOALookat 1`;
+		string $lookat = `zooGetLookat 1`;
 		string $axes[] = { "x", "y", "z" };
 		for( $axis in $axes ) if( `objExists ( $obj +".r"+ $axis )`) setAttr -l 0 ( $obj +".r"+ $axis );
 

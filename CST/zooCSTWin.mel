@@ -52,7 +52,7 @@ window -mb 1 -title $windowTitle -width 520 -sizeable 1 $windowName;
 	menu -label "Animation Tools";
 		menuItem -l "Draw Line of Action (LOA)" -c( "zooLineOfAction;zooLineOfAction_multi `ls -sl` \"\";" );
 		menuItem -l "Camera for LOA ->" -sm 1;
-			for( $c in $cameras ) menuItem -l( `match "[^|]+$" $c` ) -c( "if( `exists zooSetLOACamera` ) zooSetLOACamera "+ $c +";" );
+			for( $c in $cameras ) menuItem -l( `match "[^|]+$" $c` ) -c( "zooSetLookat "+ $c +";" );
 		setParent -m ..;
 		menuItem -d 1;
 		menuItem -l "Bolt on IK" -c( "zooBoltOnIKWin;" );
