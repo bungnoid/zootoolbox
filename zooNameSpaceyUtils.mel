@@ -1,6 +1,9 @@
 // Hamish McKenzie ©2006...
 
 
+zooArrays_str;
+
+
 global proc zooNameSpaceyUtils() {
 	return;
 	}

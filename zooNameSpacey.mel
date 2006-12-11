@@ -10,6 +10,9 @@
 // Hamish McKenzie ©2006...
 
 
+zooNameSpaceyUtils;
+
+
 global proc zooNameSpacey() {
 	string $windowName = "zooNameSpaceyWindow";
 	string $windowTitle = "zooNameSpacey v" + `zooNameSpaceyInfo version` + "   -:macaroniKazoo:-";

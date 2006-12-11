@@ -39,9 +39,9 @@ global proc zooHeavyBuildUI() {
 	menuItem -en( $enableUIItems && size(`textScrollList -q -ai $tslVName`)) -l "select verts" -c( "{select -cl; for( $a in `textScrollList -q -ai "+ $tslVName +"` ) if( `objExists $a` ) select -add $a;}" );
 	menuItem -l "select verts affected by joints" -ann "selects the verticies affected by the selected joints - or the joints loaded in the heavy UI" -c( "zooSurgeonUtils; { string $verts[] = {}; string $js[] = `ls -type transform -sl`; if( "+ ( $enableUIItems && size(`textScrollList -q -ai $tslJName`)) +") $js = `textScrollList -q -ai "+ $tslJName +"`; for( $s in $js ) { string $temp[] = {}; zooGetJointVerts $s 0.0000000000001 {} {} $temp {} {}; $verts = `zooAddArray_str $verts $temp`;} select $verts; }" );
 	menuItem -d 1;
-	menuItem -l "store weights" -ann "store weights on the selected meshes/verticies using zooWeightSave" -c( "{string $selObjs[] = `ls -sl -tr`; for( $a in $selObjs ) zooWeightStore $a; if( size(`ls -hl`)) zooWeightStoreVerts `ls -sl`;}" );
+	menuItem -l "store weights" -ann "store weights on the selected meshes/verticies using zooWeightSave" -c( "{zooHeavyUtils; string $selObjs[] = `ls -sl -tr`; for( $a in $selObjs ) zooWeightStore $a; if( size(`ls -hl`)) zooWeightStoreVerts `ls -sl`;}" );
 	menuItem -ob 1 -c( "zooWeightSave;" );
-	menuItem -l "restore weights" -ann "restores weights on the selected meshes/verticies using zooWeightSave" -c( "{string $selObjs[] = `ls -sl -tr`; for( $a in $selObjs ) zooWeightRestore $a; if( size(`ls -hl`)) zooWeightRestoreVerts `ls -sl`;}" );
+	menuItem -l "restore weights" -ann "restores weights on the selected meshes/verticies using zooWeightSave" -c( "{zooHeavyUtils; string $selObjs[] = `ls -sl -tr`; for( $a in $selObjs ) zooWeightRestore $a; if( size(`ls -hl`)) zooWeightRestoreVerts `ls -sl`;}" );
 	menuItem -ob 1 -c( "zooWeightSave;" );
 	}
 
