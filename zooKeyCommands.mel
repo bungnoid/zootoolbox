@@ -1,7 +1,7 @@
 //
 // zooKeyCommands
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 10 May 2003
 //
 // Description:
@@ -10,8 +10,8 @@
 // require a script to set the attribute properly - space switching is a good
 // candidate
 //
-// Hamish McKenzie ©2006...
-// macaroniKazoo Productions ©2006...
+// Hamish McKenzie ©2007...
+// macaroniKazoo Productions ©2007...
 
 
 zooFlags;
@@ -232,4 +232,4 @@ it runs the command for each object.  So the # symbol gets replaced by the objec
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

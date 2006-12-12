@@ -1,7 +1,7 @@
 //
 // zAnim Loader
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 27 July 2003
 //
 // Description:
@@ -14,8 +14,8 @@
 // To use as stand alone, use the zooAnimFileLoad proc to load the contents of a
 // .znm file on to a selection of objects.
 //
-// Hamish McKenzie ©2006...
-// macaroniKazoo Productions ©2006...
+// Hamish McKenzie ©2007...
+// macaroniKazoo Productions ©2007...
 
 
 //load dependencies
@@ -620,4 +620,4 @@ global proc string zooAnimFileInfo ( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

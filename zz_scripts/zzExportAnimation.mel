@@ -1,7 +1,7 @@
 //
 // animation export
 //
-// Created by Hamish McKenzie hamish@emissionpossible.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 11 March 2002
 //
 // Description:
@@ -11,7 +11,7 @@
 // of, play with whatever options you want to, and hit the go
 // button.
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 global proc zzExportAnimation () {

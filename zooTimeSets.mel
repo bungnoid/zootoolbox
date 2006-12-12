@@ -1,7 +1,7 @@
 //
 // time sets menu
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 28 December 2002
 //
 // Description:
@@ -23,8 +23,8 @@
 // to reflect which key is used (ie if you're using alt-w then
 // change it to -alt 1).
 //
-// Hamish McKenzie ©2006...
-// macaroniKazoo Productions ©2006...
+// Hamish McKenzie ©2007...
+// macaroniKazoo Productions ©2007...
 
 
 global proc zooTimeSets() {
@@ -475,4 +475,4 @@ global proc string[] zooTimeSetsDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

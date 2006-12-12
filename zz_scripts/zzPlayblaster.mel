@@ -46,7 +46,7 @@
 // to reflect which key is used (ie if you're using alt-w then
 // change it to -alt 1).
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 global proc zzPlayblaster() {

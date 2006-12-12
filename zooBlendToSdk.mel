@@ -45,4 +45,4 @@ global proc zooSetShapeSdk( string $obj, string $driverPath, float $driverValue 
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

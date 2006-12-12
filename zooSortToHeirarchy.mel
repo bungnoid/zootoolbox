@@ -1,14 +1,14 @@
 //
 // Sort To Heirarchy
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 17 August 2003
 //
 // Description:
 // given a list of objects, will return an array ordered by heirarchy, from
 // highest to lowest.
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 zooArrays_int;
@@ -82,4 +82,4 @@ global proc int[] zooGetHeirarchyLevels( string $objs[] ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

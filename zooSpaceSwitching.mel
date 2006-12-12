@@ -281,4 +281,4 @@ global proc string zooFindSpaceAttrNode( string $obj ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

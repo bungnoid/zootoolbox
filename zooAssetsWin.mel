@@ -3,7 +3,7 @@
 //This script merely builds the UI and exits.  The zooAssets script is responsible
 //for updating and maintaining the interface.
 //
-// ©2006 macaronikazoo.com
+// ©2007 macaronikazoo.com
 
 
 proc win() {

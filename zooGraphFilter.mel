@@ -1,7 +1,7 @@
 //
 // Graph Filter
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 08 October 2002
 //
 // Description:
@@ -16,7 +16,7 @@
 //  assign this function to a key press:
 //	zooGraphFilter;
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 zooUtils;
@@ -302,4 +302,4 @@ global proc string[] zooGraphFilterDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

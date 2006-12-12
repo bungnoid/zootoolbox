@@ -19,4 +19,4 @@ global proc zooReorderAttrs( string $obj, string $newAttribOrder[] ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

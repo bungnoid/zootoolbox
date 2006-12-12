@@ -17,7 +17,7 @@
 //
 // copy keys
 //
-// Created by Hamish McKenzie hamish@emissionpossible.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 27 September 2002
 //
 // Description:
@@ -41,8 +41,8 @@
 //	zzCopyKeys none;
 //	zzCopyKeys config - opens the config window
 //
-// Hamish McKenzie ©2006...
-// Macaroni Kazoo Productions ©2006...
+// Hamish McKenzie ©2007...
+// Macaroni Kazoo Productions ©2007...
 
 
 global proc zzCopyKeys ( string $function ) {

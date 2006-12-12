@@ -1,7 +1,7 @@
 //
 // zooTriggered
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 17 May 2003
 //
 // Description:
@@ -13,8 +13,8 @@
 //  you can also install a shelf button from the UI which
 //  reflects the load status of the script
 //
-// Hamish McKenzie ©2006...
-// macaroniKazoo Productions ©2006...
+// Hamish McKenzie ©2007...
+// macaroniKazoo Productions ©2007...
 
 
 zooArrays_str;
@@ -446,4 +446,4 @@ global proc string zooTriggeredInfo( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

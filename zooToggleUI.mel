@@ -13,7 +13,7 @@
 // Usage:
 //  zooToggleUI;
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 global proc zooToggleUI() {
@@ -78,4 +78,4 @@ global proc int isToolboxVisible() {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

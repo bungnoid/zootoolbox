@@ -97,4 +97,4 @@ global proc string zooLineOfAction_multi( string $objs[], string $optionStr ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

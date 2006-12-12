@@ -174,4 +174,4 @@ global proc zooDeleteStore( string $name ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

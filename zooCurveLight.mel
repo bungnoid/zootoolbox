@@ -1,7 +1,7 @@
 //
 // Curve Light
 //
-// Created by Hamish McKenzie hamish@macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 17 November 2002
 //
 // Description:
@@ -21,7 +21,7 @@
 //  just type the command:
 //	zooCurveLight;
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 
@@ -213,4 +213,4 @@ global proc string[] zooCurveLightDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

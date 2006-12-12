@@ -1,10 +1,10 @@
 // zooMirror
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 07 August 2004
 //
-// Hamish McKenzie ©2006...
-// macaroniKazoo Productions ©2006...
+// Hamish McKenzie ©2007...
+// macaroniKazoo Productions ©2007...
 
 
 global proc zooReflecto() {
@@ -303,4 +303,4 @@ global proc string[] zooReflectoDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

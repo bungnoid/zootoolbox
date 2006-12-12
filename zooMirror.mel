@@ -1,9 +1,9 @@
 // zooMirror
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 07 August 2004
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 zooAlign "-load 1";
@@ -63,4 +63,4 @@ global proc string[] zooMirrorDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

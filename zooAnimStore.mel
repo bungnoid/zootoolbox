@@ -227,7 +227,7 @@ global proc zooClipPopup( string $popup, string $locale, string $clip, string $t
 	menuItem -l "apply with loose name matching" -c( "zooApplyClip \""+ $clip +"."+ $type +"\" \""+ $store +"\" \""+ $locale +"\" 0 0;" );
 	menuItem -l "apply with xferAnim" -c( "zooAnimStoreWindowFunctions_var -loadInXfer_"+ $locale +" "+ $clip +"."+ $type +";" );
 	menuItem -d 1;
-	menuItem -l( "move clip to "+ $otherLoc ) -c( "zooMoveClip \""+ $clip +"."+ $type +"\" \""+ $store +"\" \""+ $locale +"\"; zooAnimStoreWindowFunctions -updateClips"+ ($locale=="local"?"G":"L") +";" );;
+	menuItem -l( "move clip to "+ $otherLoc ) -c( "zooMoveClip \""+ $clip +"."+ $type +"\" \""+ $store +"\" \""+ $locale +"\"; zooAnimStoreWindowFunctions -updateClips;" );;
 	menuItem -l( "copy clip to "+ $otherLoc ) -c( "zooCopyClip \""+ $clip +"."+ $type +"\" \""+ $store +"\" \""+ $locale +"\"; zooAnimStoreWindowFunctions -updateClips"+ ($locale=="local"?"G":"L") +";" );;
 	menuItem -l "rename clip..." -c( "{ string $ans = `promptDialog -t \"rename clip\" -tx "+ $clip +" -m \"New Name:\" -b \"Rename\" -b \"Cancel\"`; if( $ans != \"Cancel\" ) { zooRenameClip "+ $clip +"."+ $type +" "+ $store +" \""+ $locale +"\" ( `promptDialog -q -text` +\"."+ $type +"\"); zooAnimStoreWindowFunctions -updateClips"+ ($locale=="local"?"L":"G") +"; }}" );
 	menuItem -d 1;
@@ -488,4 +488,4 @@ global proc zooApplyClip( string $clip, string $store, string $locale, float $na
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

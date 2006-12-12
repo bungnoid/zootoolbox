@@ -1,7 +1,7 @@
 //
 // Tangent Works
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 29 May 2005
 //
 // Description:
@@ -23,7 +23,7 @@
 // to reflect which key is used (ie if you're using alt-w then
 // change it to -alt 1).
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 zooFlags;  //source zooFlags
@@ -184,4 +184,4 @@ global proc string[] zooSetkeyDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

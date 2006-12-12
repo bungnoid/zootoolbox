@@ -1,13 +1,13 @@
 //
 // zooNameSpacey
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 07 October 2003
 //
 // Description:
 // helps management of name spaces within a scene
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 zooNameSpaceyUtils;
@@ -146,4 +146,4 @@ global proc string zooNameSpaceyInfo ( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

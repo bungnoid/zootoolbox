@@ -19,7 +19,7 @@
 //  zooReblender_recreator { "mesh1", "mesh2", "mesh3"... };
 //  command.
 //
-// ©2006 macaroniKazoo.com
+// ©2007 macaroniKazoo.com
 //------------
 
 
@@ -73,4 +73,4 @@ global proc zooReblender_recreator ( string $objs[] ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

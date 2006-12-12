@@ -16,7 +16,7 @@
 //  zooAutoSave;
 //  this loads the script
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 zooShelveIt;
@@ -282,4 +282,4 @@ global proc string[] zooAutoSaveDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

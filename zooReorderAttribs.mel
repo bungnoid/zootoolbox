@@ -17,7 +17,7 @@
 //  simply run the command:
 //	zooReorderAttribs;
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 global proc zooReorderAttribs () {
@@ -179,4 +179,4 @@ global proc string[] zooReorderAttribsDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

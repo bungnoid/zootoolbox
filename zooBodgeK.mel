@@ -1,7 +1,7 @@
 //
 // bodgy interactive IK
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 11 August 2002
 //
 // Description:
@@ -13,7 +13,7 @@
 // of, play with whatever options you want to, and hit the go
 // button.
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 zooArrays_str;
@@ -543,4 +543,4 @@ global proc string zooBodgeKInfo ( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

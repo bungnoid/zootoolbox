@@ -1,7 +1,7 @@
 //
 // zooKeyCommands
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 10 May 2003
 //
 // Description:
@@ -14,7 +14,7 @@
 //  after sourcing the script, run this command:
 //	zooKeyCommandsWin;
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 {
@@ -129,4 +129,4 @@ global proc zooKeyCommandsWinExecute() {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

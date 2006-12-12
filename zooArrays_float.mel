@@ -305,4 +305,4 @@ global proc float[] zooNormaliseArraySum( float $array[], float $normaliseTo ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

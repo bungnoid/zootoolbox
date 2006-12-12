@@ -24,7 +24,7 @@
 //
 // Distort UVs
 //
-// Created by Hamish McKenzie hamish@emissionpossible.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 25 March 2003
 //
 // Description:
@@ -60,7 +60,7 @@
 //  Attributes are setup up on the original texture to control the
 //  effect.
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 global proc zzMakeUVDistortion () {

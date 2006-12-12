@@ -123,7 +123,7 @@ global proc string[] zooMatchNames( string $sources[], string $targets[], string
 					//so now test to see if any of the tokens are "sub-words" of each other - ie if you have something_otherThing another_other
 					//the second token, "otherThing" and "other", the second is a subset of the first, so this is a rough match
 					if( $bestTokMatch<$closeWeight ) if( `size $srcTok` > 1 && `size $tgtTok` > 1 ) {  //make sure the src and tgt tokens are non-trivial (ie at least 2 letters)
-						if( `match (tolower($srcTok)) (tolower($tgtTok))` == tolower($srcTok)) {$bestTokMatch = $containWeight;print( $tgt +"  "+ $srcTok +"   "+ `match (tolower($srcTok)) (tolower($tgtTok))` +"\n");}
+						if( `match (tolower($srcTok)) (tolower($tgtTok))` == tolower($srcTok)) $bestTokMatch = $containWeight;
 						else if( `match (tolower($tgtTok)) (tolower($srcTok))` == tolower($tgtTok)) $bestTokMatch = $containWeight;
 						}
 					}
@@ -156,7 +156,7 @@ global proc string[] zooMatchNames( string $sources[], string $targets[], string
 		else $matchedList[( `size $matchedList` )] = "";
 
 		//debugging line - useful for printing match stats when fine tuning the algorithm
-		for( $x=0; $x<`size $targets`; $x++ ) print( $targets[$x] +" - "+ $tokenMatchCount[$x] +" - "+ $tokenWeight +" - "+ $numSrcTokens +"\n" );
+		//for( $x=0; $x<`size $targets`; $x++ ) print( $targets[$x] +" - "+ $tokenMatchCount[$x] +" - "+ $tokenWeight +" - "+ $numSrcTokens +"\n" );
 		}
 
 	$targets = $tgtTemp;

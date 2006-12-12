@@ -246,4 +246,4 @@ global proc string[] zooQueryPoseConnects( string $trigger, string $cmdStr ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

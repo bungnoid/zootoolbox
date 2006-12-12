@@ -1,7 +1,7 @@
 //
 // zooWeightSave
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 25 March 2005
 //
 // Description:
@@ -22,7 +22,7 @@
 // NOTE: that if joint names change after storing, it can only be by
 // adding/removing a namespace, or an altered joint pathname (ie long name)
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 zooArrays_float;
@@ -366,4 +366,4 @@ global proc string zooWeightSaveInfo( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

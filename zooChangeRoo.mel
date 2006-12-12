@@ -1,7 +1,7 @@
 //
 // zooChangeRoo
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 09 January 2002
 //
 // Description:
@@ -15,7 +15,7 @@
 // will change all selected objects rotation order to zxy
 //
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 zooArrays_float;
@@ -98,4 +98,4 @@ global proc string[] zooChangeRooDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

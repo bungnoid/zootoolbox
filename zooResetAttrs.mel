@@ -16,4 +16,4 @@ global proc zooResetAttrs( string $obj ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

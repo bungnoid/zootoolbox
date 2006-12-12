@@ -123,4 +123,4 @@ global proc zooWeightsToOther( string $joint, string $optionStr ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

@@ -8,7 +8,7 @@
 //
 // more detail on how to use zooChangeSpace can be found at the end of this script
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 //load dependencies
@@ -114,4 +114,4 @@ this does exactly the same as the previous example, but using the -cmd flag
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

@@ -1,7 +1,7 @@
 //
 // xfer animation
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 10 May 2003
 //
 // Description:
@@ -19,8 +19,8 @@
 // actual transfer of animation is contained in the zooXferAnimUtils script.  If you want to
 // use zooXferAnim commands in other scripts, refer to zooXferAnimUtils
 //
-// Hamish McKenzie ©2006...
-// macaroniKazoo Productions ©2006...
+// Hamish McKenzie ©2007...
+// macaroniKazoo Productions ©2007...
 
 
 zooAnimFile;
@@ -718,4 +718,4 @@ global proc string zooXferAnimInfo ( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

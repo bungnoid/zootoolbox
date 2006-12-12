@@ -15,7 +15,7 @@
 //  Example:
 //	zooPanelCycler { "graph", "dope", "render" };  will toggle the graph and dope sheets.
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 zooArrays_str;
@@ -105,4 +105,4 @@ global proc zooGetAllAlias( string $alias[], string $names[] ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

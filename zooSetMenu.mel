@@ -1,7 +1,7 @@
 //
 // quick selection set enhanced menu
 //
-// Created by Hamish McKenzie mel@mel.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 1 October 2001
 //
 // Description:
@@ -24,7 +24,7 @@
 // to reflect which key is used (ie if you're using alt-w then
 // change it to -alt 1).
 //
-// Hamish McKenzie ©2006...
+// Hamish McKenzie ©2007...
 
 
 zooUtils;
@@ -432,4 +432,4 @@ global proc string zooSetMenuToolsInfo ( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007
