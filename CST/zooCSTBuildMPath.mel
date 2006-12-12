@@ -291,4 +291,4 @@ global proc string[] zooCSTBuildMPath( string $prefix, string $objs[], string $o
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

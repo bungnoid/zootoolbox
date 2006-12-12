@@ -163,10 +163,11 @@ global proc string[] zooCSTBuildPrimIKFKSpine( string $prefix, string $root, str
 	//------
 	//now cleanup the top level
 	//------
+		//     deform1     deform2     deform3     basecurve   curve
 		parent $subPrim[0] $subPrim[1] $subPrim[2] $subPrim[3] $subPrim[4] $partsControl;
 		for( $n=6; $n<`size $subPrim`; $n++ ) {
 			if( !`objExists $subPrim[$n]` ) continue;
-			if( `nodeType $subPrim[$n]` == "motionPath" ) break;
+			if( `nodeType $subPrim[$n]` != "transform" ) break;
 			parent $subPrim[$n] $partsControl;
 			}
 
@@ -269,4 +270,4 @@ option flags
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

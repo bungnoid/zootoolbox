@@ -302,6 +302,7 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 		connectAttr -f ( $limbControl +".ikBlend" ) ( $wristSpaceOrient +"."+ $attribs[0] );
 		connectAttr -f ( $weightRevNode +".outputX" ) ( $wristSpaceOrient +"."+ $attribs[1] );
 		setAttr ( $wristSpaceOrient +".interpType" ) 2;
+		$utils[`size $utils`] = $weightRevNode;
 
 
 	//------
@@ -428,4 +429,4 @@ controller names are returned.  the $controller variable is the object attribs a
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

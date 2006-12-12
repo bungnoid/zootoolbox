@@ -158,7 +158,7 @@ global proc string[] zooCSTMakeStretchy( string $control, string $ikHandle, stri
 		connectAttr -f ( $dampen +".output" ) ( $lengthMods +".input1D[2]" );
 		connectAttr -f ( $stretchEnable +".outputX" ) ( $actualLength +".input1D[1]" );
 		connectAttr -f ( $actualLength +".output1D" ) ( $finalLength +".inputR" );
-		$allNodes = `zooAddArray_str $allNodes { $dampen, $lengthMods, $actualLength, $finalLength, $manualStretchMult, $fkikBlend }`;
+		$allNodes = `zooAddArray_str $allNodes { $dampen, $lengthMods, $actualLength, $finalLength, $manualStretchMult, $fkikBlend, $stretchEnable }`;
 
 
 	//------
@@ -192,6 +192,7 @@ global proc string[] zooCSTMakeStretchy( string $control, string $ikHandle, stri
 
 			$elbowPos = `shadingNode -asUtility reverse`;
 			$elbowPos = `rename $elbowPos ( $clients[1] +"_elbowPos")`;
+			$allNodes[`size $allNodes`] = $elbowPos;
 			if( $isNeg ) {
 				string $mult = `shadingNode -asUtility multiplyDivide`;
 				setAttr ( $mult +".input2" ) -1 -1 -1;
@@ -200,13 +201,13 @@ global proc string[] zooCSTMakeStretchy( string $control, string $ikHandle, stri
 				connectAttr -f ( $elbowPos +".outputX" ) ( $mult +".input1Y" );
 				connectAttr -f ( $mult +".outputY" ) ( $fractionNodes[2] +".input2X" );
 				connectAttr -f ( $mult +".outputX" ) ( $fractionNodes[1] +".input2X" );
+				$allNodes[`size $allNodes`] = $mult;
 				}
 			else {
 				connectAttr -f ( $control +".elbowPos" ) ( $elbowPos +".inputX" );
 				connectAttr -f ( $elbowPos +".outputX" ) ( $fractionNodes[2] +".input2X" );
 				connectAttr -f ( $control +".elbowPos" ) ( $fractionNodes[1] +".input2X" );
 				}
-			$allNodes[( `size $allNodes` )] = $elbowPos;
 			}
 
 
@@ -277,4 +278,4 @@ global proc float[] zooCSTGetIKLength( string $ikHandle ) {
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

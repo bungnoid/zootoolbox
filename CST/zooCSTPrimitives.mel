@@ -226,6 +226,7 @@ global proc zooCSTDeletePrimitive( string $primitive ) {
 	string $outputs[] = `zooCSTListPrimOutputs $primitive`;
 	for( $obj in $outputs ) zooCSTDisconnectObj $obj "-inputs 1 -outputs 1";
 	for( $obj in $outputs ) if( `objExists $obj` ) delete $obj;
+	for( $obj in $controls ) if( `objExists $obj` ) delete $obj;
 
 	zooCSTDisconnectObj $primitive "-inputs 1 -outputs 1";
 	if( `exists deleteUnusedExpressions` ) deleteUnusedExpressions;  //this is an alias proc used when doing an optimize scene
@@ -260,7 +261,7 @@ global proc zooCSTDisconnectObj( string $obj, string $optionStr ) {
 		if( `objExists $objSrc` ) if( `nodeType $objSrc` == "unitConversion" ) delete $objSrc;
 		}
 
-	string $outputs[] = `listConnections -s 0 -d 1 -c 1 -p 1 $obj`;
+	string $outputs[] = `listConnections -scn 1 -s 0 -d 1 -c 1 -p 1 $obj`;
 	if( $doOutputs ) for( $n=0; $n<`size $outputs`; $n+=2 ) {
 		string $objTgt = `match "^[^.]+" $inputs[$n]`;
 		string $attrTgt = `match "[^.]+$" $inputs[$n]`;
@@ -356,4 +357,4 @@ So thats is.  Its sounds like quite a lot of extra work, but it doesn't take lon
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007

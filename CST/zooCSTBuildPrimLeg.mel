@@ -66,7 +66,7 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 		for( $n=0; $n<`size $controls`; $n++ ) $controls[$n] = `zooRenamerFunctions replace limbMiddle knee $controls[$n]`;
 		for( $n=0; $n<`size $controls`; $n++ ) $controls[$n] = `zooRenamerFunctions replace limbEnd ankle $controls[$n]`;
 		for( $n=0; $n<`size $controls`; $n++ ) $controls[$n] = `zooRenamerFunctions replace pole knee $controls[$n]`;
-		$controls[0] = `rename $controls[0] ( $prefix +"_leg_ik_lockthis"+ $suffix )`;
+		$controls[0] = `rename $controls[0] ( $prefix +"_leg_ik"+ $suffix )`;
 
 
 	//------
@@ -291,10 +291,14 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 
 
 	//------
-	//hide attribs
+	//hide attribs, objects and cleanup
 	//------
+		setAttr ( $legIK +".v" ) 0;
+		delete `listRelatives -s -pa $legIK`;  //delete legIK shape nodes
 		zooAttrState "-attrs s kneePos -k 0 -l 1" $legControl;
 		zooAttrState "-attrs v -k 0" $legControl;
+		string $toLock[] = {$legIK,$legControlSpace,$toeRoll,$heelRoll,$footControlSpace,$footRollControl,$toeOrient,$footBankL,$footBankR};
+		for( $a in $toLock ) zooAttrState "-attrs t r s -l 1" $a;
 
 
 	//------
@@ -326,7 +330,7 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 		zooCSTPrimOutputs $controls $primitive;
 		zooCSTPrimOutputs { $legControl, $legControlSpace, $footControlSpace, $footRollControl, $toeOrient } $primitive;
 		zooCSTPrimOutputs { $footBankL, $footBankR, $toeRoll } $primitive;
-		zooCSTPrimOutputs { $reverseNode, $footControlConstraint } $primitive;
+		zooCSTPrimOutputs { $reverseNode, $weightReverse, $footControlConstraint } $primitive;
 		zooCSTPrimOutputs $constraints $primitive;
 		zooCSTPrimOutputs $stretchNodes $primitive;
 		zooCSTPrimOutputs $spaceNodes $primitive;
@@ -399,4 +403,4 @@ option flags
 
 
 //zoo.end
-//macaroniKazoo ©2006
+//macaroniKazoo ©2007
