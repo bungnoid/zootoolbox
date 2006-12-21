@@ -7,6 +7,8 @@ zooUtils;
 //create alias'
 alias h help -doc;
 alias w whatIs;
+alias d procDef;
+alias l listProcs;
 
 
 //re-create the scripts environment variable to include all sub-directories of the maya/scripts dir
