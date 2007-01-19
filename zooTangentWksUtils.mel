@@ -1,6 +1,7 @@
 zooUtils;
 zooArrays_float;
 zooGraphFilterUtils;
+zooVectors;
 
 
 global proc zooTangentWksUtils() {

@@ -489,7 +489,10 @@ global proc string[] zooAnimFileGetObjs( string $filepath ) {
 
 
 //------
-//
+//the following procs are specific to reading anim files - the file needs to be open
+//already - which is why it takes a fileID arg.  it reads through the file - and
+//changes the current position of the reader, and returns an object and its per
+//object info in the given array
 //------
 global proc int zooGetNextObj( int $fileID, string $objInfo[] ) {
 	string $line = "";
@@ -517,7 +520,7 @@ global proc int zooGetNextObj( int $fileID, string $objInfo[] ) {
 
 
 //------
-//
+//moves to the next attr in the file and returns its name
 //------
 global proc string zooGetNextAttr( int $fileID ) {
 	while( !`feof $fileID` ) {
@@ -531,7 +534,8 @@ global proc string zooGetNextAttr( int $fileID ) {
 
 
 //------
-//
+//moves to the next key data for an attr in the file, and fills the passed arrays
+//with appropriate data
 //------
 global proc int zooGetNextAttrInfo( int $fileID, string $weighted[], string $keys[], string $locked[], string $tTypes[], string $tVals[] ) {
 	string $line = "";
@@ -567,7 +571,7 @@ global proc int zooGetNextAttrInfo( int $fileID, string $weighted[], string $key
 
 
 //------
-//
+//returns a single line, and moves on in the file - strips out newlines as well
 //------
 global proc string zooGetLine( int $fileID ) {
 	string $line = `fgetline $fileID`;
