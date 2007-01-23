@@ -31,12 +31,13 @@ global proc zooKeyCommands( string $optionStr, string $cmd ) {
 	if( `size $optionTemp` ) $objs = $optionTemp;
 	clear $optionTemp;
 
+
 	//------
 	//get the keyframe list
 	//------
-	$keys = `keyframe -q -tc $objs`;
-	$keys = `sort $keys`;
-	$keys = `zooRemoveDupeItems_float $keys`;
+		$keys = `keyframe -q -tc $objs`;
+		$keys = `sort $keys`;
+		$keys = `zooRemoveDupeItems_float $keys`;
 
 
 	//------
@@ -51,86 +52,87 @@ global proc zooKeyCommands( string $optionStr, string $cmd ) {
 	//  -frames * 50 does all keys from the first key to frame 50
 	//  -frames * * does all keys
 	//------
-	$optionTemp = `zooGetFlagArguments $optionStr bake`; if( `size $optionTemp` ) $bake = $optionTemp[0];
-	$optionTemp = `zooGetFlagArguments $optionStr frames`;
-	string $startStr = "!"; if( `size $optionTemp` ) $startStr = $optionTemp[0];
-	string $endStr = "!"; if( `size $optionTemp` ) $endStr = $optionTemp[1];
-	float $selRange[] = `zooGetSelectedRange`;
-	float $start = `playbackOptions -q -min`;
-	float $end = `playbackOptions -q -max`;
-	int $n = 0;
+		$optionTemp = `zooGetFlagArguments $optionStr bake`; if( `size $optionTemp` ) $bake = $optionTemp[0];
+		$optionTemp = `zooGetFlagArguments $optionStr frames`;
+		string $startStr = "!"; if( `size $optionTemp` ) $startStr = $optionTemp[0];
+		string $endStr = "!"; if( `size $optionTemp` ) $endStr = $optionTemp[1];
+		float $selRange[] = `zooGetSelectedRange`;
+		float $start = `playbackOptions -q -min`;
+		float $end = `playbackOptions -q -max`;
+		int $n = 0;
 
-	if( $startStr == "." ) $start = `currentTime -q`;
-	else if( $startStr == "*" ) $start = $keys[0];
-	else if( $startStr == "!" ) $start = `playbackOptions -q -min`;
-	else if( $startStr == ":" ) $start = $selRange[0];
-	else if( $startStr == "$" ) $start = `playbackOptions -q -ast`;
-	else if( $startStr == "<" ) $start = `findKeyframe -w previous`;
-	else if( $startStr == ">" ) $start = `findKeyframe -w next`;
-	else if( `match "[-0-9]+" $startStr` != "" ) $start = $startStr;
+		if( $startStr == "." ) $start = `currentTime -q`;
+		else if( $startStr == "*" ) $start = $keys[0];
+		else if( $startStr == "!" ) $start = `playbackOptions -q -min`;
+		else if( $startStr == ":" ) $start = $selRange[0];
+		else if( $startStr == "$" ) $start = `playbackOptions -q -ast`;
+		else if( $startStr == "<" ) $start = `findKeyframe -w previous`;
+		else if( $startStr == ">" ) $start = `findKeyframe -w next`;
+		else if( `match "[-0-9]+" $startStr` != "" ) $start = $startStr;
 
-	if( $endStr == "." ) $end = `currentTime -q`;
-	else if( $endStr == "*" ) $end = $keys[( `size $keys`-1 )];
-	else if( $endStr == "!" ) $end = `playbackOptions -q -max`;
-	else if( $endStr == ":" ) $end = $selRange[1];
-	else if( $endStr == "$" ) $end = `playbackOptions -q -aet`;
-	else if( $endStr == "<" ) $end = `findKeyframe -w previous`;
-	else if( $endStr == ">" ) $end = `findKeyframe -w next`;
-	else if( `match "[-0-9]+" $endStr` != "" ) $end = $endStr;
+		if( $endStr == "." ) $end = `currentTime -q`;
+		else if( $endStr == "*" ) $end = $keys[( `size $keys`-1 )];
+		else if( $endStr == "!" ) $end = `playbackOptions -q -max`;
+		else if( $endStr == ":" ) $end = $selRange[1];
+		else if( $endStr == "$" ) $end = `playbackOptions -q -aet`;
+		else if( $endStr == "<" ) $end = `findKeyframe -w previous`;
+		else if( $endStr == ">" ) $end = `findKeyframe -w next`;
+		else if( `match "[-0-9]+" $endStr` != "" ) $end = $endStr;
 
-	//make sure the start is before the end
-	if( $start > $end ) {
-		float $temp = $start;
-		$start = $end;
-		$end = $temp;
-		}
+		//make sure the start is before the end
+		if( $start > $end ) {
+			float $temp = $start;
+			$start = $end;
+			$end = $temp;
+			}
 
-	//now crop the list of keys to the range of the start/end
-	$keys = `zooCropArray_float $keys $start $end`;
+		//now crop the list of keys to the range of the start/end
+		$keys = `zooCropArray_float $keys $start $end`;
 
-	//now if we're in bake mode, clear the key array and build a new array containing each frame between start and end
-	if( $bake ) {
-		clear $keys;
-		for( $n=$start; $n<$end; $n+=$bake ) $keys[( `size $keys` )] = $n;
-		print $keys;
-		}
+		//now if we're in bake mode, clear the key array and build a new array containing each frame between start and end
+		if( $bake ) {
+			clear $keys;
+			for( $n=$start; $n<$end; $n+=$bake ) $keys[( `size $keys` )] = $n;
+			print $keys;
+			}
+
 
 	//------
 	//initialise the progress window variables
 	//------
-	float $progress = 0;
-	float $increment = `size $keys`? 100/(float)(`size $keys`): 1;
+		float $progress = 0;
+		float $increment = `size $keys`? 100/(float)(`size $keys`): 1;
 
 
 	//------
 	//run the command
 	//------
-	zooAllViews 0;
-	if( $cmd != "" ) for( $t in $keys ) {
-		currentTime $t;
-		string $tmpACmd = $cmd;
-		//the @ symbol is used to refer to the current frame number - so sub the value into the command
-		while( `match "@+" $tmpACmd` != "" ) $tmpACmd = `substitute "@+" $tmpACmd ((string)$t)`;
+		zooAllViews 0;
+		if( $cmd != "" ) for( $t in $keys ) {
+			currentTime $t;
+			string $tmpACmd = $cmd;
+			//the @ symbol is used to refer to the current frame number - so sub the value into the command
+			while( `match "@+" $tmpACmd` != "" ) $tmpACmd = `substitute "@+" $tmpACmd ((string)$t)`;
 
-		//the ^ symbol is used to refer to the current key index
-		while( `match "^+" $tmpACmd` != "" ) $tmpACmd = `substitute "^+" $tmpACmd ((string)$n)`;
-		for( $obj in $objs ) if( size(`keyframe -t $t -q $obj`) || $bake ) {
-			string $tmpBCmd = $tmpACmd;
-			//the # symbol is used to refer to the trigger itself - so sub the name of the trigger into the command
-			while( `match "#+" $tmpBCmd` != "" ) $tmpBCmd = `substitute "#+" $tmpBCmd $obj`;
-			catch(eval($tmpBCmd));
+			//the ^ symbol is used to refer to the current key index
+			while( `match "^+" $tmpACmd` != "" ) $tmpACmd = `substitute "^+" $tmpACmd ((string)$n)`;
+			for( $obj in $objs ) if( size(`keyframe -t $t -q $obj`) || $bake ) {
+				string $tmpBCmd = $tmpACmd;
+				//the # symbol is used to refer to the trigger itself - so sub the name of the trigger into the command
+				while( `match "#+" $tmpBCmd` != "" ) $tmpBCmd = `substitute "#+" $tmpBCmd $obj`;
+				catch(eval($tmpBCmd));
+				}
+			$n++;
+
+			//update progress window
+			$progress += $increment;
+			if( `progressWindow -q -ic` ) break;
+			progressWindow -e -progress((int)$progress) -status( "working on key at time: "+ $t );
 			}
-		$n++;
 
-		//update progress window
-		$progress += $increment;
-		if( `progressWindow -q -ic` ) break;
-		progressWindow -e -progress((int)$progress) -status( "working on key at time: "+ $t );
-		}
-
-	progressWindow -endProgress;
-	currentTime $initialTime;
-	zooAllViews 1;
+		progressWindow -ep;
+		currentTime $initialTime;
+		zooAllViews 1;
 	}
 
 
@@ -162,10 +164,10 @@ global proc zooKeyCommandsPopupMenu( string $parent ) {
 	setParent -m $parent;
 	menu -e -dai $parent;
 
-	menuItem -l "setKeyframe (all attributes)" -c( "zooKeyCommands \"-frames ! !\" \"setKeyframe\"" );
-	menuItem -ob 1 -c( "zooKeyCommands \"-frames . !\" \"setKeyframe\"" );
-	menuItem -l "setKeyframe (transforms only)" -c( "zooKeyCommands \"-frames ! !\" \"setKeyframe -at t -at r -at s\"" );
-	menuItem -ob 1 -c( "zooKeyCommands \"-frames . !\" \"setKeyframe -at t -at r -at s\"" );
+	menuItem -l "setKeyframe (all attributes)" -c( "zooKeyCommands \"-frames ! !\" \"setKeyframe #;\"" );
+	menuItem -ob 1 -c( "zooKeyCommands \"-frames . !\" \"setKeyframe #;\"" );
+	menuItem -l "setKeyframe (transforms only)" -c( "zooKeyCommands \"-frames ! !\" \"setKeyframe -at t -at r -at s #;\"" );
+	menuItem -ob 1 -c( "zooKeyCommands \"-frames . !\" \"setKeyframe -at t -at r -at s #;\"" );
 	menuItem -l "setParent 0" -c( "zooKeyCommands \"-frames ! !\" \"zooChangeSpace \\\"-attr parent 0\\\" #\"" );
 	menuItem -ob 1 -c( "zooKeyCommands \"-frames . !\" \"zooChangeSpace \\\"-attr parent 0\\\" #\"" );
 	menuItem -l "setParent 1" -c( "zooKeyCommands \"-frames ! !\" \"zooChangeSpace \\\"-attr parent 1\\\" #\"" );

@@ -443,12 +443,19 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 					$keyVal = $cur + $fileVal;
 					}
 
+				if( $additive ) {
+					float $cur = `getAttr ( $tgt +"."+ $attrib )`;
+					$keyVal = $cur + $keyVal;
+					}
+
 				//process keyframe and tangent information, provided the target attribute exists and is keyable
+				int $isPose = 0;
 				setKeyframe -t $keyTime -v $keyVal ( $tgt +"."+ $attrib );
 				if( $inWeight == -1 && $outWeight == -1 ) $tangents = 0;
 				if( $ittType == "global" ) $ittType = $globalItt;
 				if( $ottType == "global" ) $ottType = $globalOtt;
-				keyTangent -e -t $keyTime -l $lock -ia $inAngle -oa $outAngle -iw $inWeight -ow $outWeight ( $tgt +"."+ $attrib );
+				if( $inAngle == -1 && $outAngle == -1 && $inWeight == -1 && $outWeight == -1 ) $isPose = 1;
+				if( !$isPose ) keyTangent -e -t $keyTime -l $lock -ia $inAngle -oa $outAngle -iw $inWeight -ow $outWeight ( $tgt +"."+ $attrib );
 				}
 			}
 		}
