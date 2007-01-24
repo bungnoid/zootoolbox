@@ -20,19 +20,6 @@ global proc float[] zooGetSelectedRange() {
 	}
 
 
-//simply returns the object name of an attribute path.  ie, `zooBodgeKReturnObjName "pSphere1.translateX"`;  returns pSphere1
-global proc string zooNameFromAttrPath( string $attributePath ) {
-	string $buffer[] = {};
-	tokenize $attributePath "." $buffer;
-	return $buffer[0];
-	}
-
-
-global proc string[] zooUtilsGetFiles( string $path, string $filespec ){
-	return `zooGetFiles $path $filespec`;
-	}
-
-
 global proc string[] zooGetFiles( string $path, string $filespec ){
 	string $files[] = `getFileList -folder ( $path +"/" ) -filespec $filespec`;
 	string $dirs[] = {};
@@ -40,12 +27,6 @@ global proc string[] zooGetFiles( string $path, string $filespec ){
 	for( $file in $files ) if( `filetest -f ( $path +"/"+ $file )` ) $dirs[( `size $dirs` )] = $file;
 
 	return $dirs;
-	}
-
-
-//returns a list of immediate children directories under the given directory
-global proc string[] zooUtilsGetSubDirs( string $path ){
-	return `zooGetSubDirs $path 0`;
 	}
 
 
@@ -61,11 +42,6 @@ global proc string[] zooGetSubDirs( string $path, int $includeRoot ){
 		}
 
 	return $dirs;
-	}
-
-
-global proc string[] zooUtilsGetRecursedSubDirs( string $path ) {
-	return `zooGetRecursedSubDirs $path`;
 	}
 
 
