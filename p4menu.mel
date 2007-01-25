@@ -1,0 +1,53 @@
+global proc p4menu() {
+	global string $gMainWindow;
+	string $menuName = "p4menu";
+
+	if( `menu -ex $menuName` ) deleteUI $menuName;
+	menu -l "Perforce" -to 1 -p $gMainWindow -pmc( "p4buildMenu "+ $menuName +" \"\";" ) $menuName;
+	}
+
+
+global proc p4buildMenu( string $parent, string $file ) {
+	menu -e -dai $parent;
+	setParent -m $parent;
+
+	//if the given file is an empty string, then query the currently opened file and use that
+	if( $file == "" ) $file = `file -q -sn`;
+
+	//if the file is still an empty string or unreadable, the currently opened file hasn't been saved - report it
+	if( !`filetest -r $file` || $file == "" ) {
+		menuItem -en 0 -l "file not saved";
+		menuItem -d 1;
+		menuItem -l "Perforce Scene File Lister" -c( "p4Lister {};" );
+		menuItem -l "List All Files Currently \"open for edit\"" -c( "p4Lister `p4OpenedFullPaths`;" );
+		return;
+		}
+
+	p4;
+	string $dataNames[] = {};
+	string $data[] = `p4_fstat $file $dataNames {}`;
+	int $isEdit = `isEdit $file`;
+	int $headRev = `zooGetIdxOfElement_str $dataNames "headRev"`;
+	int $haveRev = `zooGetIdxOfElement_str $dataNames "haveRev"`;
+	int $isLatest = 0;
+	int $inPerforce = 1;
+
+	if( $headRev != -1 ) $isLatest = $data[$headRev] == $data[$haveRev]? 1: 0;
+	if( $headRev == -1 ) $inPerforce = 0;
+	if( !$inPerforce ) menuItem -l "Add to Perforce" -c( "p4_add \""+ $file +"\"; p4_submit {\""+ $file +"\"} \"file added from maya\"; p4_edit \""+ $file +"\";" );
+	else {
+		menuItem -en(!$isLatest) -l( "Sync to Latest ("+ $data[$haveRev] +"/"+ $data[$headRev] +")" ) -c( "p4_sync \""+ $file +"\";" );
+		menuItem -en(!$isEdit) -l "Open for Edit" -c( "p4_sync \""+ $file +"\"; p4_edit \""+ $file +"\";" );
+		menuItem -d 1;
+		menuItem -en $isEdit -l "Submit File" -c( "p4submitUI {\""+ $file +"\"};" );
+		menuItem -d 1;
+		menuItem -en $isEdit -l "Revert File" -c( "p4_revert \""+ $file +"\";" );
+		}
+	menuItem -d 1;
+	menuItem -l "Explore to File" -c( "zooExploreTo \""+ $file +"\";" );
+	//menuItem -d 1;
+	//menuItem -l "Perforce Scene File Lister" -c( "p4Lister {};" );
+	//menuItem -l "List All Files Currently \"open for edit\"" -c( "p4Lister `p4OpenedFullPaths`;" );
+	}
+
+

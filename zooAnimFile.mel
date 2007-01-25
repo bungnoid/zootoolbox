@@ -341,6 +341,7 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 	float $incrementalApply = 1.0;
 	int $incrementOn = 0;
 	int $additive = 0;
+	int $nocreate = 0;
 	int $numSrcs = `size $srcs`;
 	int $numTgts = `size $tgts`;
 
@@ -349,6 +350,7 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 	$temp = `zooGetFlagArguments $optionStr incrementOn`; if( `size $temp` ) if( `size $temp` ) $incrementOn = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr increment`; if( `size $temp` ) if( `size $temp` ) $incrementalApply = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr additive`; if( `size $temp` ) $additive = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr nocreate`; if( `size $temp` ) $nocreate = $temp[0];
 
 	//look for problems
 	if( !`filetest -r $filename` ) { warning "the specified file doesn't exist"; return; }
@@ -447,6 +449,10 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 					float $cur = `getAttr ( $tgt +"."+ $attrib )`;
 					$keyVal = $cur + $keyVal;
 					}
+
+				//if nocreate is turned on - this means don't create keys, only modify existing keys.
+				//not very useful for anim clip loading, but useful for pose clip loading sometimes
+				if( $nocreate ) if( !`keyframe -t $keyTime -q -kc ( $tgt +"."+ $attrib )`) continue;
 
 				//process keyframe and tangent information, provided the target attribute exists and is keyable
 				int $isPose = 0;
