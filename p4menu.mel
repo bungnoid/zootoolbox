@@ -25,8 +25,8 @@ global proc p4buildMenu( string $parent, string $file ) {
 
 	p4;
 	string $dataNames[] = {};
-	string $data[] = `p4_fstat $file $dataNames {}`;
-	int $isEdit = `isEdit $file`;
+	string $data[] = {};
+	int $isEdit = `isEdit $file $dataNames $data`;
 	int $headRev = `zooGetIdxOfElement_str $dataNames "headRev"`;
 	int $haveRev = `zooGetIdxOfElement_str $dataNames "haveRev"`;
 	int $isLatest = 0;

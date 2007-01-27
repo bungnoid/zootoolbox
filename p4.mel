@@ -16,7 +16,7 @@ global proc p4() {
 		string $windowName = "p4SubmitUI";
 		string $windowTitle = "submit comments";
 		string $fileArrayStr = "{ \""+ `zooArrayToStr_str $files "\",\""` +"\" }";
-		int $isEdit = `isEdit $files[0]`;
+		int $isEdit = `isEdit $files[0] {} {}`;
 
 		if( `window -exists $windowName` ) deleteUI $windowName;
 		window -title $windowTitle -mb 1 -resizeToFitChildren 0 -maximizeButton 0 -sizeable 1 -width 300 -height 200 $windowName;
@@ -92,21 +92,6 @@ global proc p4() {
 		}
 
 
-	//returns whether a given file is already open for edit or not
-	global proc int isEdit( string $file ) {
-		string $opened[] = `p4_opened`;
-		$file = `p4Path $file`;
-		if( $file != "" ) $file = `tolower $file`;
-		for( $path in $opened ) {
-			$path = tolower(`zooScrubPath $path`);
-			//print( `zooPadAfter_str $path 80 " "` +"     "+ $file +"\n" );  //debugging line
-			if( $file == $path ) return 1;
-			}
-
-		return 0;
-		}
-
-
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 // COMMON FUNCTIONALITY - these are commonly used functions that aren't single line functions with the p4 wrappers
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -129,29 +114,6 @@ global proc p4() {
 		else $revStr = "x"+ $revStr;
 
 		return $revStr;
-		}
-
-
-	//returns an int as to whether the current file is synced to the latest perforce
-	//revision.  returns -1 if file is not in perforce
-	global proc int isLatest( string $file ) {
-		string $dataNames[] = {};
-		string $data[] = `p4_fstat $file $dataNames {}`;
-		int $headRev = `zooGetIdxOfElement_str $dataNames "headRev"`;
-		int $haveRev = `zooGetIdxOfElement_str $dataNames "haveRev"`;
-		int $actIdx = `zooGetIdxOfElement_str $dataNames "action"`;
-
-		//so if the head rev is -1 that means it doesn't have a head revision which
-		//means either the file isn't in perforce - OR its been added to perforce but
-		//the add hasn't been submitted yet - so check for that.  if the file is
-		//waiting for add submission, then return 0 instead of -1
-		if( $headRev == -1 ) {
-			if( $actIdx == -1 ) return -1;
-			else if( $data[$actIdx] == "add" ) return 0;
-			}
-		if( $haveRev == -1 ) return 0;
-		if( $data[$headRev] == $data[$haveRev] ) return 1;
-		return 0;
 		}
 
 
@@ -309,6 +271,45 @@ global proc p4() {
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 // SUPPORT PROCS - these are convenience procs to simplify the wrapper commands
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+
+	//returns an int as to whether the current file is synced to the latest perforce
+	//revision.  returns -1 if file is not in perforce.  the dataNames and data args
+	//are optional.  if present, they get filled with the fstat results, so they can
+	//be reused without re-querying
+	global proc int isLatest( string $file, string $dataNames[], string $data[] ) {
+		$data = `p4_fstat $file $dataNames {}`;
+		int $headRev = `zooGetIdxOfElement_str $dataNames "headRev"`;
+		int $haveRev = `zooGetIdxOfElement_str $dataNames "haveRev"`;
+		int $actIdx = `zooGetIdxOfElement_str $dataNames "action"`;
+
+		//so if the head rev is -1 that means it doesn't have a head revision which
+		//means either the file isn't in perforce - OR its been added to perforce but
+		//the add hasn't been submitted yet - so check for that.  if the file is
+		//waiting for add submission, then return 0 instead of -1
+		if( $headRev == -1 ) {
+			if( $actIdx == -1 ) return -1;
+			else if( $data[$actIdx] == "add" ) return 0;
+			}
+		if( $haveRev == -1 ) return 0;
+		if( $data[$headRev] == $data[$haveRev] ) return 1;
+		return 0;
+		}
+
+
+	//returns whether a given file is already open for edit or not
+	global proc int isEdit( string $file, string $dataNames[], string $data[] ) {
+		$data = `p4_fstat $file $dataNames {}`;
+		int $isEdit = 0;
+		int $actIdx = `zooGetIdxOfElement_str $dataNames "action"`;
+
+		if( $actIdx != -1 ) {
+			if( $data[$actIdx] == "edit" ) $isEdit = 1;
+			}
+		if( `size $data` <= 1 ) $isEdit = -1;  //indicates that the file isn't in perforce
+
+		return $isEdit;
+		}
 
 
 	//given a filepath, this proc returns a path relative to the perforce

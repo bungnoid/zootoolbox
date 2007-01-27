@@ -237,17 +237,17 @@ global proc zooWeightRestoreVerts( string $verts[] ) {
 	}
 
 
-global proc string[] zooGetJointsFromStored( string $obj, string $actualJoints[], string $exstingJoints[], string $jointStrs[], string $weightStrs[] ) {
+global proc string[] zooGetJointsFromStored( string $obj, string $actualJoints[], string $existingJoints[], string $jointStrs[], string $weightStrs[] ) {
 	if( !`objExists $obj` ) return {};
-	return `zooGetJointsFromStoredVerts {( $obj +".vtx[*]" )} $actualJoints $exstingJoints $jointStrs $weightStrs`;
+	return `zooGetJointsFromStoredVerts {( $obj +".vtx[*]" )} $actualJoints $existingJoints $jointStrs $weightStrs`;
 	}
 
 
-global proc string[] zooGetJointsFromStoredVerts( string $verts[], string $actualJoints[], string $exstingJoints[], string $jointStrs[], string $weightStrs[] ) {
+global proc string[] zooGetJointsFromStoredVerts( string $verts[], string $actualJoints[], string $existingJoints[], string $jointStrs[], string $weightStrs[] ) {
 	$verts = `ls -fl $verts`;
 
 	clear $actualJoints;
-	clear $exstingJoints;
+	clear $existingJoints;
 	clear $jointStrs;
 	clear $weightStrs;
 	int $numVerts = `size $verts`;
@@ -275,7 +275,7 @@ global proc string[] zooGetJointsFromStoredVerts( string $verts[], string $actua
 	//and uses the first one it finds
 	for( $n=0; $n<`size $actualJoints`; $n++ ) {
 		if( `objExists $actualJoints[$n]` ) {
-			$exstingJoints[( `size $exstingJoints` )] = $actualJoints[$n];
+			$existingJoints[( `size $existingJoints` )] = $actualJoints[$n];
 			continue;
 			}
 		string $leafName = `match "[^|:]+$" $actualJoints[$n]`;
@@ -283,11 +283,11 @@ global proc string[] zooGetJointsFromStoredVerts( string $verts[], string $actua
 
 		if( `objExists $potMatches[0]` ) {
 			warning( $actualJoints[$n] +" was the actual joint stored in the mesh - but it was not found in the scene.  the closest match found was: "+ $potMatches[0] +" so I'm using that instead" );
-			$exstingJoints[( `size $exstingJoints` )] = $potMatches[0];
+			$existingJoints[( `size $existingJoints` )] = $potMatches[0];
 			}
 		}
 
-	return $exstingJoints;
+	return $existingJoints;
 	}
 
 
@@ -360,7 +360,7 @@ global proc zooStripInvalidJoints( string $j[], string $w[] ) {
 
 
 global proc string zooWeightSaveInfo( string $function ) {
-	string $currentVersion = "1.06.11";
+	string $currentVersion = "1.07.02";
 	if( $function == "version" ) return $currentVersion;
 	}
 
