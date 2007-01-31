@@ -55,7 +55,11 @@ global proc string[] zooMatchNames( string $sources[], string $targets[], string
 			}
 		}
 
-	if( $sort ) { $sources = `sort $sources`; $targets = `sort $targets`; }
+	if( $sort ) {
+		$sources = `sort $sources`;
+		$targets = `sort $targets`;
+		}
+
 	for( $src in $sources ) {
 		string $srcTokens[] = {};
 		int $srcParity = `zooMatchHasParity $src`;
@@ -69,8 +73,10 @@ global proc string[] zooMatchNames( string $sources[], string $targets[], string
 			}
 
 		clear $tokenMatchCount;
+
 		//first, initialise the token count array
-		for( $a=0; $a<`size $targets`; $a++ ) $tokenMatchCount[$a] = 0;
+		int $numTgts = `size $targets`;
+		for( $a=0; $a<$numTgts; $a++ ) $tokenMatchCount[$a] = 0;
 
 		//now start going through each target
 		for( $tgt in $targets ) {
@@ -139,9 +145,10 @@ global proc string[] zooMatchNames( string $sources[], string $targets[], string
 		int $high = 0;
 		int $num = 0;
 
-		for( $i=0; $i<`size $tokenMatchCount`; $i++ ) if( $tokenMatchCount[$i] > $high ) {
+		for( $i=0; $i<$numTgts; $i++ ) if( $tokenMatchCount[$i] > $high ) {
 			$high = $tokenMatchCount[$i];
 			$num = $i;
+			//print( $szMatchCount +"  "+ $tokenMatchCount[$i] +"  "+ $high +"  "+ $i );
 			}
 
 		float $tokenWeight = 1.0/($exactWeight*$numSrcTokens);
@@ -149,11 +156,16 @@ global proc string[] zooMatchNames( string $sources[], string $targets[], string
 
 		if( $high && $normMatchWeight>=$threshold ) {
 			//add back the prefifxes if we stripped them in the first place
-			if( $strip ) $matchedList[( `size $matchedList` )] = $tgtPrefixes[$num] + $targets[$num];
-			else $matchedList[( `size $matchedList` )] = $targets[$num];
-			if( $unique ) $targets = `zooRemoveArrayIdx_str $targets $num`;  //if the matches are to be unique - remove the matched target from the targets list
+			if( $strip ) $matchedList[`size $matchedList`] = $tgtPrefixes[$num] + $targets[$num];
+			else $matchedList[`size $matchedList`] = $targets[$num];
+
+			//if the matches are to be unique - remove the matched target from the targets list
+			if( $unique ) {
+				$targets = `zooRemoveArrayIdx_str $targets $num`;
+				$tgtPrefixes = `zooRemoveArrayIdx_str $tgtPrefixes $num`;
+				}
 			}
-		else $matchedList[( `size $matchedList` )] = "";
+		else $matchedList[`size $matchedList`] = "";
 
 		//debugging line - useful for printing match stats when fine tuning the algorithm
 		//for( $x=0; $x<`size $targets`; $x++ ) print( $targets[$x] +" - "+ $tokenMatchCount[$x] +" - "+ $tokenWeight +" - "+ $numSrcTokens +"\n" );
