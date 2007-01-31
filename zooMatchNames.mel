@@ -44,7 +44,7 @@ global proc string[] zooMatchNames( string $sources[], string $targets[], string
 
 	string $tgtPrefixes[] = {};  //store prefixes for adding back to matches later
 	if( $strip ) {
-		for( $n=0; $n<`size $sources`; $n++ ) $srcPrefixes[$n] = `match "[^:|]+$" $sources[$n]`;
+		for( $n=0; $n<`size $sources`; $n++ ) $sources[$n] = `match "[^:|]+$" $sources[$n]`;
 		for( $n=0; $n<`size $targets`; $n++ ) {
 			string $name = `match "[^:|]+$" $targets[$n]`;
 			string $prefix = `substring $targets[$n] 1 (size($targets[$n])-size($name))`;
@@ -148,7 +148,6 @@ global proc string[] zooMatchNames( string $sources[], string $targets[], string
 		for( $i=0; $i<$numTgts; $i++ ) if( $tokenMatchCount[$i] > $high ) {
 			$high = $tokenMatchCount[$i];
 			$num = $i;
-			//print( $szMatchCount +"  "+ $tokenMatchCount[$i] +"  "+ $high +"  "+ $i );
 			}
 
 		float $tokenWeight = 1.0/($exactWeight*$numSrcTokens);
