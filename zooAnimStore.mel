@@ -199,6 +199,10 @@ global proc zooStoreListPopup( string $popup ) {
 	setParent -m $popup;
 
 	menuItem -l "create store" -c "zooAnimStoreWindowFunctions -createStore";
+	menuItem -l "explore to store" -sm 1;
+		menuItem -l "local store" -c( "{string $loc = `zooGetPresetDirectory \"local\" zooAnimStore`; zooExploreTo $loc;}" );
+		menuItem -l "global store" -c( "{string $loc = `zooGetPresetDirectory \"global\" zooAnimStore`; zooExploreTo $loc;}" );
+	setParent -m ..;
 	menuItem -d 1;
 	menuItem -l "rename store" -c "zooAnimStoreWindowFunctions -renameStore";
 	menuItem -d 1;
@@ -218,6 +222,7 @@ global proc zooClipListPopup( string $popup, string $locale ) {
 global proc zooClipPopup( string $popup, string $locale, string $clip, string $type ) {
 	string $store = zooGetElement_str(0,`textScrollList -q -si zooStoreUIStores`);
 	string $otherLoc = "--> global";
+	string $loc = `zooGetPresetDirectory $locale zooAnimStore`;
 
 	menu -e -dai $popup;
 	setParent -m $popup;
@@ -230,6 +235,7 @@ global proc zooClipPopup( string $popup, string $locale, string $clip, string $t
 	menuItem -l( "move clip to "+ $otherLoc ) -c( "zooMoveClip \""+ $clip +"."+ $type +"\" \""+ $store +"\" \""+ $locale +"\"; zooAnimStoreWindowFunctions -updateClips;" );;
 	menuItem -l( "copy clip to "+ $otherLoc ) -c( "zooCopyClip \""+ $clip +"."+ $type +"\" \""+ $store +"\" \""+ $locale +"\"; zooAnimStoreWindowFunctions -updateClips"+ ($locale=="local"?"G":"L") +";" );;
 	menuItem -l "rename clip..." -c( "{ string $ans = `promptDialog -t \"rename clip\" -tx "+ $clip +" -m \"New Name:\" -b \"Rename\" -b \"Cancel\" -db \"Rename\"`; if( $ans != \"Cancel\" ) { zooRenameClip "+ $clip +"."+ $type +" "+ $store +" \""+ $locale +"\" ( `promptDialog -q -text` +\"."+ $type +"\"); zooAnimStoreWindowFunctions -updateClips"+ ($locale=="local"?"L":"G") +"; }}" );
+	menuItem -l "explore to clip..." -c( "zooExploreTo \""+ $loc + $store +"/"+ $clip +"."+ $type +".znm\";" );
 	menuItem -d 1;
 	menuItem -l "new icon from panel" -c( "zooAnimStoreWindowFunctions_var -newIcon_"+ $locale +" \""+ $clip +"."+ $type +"\";" );
 	menuItem -d 1;

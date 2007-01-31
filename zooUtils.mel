@@ -158,21 +158,19 @@ global proc string zooGetScriptLocation( string $scriptName ) {
 
 //unlike the get script path, this proc takes a file name including extension
 global proc string zooGetIconLocation( string $iconFileName ) {
-	string $paths[] = {};
+	string $paths[] = `zooListEnv XBMLANGPATH`;
 	string $buffer[] = {};
 	string $iconName;
 	string $ext;
 	string $scriptPath = "";
-	string $sep = ":";
 
-	if( `about -nt` ) $sep = ";";
-	tokenize `getenv XBMLANGPATH` $sep $paths;
 	tokenize $iconFileName "." $buffer;
-	for( $n = 0; $n < ( `size $buffer`-1 ); $n++ ) $iconName = $iconName + $buffer[$n];
-	$ext = $buffer[( `size $buffer`-1 )];
-	$scriptPath = `zooGetFileLocation $paths $iconName $ext`;
+	for( $n=0; $n<( `size $buffer`-1 ); $n++ ) $iconName = $iconName + $buffer[$n];
+	$ext = $buffer[`size $buffer`-1];
+	$scriptPath = `zooGetFileLocation $paths $iconName $ext` +"/"+ $iconFileName;
+	$scriptPath = `zooScrubPath $scriptPath`;
 
-	return ( $scriptPath + "/" + $iconFileName );
+	return $scriptPath;
 	}
 
 

@@ -236,7 +236,7 @@ global proc zooOrientChainProperly( string $chain[], string $three[] ) {
 
 	//finally, deal with the last joint
 	$kids = `listRelatives -pa -type transform $last`;
-	if( `size $kids` ) parent -w $kids;
+	if( `size $kids` ) $kids = `parent -w $kids`;
 	setAttr ( $last +".r" ) 0 0 0;
 	setAttr ( $last +".jo" ) 0 0 0;
 	if( `size $kids` ) parent $kids $last;

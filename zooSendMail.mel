@@ -25,7 +25,7 @@ zooArrays_str;
 // this will send an email to yourself - the to flag defaults to the current user
 global proc zooSendMail( string $optionStr, string $body ) {
 	string $temp[] = {};
-	string $pathToEmail = "r:/pipeline_tools/apps/blat/full/blat.exe";
+	string $pathToEmail = "//network/apps/blat/blat.exe";
 	string $domain = "yourdomain.com";
 	string $subject = "[zooSendMail] default subject from maya";
 	string $to[] = { "#" };
@@ -54,7 +54,7 @@ global proc zooSendMail( string $optionStr, string $body ) {
 	string $ccStr = `zooArrayToStr_str $cc ","`;
 
 	//*** this is the mail command you'll need to edit to use this script internally
-	string $sendCmd = "start \""+ (toNativePath($pathToEmail)) +"\" \""+ (toNativePath($mailFile)) +"\" -server AUBBMXS01 -subject \""+ $subject +"\" -f "+ $user +"@"+ $domain;
+	string $sendCmd = "start \""+ (toNativePath($pathToEmail)) +"\" \""+ (toNativePath($mailFile)) +"\" -server INTERNAL_MAIL_SERVER -subject \""+ $subject +"\" -f "+ $user +"@"+ $domain;
 
 	if( $toStr != "" ) $sendCmd = $sendCmd +" -to "+ $toStr;
 	if( $ccStr != "" ) $sendCmd = $sendCmd +" -cc "+ $ccStr;
