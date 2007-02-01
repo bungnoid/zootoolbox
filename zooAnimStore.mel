@@ -8,7 +8,7 @@ zooXferAnimUtils;
 
 global proc zooAnimStore() {
 	string $windowName = "zooAnimStoreWindow";
-	string $windowTitle = "zooAnimStore   ::macaroniKazoo::";
+	string $windowTitle = "zooAnimStore v1.07.02   ::macaroniKazoo::";
 	int $alphabetical = `optionVar -ex zooAnimStoreAlphabetical`? `optionVar -q zooAnimStoreAlphabetical`: 1;
 	int $spacing = `optionVar -ex zooAnimStoreSpacing`? `optionVar -q zooAnimStoreSpacing`: 0;
 
@@ -200,8 +200,8 @@ global proc zooStoreListPopup( string $popup ) {
 
 	menuItem -l "create store" -c "zooAnimStoreWindowFunctions -createStore";
 	menuItem -l "explore to store" -sm 1;
-		menuItem -l "local store" -c( "{string $loc = `zooGetPresetDirectory \"local\" zooAnimStore`; zooExploreTo $loc;}" );
-		menuItem -l "global store" -c( "{string $loc = `zooGetPresetDirectory \"global\" zooAnimStore`; zooExploreTo $loc;}" );
+		menuItem -l "local store" -c( "{string $store = zooGetElement_str(0,`textScrollList -q -si zooStoreUIStores`); string $loc = `zooGetPresetDirectory \"local\" zooAnimStore`; zooExploreTo ( $loc + $store );}" );
+		menuItem -l "global store" -c( "{string $store = zooGetElement_str(0,`textScrollList -q -si zooStoreUIStores`); string $loc = `zooGetPresetDirectory \"global\" zooAnimStore`; zooExploreTo ( $loc + $store );}" );
 	setParent -m ..;
 	menuItem -d 1;
 	menuItem -l "rename store" -c "zooAnimStoreWindowFunctions -renameStore";
@@ -237,6 +237,7 @@ global proc zooClipPopup( string $popup, string $locale, string $clip, string $t
 	menuItem -l "rename clip..." -c( "{ string $ans = `promptDialog -t \"rename clip\" -tx "+ $clip +" -m \"New Name:\" -b \"Rename\" -b \"Cancel\" -db \"Rename\"`; if( $ans != \"Cancel\" ) { zooRenameClip "+ $clip +"."+ $type +" "+ $store +" \""+ $locale +"\" ( `promptDialog -q -text` +\"."+ $type +"\"); zooAnimStoreWindowFunctions -updateClips"+ ($locale=="local"?"L":"G") +"; }}" );
 	menuItem -l "explore to clip..." -c( "zooExploreTo \""+ $loc + $store +"/"+ $clip +"."+ $type +".znm\";" );
 	menuItem -d 1;
+	//menuItem -l "over-write clip" -c( "zooAnimStoreWindowFunctions_var -newIcon_"+ $locale +" \""+ $clip +"."+ $type +"\";" );
 	menuItem -l "new icon from panel" -c( "zooAnimStoreWindowFunctions_var -newIcon_"+ $locale +" \""+ $clip +"."+ $type +"\";" );
 	menuItem -d 1;
 	menuItem -l "delete clip" -c( "zooAnimStoreWindowFunctions_var -deleteClip_"+ $locale +" \""+ $clip +"."+ $type +"\";" );
@@ -245,6 +246,8 @@ global proc zooClipPopup( string $popup, string $locale, string $clip, string $t
 	menuItem -d 1;
 	menuItem -l "create anim clip..." -c( "zooAnimStoreWindowFunctions -createAnimClip_"+ $locale );
 	menuItem -l "create pose clip..." -c( "zooAnimStoreWindowFunctions -createPoseClip_"+ $locale );
+	menuItem -d 1;
+	menuItem -l "explore to clip" -c( "zooExploreTo \""+ $loc + $store +"/"+ $clip +"."+ $type +".znm\"" );
 	}
 
 
@@ -265,7 +268,7 @@ global proc zooAnimStoreWindowFunctions( string $function ) {
 	string $locL = `zooGetPresetDirectory "local" zooAnimStore`;
 	string $locG = `zooGetPresetDirectory "global" zooAnimStore`;
 	string $locale = "local";
-	string $optionStr = "-world "+ `checkBox -q -v $checkWSUI` +" -offset "+ `checkBox -q -v $checkOffsetUI`;
+	string $optionStr = "-world "+ `checkBox -q -v $checkWSUI` +" -strip 0 ";
 	int $parentqss = `checkBox -q -v $checkRigAllUI`;
 
 	switch( $function ) {
@@ -348,13 +351,15 @@ global proc zooAnimStoreWindowFunctions( string $function ) {
 			string $ans = `promptDialog -t "Create Anim Clip" -m "Clip Name:" -b "Create" -b "Cancel" -db "Create"`;
 			if( $ans == "Cancel" ) return;
 			string $name = `promptDialog -q -text`;
-			string $objList = `zooArrayToStr_str (ls("-sl")) " "`;
+			string $objs[] = `ls -sl`;
+			string $objList = `zooArrayToStr_str $objs " "`;
 
 			if( `checkBox -q -v $checkRigUI` || $parentqss ) {
 				string $ctrls[] = `zooGetCtrlsFromQss $parentqss`;
-				if( `size $ctrls` ) $objList = `zooArrayToStr_str $ctrls " "`;
+				if( `size $ctrls` ) $objs = $ctrls;
 				}
-			$optionStr = $optionStr +" -objs "+ $objList;
+			//$optionStr = $optionStr +" -objs "+ $objList;
+			select -r $objs;
 			zooWriteAnimClip $name $selStore $locale ( "-offset * "+ $optionStr );
 			zooAnimStoreWindowFunctions ( "-updateClips"+ ($locale=="local"?"L":"G"));
 			break;
@@ -453,7 +458,6 @@ global proc zooAnimStoreWindowFunctions_var( string $function, string $variable 
 		case "-newIcon_global":
 			$locale = "global";
 		case "-newIcon_local":
-		print $variable;
 			string $location = `zooGetPresetDirectory $locale zooAnimStore`;
 			$location = $location + $selStore +"/";
 			print( "new icon created \""+ `zooWriteIcon $variable $location ""` +"\"\n" );
@@ -487,7 +491,6 @@ global proc zooApplyClip( string $clip, string $store, string $locale, float $na
 	if( `checkBox -q -v zooStoreUICheckRig` || $parentqss ) {
 		string $fromQss[] = `zooGetCtrlsFromQss $parentqss`;
 		if( `size $fromQss` ) $objs = $fromQss;
-		print $fromQss;
 		}
 	zooXferBlindTransfer ( "-threshold "+ $nameThreshold +" -mode 3 -additive "+ $add +" -world "+ $world +" -offset "+ $offset +" -filename "+ $location + $clip +".znm"+ $opts ) {} $objs;
 	}

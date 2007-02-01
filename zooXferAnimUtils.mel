@@ -30,14 +30,14 @@ global proc zooXferBlindTransfer( string $optionStr, string $srcList[], string $
 			//if we have a file import then automatically load the objects in the file as the source list
 			string $filename = "";
 			$optionTemp = `zooGetFlagArguments $optionStr filename`; if( `size $optionTemp` ) $filename = `zooArrayToStr_str $optionTemp " "`;
-			$srcList = `zooAnimFileGetObjs $filename`;
-			$matchedTgts = `zooMatchNames $srcList $tgtList ( $optionStr +" -parity 1 -sort 1 -threshold 0.8" )`;
+			if( !`size $srcList` ) $srcList = `zooAnimFileGetObjs $filename`;
+			$matchedTgts = `zooMatchNames $srcList $tgtList ( $optionStr +" -parity 1 -threshold 0.8" )`;
 			//for( $n=0; $n<`size $srcList`; $n++ ) print( "src:  "+ `zooPadAfter_str $srcList[$n] 30 " "` +"tgt:  "+ $matchedTgts[$n] +"\n" );
 			break;
 
 		default:
 			$srcList = `zooSortToHeirarchy $srcList`;
-			$matchedTgts = `zooMatchNames $srcList $tgtList ( $optionStr +" -parity 1 -sort 1 -threshold 0.8" )`;
+			$matchedTgts = `zooMatchNames $srcList $tgtList ( $optionStr +" -parity 1 -threshold 0.8" )`;
 			break;
 		}
 
@@ -163,6 +163,7 @@ global proc zooXferBatch( string $optionStr, string $srcList[], string $tgtList[
 			//print( "zooAnimFileLoadObjects \""+ $optionStr +"\" { \""+ `zooArrayToStr_str $srcList "\", \""` +"\" } { \""+ `zooArrayToStr_str $tgtList "\", \""` +"\" };\n" );
 			break;
 		}
+	print( "zooXferBatch \""+ $optionStr +"\" {\""+ `zooArrayToStr_str $srcList "\",\""` +"\"} {\""+ `zooArrayToStr_str $tgtList "\",\""` +"\"};\n" );
 	}
 
 

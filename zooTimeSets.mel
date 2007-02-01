@@ -443,7 +443,22 @@ global proc zooTimeSetsFrameTime() {
 	string $currentEditor = `getPanel -wf`;
 	if( $currentEditor == "graphEditor1" ) $currentEditor = "graphEditor1GraphEd";
 	if( $currentEditor == "dopeSheetPanel1" ) $currentEditor = "dopeSheetPanel1DopeSheetEd";
-	if( $currentEditor == "dopeSheetPanel1DopeSheetEd" || $currentEditor == "graphEditor1GraphEd" ) animView -startTime ( `playbackOptions -q -minTime` - 1 ) -endTime ( `playbackOptions -q -maxTime` + 1 ) $currentEditor;
+	if( $currentEditor == "dopeSheetPanel1DopeSheetEd" ) animView -startTime ( `playbackOptions -q -minTime` - 1 ) -endTime ( `playbackOptions -q -maxTime` + 1 ) $currentEditor;
+	if( $currentEditor == "graphEditor1GraphEd" ) {
+		//determine min max key values in time range
+		string $objs[] = `selectionConnection -q -obj graphEditor1FromOutliner`;
+		float $start = `playbackOptions -q -minTime` - 1;
+		float $end = `playbackOptions -q -maxTime` + 1;
+		float $keys[] = sort(`keyframe -t( $start +":"+ $end ) -q -vc $objs`);
+		float $minVal = $keys[0];
+		float $maxVal = $keys[(`size $keys`-1)];
+		float $range = $maxVal - $minVal;
+
+		$range *= 0.15;
+		$minVal -= $range;
+		$maxVal += $range;
+		animView -startTime $start -endTime $end -min $minVal -max $maxVal $currentEditor;
+		}
 	}
 
 

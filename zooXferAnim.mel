@@ -709,7 +709,7 @@ global proc zooXferAnimBuildQssMenu( string $subCmd, string $parent ) {
 
 global proc string zooXferAnimInfo ( string $function ) {
 	string $creationDate = "10 May 2003";
-	string $currentVersion = "4.06.10";
+	string $currentVersion = "4.07.02";
 
 	if( $function == "created" ) return $creationDate;
 	if( $function == "version" ) return $currentVersion;

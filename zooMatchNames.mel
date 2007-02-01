@@ -15,7 +15,10 @@ zooStrUtils;
 // -ignoreWordsSrc [int]	ignores the first word in the source name.  default: 0
 // -ignoreWordsTgt [int]	ignores the first word in the target name.  default: 0
 global proc string[] zooMatchNames( string $sources[], string $targets[], string $optionStr ) {
-	string $tgtTemp[] = $targets;  //stores the original array so we can restore it at the end of the proc - remember, arrays are passed by reference
+	//stores the original array so we can restore it at the end of the proc - remember, arrays are passed by reference
+	string $tgtTemp[] = $targets;
+	string $srcTemp[] = $sources;
+
 	string $matchedList[] = {};
 	string $temp[] = {};
 	float $threshold = 0;
@@ -170,6 +173,8 @@ global proc string[] zooMatchNames( string $sources[], string $targets[], string
 		//for( $x=0; $x<`size $targets`; $x++ ) print( $targets[$x] +" - "+ $tokenMatchCount[$x] +" - "+ $tokenWeight +" - "+ $numSrcTokens +"\n" );
 		}
 
+	//restore original arrays
+	$sources = $srcTemp;
 	$targets = $tgtTemp;
 
 	return $matchedList;
