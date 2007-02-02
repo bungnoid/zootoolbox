@@ -333,7 +333,6 @@ global proc zooAnimFileWritePose( string $filename, string $optionStr ){
 //and because objD doesn't exist in the file, it gets ignored
 //------
 global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $tgts[] ) {
-	string $cTgts[] = $tgts;
 	string $objs[] = {};
 	string $temp[] = {};
 	string $fileContents[] = {};
@@ -344,7 +343,8 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 	int $additive = 0;
 	int $nocreate = 0;
 	int $numSrcs = `size $srcs`;
-	int $numTgts = `size $cTgts`;
+	int $numTgts = `size $tgts`;
+	int $n = 0;
 
 	$temp = `zooGetFlagArguments $optionStr filename`; if( `size $temp` ) $filename = `zooArrayToStr_str $temp " "`;
 	$temp = `zooGetFlagArguments $optionStr offset`; if( `size $temp` ) { if( $temp[0] == "*" ) $timeOffset = `currentTime -q`; else $timeOffset = $temp[0]; }
@@ -359,9 +359,8 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 	if( !$numTgts ) { warning "there are no target objects specified"; return; }
 
 	//prepare the object lists - ie strip namespaces if they exist, and determine the namespace for the target list
-	string $namespace = `zooGetNamespace $cTgts[0]`;
-	for( $n=0; $n<$numTgts; $n++ ) if( $namespace == "" ) $namespace = `zooGetNamespace $cTgts[$n]`;
-	for( $n=0; $n<$numTgts; $n++ ) $cTgts[$n] = `match "[^:]+$" $cTgts[$n]`;
+	string $namespace = "";
+	while( $namespace == "" ) $namespace = `zooGetNamespace $tgts[$n++]`;
 
 	string $globalItt = zooGetElement_str(0,`keyTangent -q -global -itt`);
 	string $globalOtt = zooGetElement_str(0,`keyTangent -q -global -ott`);
@@ -400,8 +399,9 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 			break;
 			}
 
-		$tgt = $cTgts[$x];
-		if( !`objExists $tgt` ) $tgt = $namespace + $cTgts[$x];
+		//search for the target - if the raw target doesn't exist, try searching a likely candidate
+		$tgt = $tgts[$x];
+		if( !`objExists $tgt` ) $tgt = $namespace + `match "[^:]+$" $tgt`;
 		if( !`objExists $tgt` ) continue;
 		if( $cont ) continue;
 		if( `objExists ( $tgt +".ro " )` ) setAttr ( $tgt +".ro " ) $rotOrder;
@@ -462,7 +462,10 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 				if( $ittType == "global" ) $ittType = $globalItt;
 				if( $ottType == "global" ) $ottType = $globalOtt;
 				if( $inAngle == -1 && $outAngle == -1 && $inWeight == -1 && $outWeight == -1 ) $isPose = 1;
-				if( !$isPose ) keyTangent -e -t $keyTime -l $lock -ia $inAngle -oa $outAngle -iw $inWeight -ow $outWeight ( $tgt +"."+ $attrib );
+				if( !$isPose ) {
+					keyTangent -e -t $keyTime -l $lock -ia $inAngle -oa $outAngle -iw $inWeight -ow $outWeight ( $tgt +"."+ $attrib );
+					if( $ottType == "step" ) keyTangent -e -ott step ( $tgt +"."+ $attrib );
+					}
 				}
 			}
 		}

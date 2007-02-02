@@ -3,6 +3,7 @@ zooArrays_str;
 zooFlags;
 zooUtils;
 zooVectors;
+zooSurgeonUtils;
 
 
 global proc zooHeavyUtils() {

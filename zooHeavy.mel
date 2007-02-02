@@ -1,6 +1,7 @@
 zooHeavyUtils;
 zooTips;
 zooUtils;
+zooSurgeonUtils;
 
 
 global proc zooHeavy() {
