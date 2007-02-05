@@ -174,6 +174,13 @@ global proc zooAnimFileWrite( string $filename, string $optionStr ){
 					$tTypes += $keytt[0] +","+ $keytt[1] +",";
 					$tSize += $itt[0] +","+ $itt[1] +","+ $ott[0] +","+ $ott[1] +",";
 					}
+				//if there are no keys are found in the timeline, query the attribute instead - we still need to write data for every attribute
+				if( !$numKeys ) {
+					$valTimes += `getAttr ( $obj +"."+ $attrib )` +",0,";
+					$lock += "0,0,";
+					$tTypes += "global,global,";
+					$tSize += "1,1,1,1,";
+					}
 
 				//add the strings obtained from the previous loop to the string to write out to the file
 				$objFileInfo += $valTimes +"\n"+ $lock +"\n"+ $tTypes +"\n"+ $tSize +"\n&endAttr\n";
