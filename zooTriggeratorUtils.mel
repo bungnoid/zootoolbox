@@ -94,7 +94,7 @@ global proc zooExportFolder( string $folder, string $filename ){
 		}
 
 	string $namespaces[] = `zooGetAllNamespaces $allConnects`;
-	if( `size $namespaces` ) $exportStr = `zooArrayToStr_str $namespaces "\n"` +"<endnamespaces>\n"+ $exportStr;
+	if( `size $namespaces` ) $exportStr = `zooArrayToStr_str $namespaces "\n"` +"\n<endnamespaces>\n"+ $exportStr;
 	int $fileID = `fopen ((zooTriggeratorBasePath()) + $filename +".preset" ) "w"`;
 	fprint $fileID $exportStr;
 	fclose $fileID;
@@ -155,6 +155,7 @@ global proc zooCreateTriggerFromData( string $tgtNamespace, string $n_data, stri
 	string $eazel = `zooGetEazel 1`;
 	string $parent = $temp[0];
 	string $connects[] = `zooTokenize $c_data ";"`;
+	int $numConnects = `size $connects`;
 	int $connectSlots[] = {};
 	float $posX = 0;
 	float $posY = 0;
@@ -164,9 +165,10 @@ global proc zooCreateTriggerFromData( string $tgtNamespace, string $n_data, stri
 	float $sclZ = 0;
 
 	$n_data = `match "[^|:]+$" $n_data`;
-	for( $n=0; $n<`size $connects`; $n++ ) {
+	for( $n=0; $n<$numConnects; $n++ ) {
+		if( $connects[$n] == "" ) continue;
 		string $connect = `match "[^#|:]+$" $connects[$n]`;
-		int $slot = `match "^[^#]+" $connects[$n]`;
+		int $slot = `match "^[0-9]+" $connects[$n]`;
 
 		if( !`objExists $connect` ) $connect = $tgtNamespace + $connect;
 		if( !`objExists $connect` ) continue;
@@ -193,9 +195,10 @@ global proc zooCreateTriggerFromData( string $tgtNamespace, string $n_data, stri
 		return;
 		}
 
-	string $shapeData[] = `zooTokenize $s_data[0] ","`;
+	string $shapeData[] = {};
 	float $xyPairs[] = {};
 
+	tokenize $s_data[0] "," $shapeData;
 	for( $n=0; $n<`size $shapeData`; $n++ ) $xyPairs[$n] = $shapeData[$n];
 	string $trigger = `zooShapeFromData $xyPairs {}`;
 

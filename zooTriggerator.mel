@@ -11,16 +11,19 @@ global proc zooTriggerator() {
 
 	string $windowName = "zooTriggeratorWindow";
 	string $windowTitle = "zooTriggerator! v"+ `zooTriggeratorInfo version` +"  ::macaroniKazoo::";
+	string $cShapes[] = `getFileList -fld (zooTriggeratorBasePath()) -fs "*.shape"`;
+	int $numShapes = `size $cShapes`;
+	string $initShape = $numShapes? `match "^[^.]+" $cShapes[0]`: "no shapes found";
 	int $showTips = `zooTipState zooTriggerator -1`;
 
 	if( $showTips ) zooTipsWin zooTriggerator 0;
-	if( `window -exists $windowName` ) deleteUI $windowName;
+	if( `window -ex $windowName` ) deleteUI $windowName;
 	window -title $windowTitle -mb 1 -resizeToFitChildren 0 -maximizeButton 1 -sizeable 1 -widthHeight 280 325 $windowName;
 		scriptJob -p $windowName -e "SceneOpened" "";
 		menu -l "Presets";
 			menuItem -l "Export Folder Preset" -c( "zooTriggeratorFunctions -exportFolder" );
 			menuItem -d 1;
-			menuItem -l "Import" -sm 1 -pmc( "zooTriggereatorBuildImportMenu triggeratorImport" ) triggeratorImport;
+			menuItem -l "Import" -sm 1 -pmc( "zooTriggereatorBuildImportMenu triggeratorImport;" ) triggeratorImport;
 		menu -l "Camera";
 			menuItem -l "Use Camera..." -sm 1 -pmc "zooTrigListCameras zooTrigUIPopupCams" zooTrigUIPopupCams;
 			setParent -m ..;
@@ -54,8 +57,8 @@ global proc zooTriggerator() {
 
 						string $sep2 = `separator`;
 						string $cShapeLbl = `text -l "Create Shape (rmb):"`;
-						string $cShape = `textField -tx "circle" -ed 0 zooTriggeratorTextShape`;
-						string $create = `button -l "create" -c( "zooTriggeratorFunctions -createTrigger;" )`;
+						string $cShape = `textField -en $numShapes -tx $initShape -ed 0 zooTriggeratorTextShape`;
+						string $create = `button -en $numShapes -l "create" -c( "zooTriggeratorFunctions -createTrigger;" )`;
 					setParent..;
 
 					string $triggerForm = `formLayout zooTriggeratorFormEditTrigger`;
@@ -306,7 +309,8 @@ global proc zooTriggereatorBuildShapeMenu( string $parent ) {
 
 	string $cShapes[] = `getFileList -fld (zooTriggeratorBasePath()) -fs "*.shape"`;
 	for( $n=0; $n<`size $cShapes`; $n++ ) $cShapes[$n] = `match "^[^.]+" $cShapes[$n]`;
-	for( $cShape in $cShapes ) menuItem -l $cShape -c( "textField -e -tx "+ $cShape +" zooTriggeratorTextShape;" );
+	if( `size $cShapes` ) for( $cShape in $cShapes ) menuItem -l $cShape -c( "textField -e -tx "+ $cShape +" zooTriggeratorTextShape;" );
+	else menuItem -l "no shapes found";
 	menuItem -d 1;
 	menuItem -l "write new shape" -c( "{string $sel[] = `ls -sl`; string $a=`promptDialog -m \"shape name\" -t \"shape name\" -b \"OK\" -b \"Cancel\"`; if( $a==\"OK\" ) zooExportObjShapeData $sel[0] `promptDialog -q -tx`;}" );
 	}
@@ -396,7 +400,6 @@ global proc zooTriggeratorFunctions( string $function ) {
 			zooTriggeratorFunctions -clearTriggerParent;
 			if( `objExists $folder` ) nameField -e -o $folder $UIFolder2;
 			break;
-
 		case "-updateFolderParent":
 			string $folder = `nameField -q -o $UIFolder3`;
 			string $parent = zooGetElement_str(0,`listRelatives -pa -p $folder`);
@@ -404,7 +407,6 @@ global proc zooTriggeratorFunctions( string $function ) {
 			zooTriggeratorFunctions -clearFolderParent;
 			if( `objExists $parent` ) nameField -e -o $parent $UIFoldParent;
 			break;
-
 		case "-updateConnects":
 			string $trigger = `nameField -q -o $UITrigger`;
 			string $connects[] = `zooGetConnects $trigger`;
@@ -412,7 +414,6 @@ global proc zooTriggeratorFunctions( string $function ) {
 			textScrollList -e -ra $UIConnects;
 			for( $c in $connects ) textScrollList -e -a $c $UIConnects;
 			break;
-
 		case "-updateTriggers":
 			string $folder = `nameField -q -o $UIFolder3`;
 			string $triggers[] = `zooListTriggersUnder $folder`;
@@ -420,7 +421,6 @@ global proc zooTriggeratorFunctions( string $function ) {
 			textScrollList -e -ra $UITriggers;
 			for( $t in $triggers ) textScrollList -e -a $t $UITriggers;
 			break;
-
 		case "-createTrigger":
 			string $sel[] = `ls -sl`;
 			string $folder = `nameField -q -o $UIFolder1`;
@@ -437,26 +437,24 @@ global proc zooTriggeratorFunctions( string $function ) {
 			for( $s in $sel ) zooAddConnect $trigger $s;
 			if( `size $sel` ) zooTrigSetCmd $trigger `zooPresetTriggerCmds -selectConnected`;
 			break;
-
 		case "-createFolder":
 			string $parent = `nameField -q -o zooTriggeratorTextFolder1`;
-			string $eazel = zooGetElement_str(0,ls("-l",`zooGetEazel 0`));
+			string $eazel = zooGetElement_str(0,ls("-l",`zooGetEazel 1`));
 			string $folder = `zooCreateFolder`;
 
+			if( !`objExists $parent` ) $parent = $eazel;
 			if( $parent == $eazel ) {
 				setAttr ( $folder +".s" ) 0.01 0.01 0.01;
 				setAttr ( $folder +".tz" ) -1;
 				}
 			parent -r $folder $parent;
 			break;
-
 		case "-loadTrigger":
 			string $sel[] = `ls -sl`;
 			nameField -e -o $sel[0] zooTriggeratorTextTrigger;
 			zooTriggeratorFunctions -updateTriggerFolder;
 			zooTriggeratorFunctions -updateConnects;
 			break;
-
 		case "-setTriggerParent":
 			string $trigger = `nameField -q -o $UITrigger`;
 			string $parent = `zooGetSelectedFolder`;
@@ -465,7 +463,6 @@ global proc zooTriggeratorFunctions( string $function ) {
 			else zooTriggeratorFunctions -clearTrigNamespace;
 			zooAssignToFolder $trigger $parent 0;
 			break;
-
 		case "-clearTriggerParent":
 			string $parent = "zooTriggeratorFormEditTrigger";
 			deleteUI $UIFolder2;
@@ -473,13 +470,11 @@ global proc zooTriggeratorFunctions( string $function ) {
 			formLayout -e -ac $UIFolder2 "top" 0 zooTriggeratorTextTrigger -ac $UIFolder2 "left" 5 zooTrigEdTriggerLbl -ac $UIFolder2 "right" 0 zooTrigEdTriggerLoadBut -an $UIFolder2 "bottom" $parent;
 			popupMenu -p $UIFolder2 -pmc( "zooTriggereatorTriggerFolderMenu zooTriggeratorPopupFolders" ) zooTriggeratorPopupFolders;
 			break;
-
 		case "-loadFolder":
 			string $a = `zooGetSelectedFolder`;
 			nameField -e -o $a $UIFolder3;
 			zooTriggeratorFunctions -updateFolderParent;
 			break;
-
 		case "-setFolderParent":
 			string $folder = `nameField -q -o $UIFolder3`;
 			string $parent = `zooGetSelectedFolder`;
@@ -493,7 +488,6 @@ global proc zooTriggeratorFunctions( string $function ) {
 				}
 			zooAssignToFolder $folder $parent 1;
 			break;
-
 		case "-clearFolderParent":
 			string $parent = "zooTriggeratorFormEditFolder";
 
@@ -502,7 +496,6 @@ global proc zooTriggeratorFunctions( string $function ) {
 			formLayout -e -ac $UIFoldParent "top" 0 zooTriggeratorTextFolder3 -ac $UIFoldParent "left" 5 zooTrigEdFolderLbl -ac $UIFoldParent "right" 0 zooTrigEdFolderLoadBut -an $UIFoldParent "bottom" $parent;
 			popupMenu -p $UIFoldParent -pmc( "zooTriggereatorBuildEditFolderParentMenu zooTriggeratorPopupFolders3" ) zooTriggeratorPopupFolders3;
 			break;
-
 		case "-addConnects":
 			string $trigger = `nameField -q -o $UITrigger`;
 			string $sel[] = `ls -sl`;
@@ -512,7 +505,6 @@ global proc zooTriggeratorFunctions( string $function ) {
 			if( size(`zooGetConnects $trigger`)) zooTrigSetCmd $trigger "select -d #;\nselect -add @;";
 			else zooTrigSetCmd $trigger "";
 			break;
-
 		case "-removeConnects":
 			string $trigger = `nameField -q -o $UITrigger`;
 			string $sel[] = `textScrollList -q -si $UIConnects`;
@@ -525,10 +517,9 @@ global proc zooTriggeratorFunctions( string $function ) {
 				}
 			if( !size(`zooGetConnects $trigger`)) zooTrigSetCmd $trigger "";
 			break;
-
 		case "-exportFolder":
 			string $sel[] = `ls -sl`;
-			string $a = `promptDialog -t "preset name" -m "preset name" -b "OK" -b "Cancel"`;
+			string $a = `promptDialog -t "preset name" -m "preset name" -b "OK" -b "Cancel" -db "OK"`;
 
 			if( $a != "OK" ) return;
 			zooExportFolder $sel[0] `promptDialog -q -tx`;
@@ -565,7 +556,7 @@ global proc string zooGetTriggerFolder( string $trigger ) {
 
 global proc string zooTriggeratorInfo ( string $function ) {
 	string $creationDate = "09 August 2005";
-	string $version = "1.06.06";
+	string $version = "1.07.03";
 
 	if( $function == "created" ) return $creationDate;
 	if( $function == "version" ) return $version;
