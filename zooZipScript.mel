@@ -50,7 +50,7 @@ global proc string zooZipScriptTo( string $scriptName, string $optionStr ) {
 		$other = eval( $scriptName + "Dependencies -other" );
 		//error( $scriptName + " doesn't have a dependencies procedure" );
 		}
-
+print( "\t=================="+ $scriptName +"\n" );print $scripts;
 	$temp = `zooGetFlagArguments $optionStr path`; if( `size $temp` ) $basePath = `zooArrayToStr_str $temp " "`;
 	$temp = `zooGetFlagArguments $optionStr scriptPath`; if( `size $temp` ) {
 		$packageLoc = `zooArrayToStr_str $temp " "`;

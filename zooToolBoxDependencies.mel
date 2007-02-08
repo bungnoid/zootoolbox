@@ -6,15 +6,21 @@ global proc string[] zooToolBoxDependencies( string $mode ) {
 	string $return[] = {};
 
 	$melDependencies[( `size $melDependencies` )] = "zooArrays_str";
+	$melDependencies[( `size $melDependencies` )] = "zooBlendToSdk";
+	$melDependencies[( `size $melDependencies` )] = "zooDates";
 	$melDependencies[( `size $melDependencies` )] = "zooFlags";
 	$melDependencies[( `size $melDependencies` )] = "zooTips";
+	$melDependencies[( `size $melDependencies` )] = "zooTimeSets";
 	$melDependencies[( `size $melDependencies` )] = "zooToggle";
 	$melDependencies[( `size $melDependencies` )] = "zooUtils";
 	$melDependencies[( `size $melDependencies` )] = "zooPosesToSliders";
 	$melDependencies[( `size $melDependencies` )] = "zooKeymaster";
 	$melDependencies[( `size $melDependencies` )] = "zooResetAttrs";
+	$melDependencies[( `size $melDependencies` )] = "zooRegisterWin";
+
 	$helpDependencies[( `size $helpDependencies` )] = "zooToolBox_help";
 	$helpDependencies[( `size $helpDependencies` )] = "zooToolBox_toolList";
+
 	$iconDependencies[( `size $iconDependencies` )] = "zooToolBox.xpm";
 	$iconDependencies[( `size $iconDependencies` )] = "zooIcon.xpm";
 	$iconDependencies[( `size $iconDependencies` )] = "zoo_sig.tga";

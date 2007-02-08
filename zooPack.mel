@@ -20,7 +20,8 @@ global proc zooToolBoxPack() {
 	string $rarCmd = "rar a -r -m5 zooToolBox.rar *.*";
 	print "executing rar command:\n";
 	print $rarCmd;
-	print `system $rarCmd`;
+	string $res = `system $rarCmd`;
+	//print $res;
 	}
 
 

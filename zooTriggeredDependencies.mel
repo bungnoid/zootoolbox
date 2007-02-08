@@ -3,6 +3,7 @@ global proc string[] zooTriggeredDependencies( string $mode ) {
 	string $iconDependencies[] = {};
 	string $helpDependencies[] = {};
 
+	$melDependencies[( `size $melDependencies` )] = "zooDeleteStaticChannels";
 	$melDependencies[( `size $melDependencies` )] = "zooFlags";
 	$melDependencies[( `size $melDependencies` )] = "zooHelp";
 	$melDependencies[( `size $melDependencies` )] = "zooPresetManager";

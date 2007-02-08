@@ -74,6 +74,8 @@ global proc zooTangentWksCreateUI () {
 	else menuItem -l "no selected items";
 
 	menuItem -en $sel -l "stepped tangents" -c( "zooTangentType step;" );
+	menuItem -en $sel -l "flat tangents" -c( "zooTangentType flat;" );
+	menuItem -d 1;
 	menuItem -en $sel -l "select all static keys" -c( "zooSelectStaticKeys static 1;" );
 	menuItem -en $sel -l "select outer static keys" -c( "zooSelectStaticKeys outer 1;" );
 	menuItem -en $sel -l "select inner static keys" -c( "zooSelectStaticKeys inner 1;" );
@@ -98,9 +100,6 @@ global proc zooTangentWksCreateUI () {
 	menuItem -d 1;
 	if( $sel ) menuItem -l "graph filters" -c( "zooGraphFilter" );
 	menuItem -l "configure" -c( "zooTangentWksConfig" );
-	menuItem -d 1;
-	menuItem -l "Help..." -c( "zooTangentWksHelp help" );
-	menuItem -l "About" -c( "zooTangentWksHelp about" );
 	}
 
 

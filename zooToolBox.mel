@@ -239,7 +239,7 @@ global proc string zooToolAnnotation( string $tool ) {
 			$annotation = "zooXferAnim is an animation transfer utility.  It allows transfer of animation using a variety of different methods, instancing, duplication, copy/paste, import/export and tracing.  Its also fully externally scriptable for integration into an existing production pipeline.";
 			break;
 		}
-	return( $annotation +" - try checking macaroniKazoo.com/download for more information" );
+	return( $annotation +" - try checking macaroniKazoo.com for more information" );
 	}
 
 global proc string zooToolCmd( string $tool ) {
