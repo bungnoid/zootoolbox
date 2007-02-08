@@ -45,6 +45,12 @@ global proc zooWeightSave() {
 			menu -l "Utils";
 				menuItem -l "Select Joints in Stored Weights" -c( "{string $sel[] = `ls -sl -tr`; string $toSel[] = {}; for( $a in $sel ) { string $existing[] = {}; zooGetJointsFromStored $a {} $existing {} {}; $toSel = `zooAddArray_str $toSel $existing`; } if( size(`ls -hl`)) zooGetJointsFromStoredVerts `ls -sl` {} $toSel {} {}; select $toSel; }" );
 				menuItem -l "Select Joints Used by Skin" -c( "{string $sel[] = `ls -o -sl`; select -cl; for( $s in $sel ) select -add `skinCluster -q -inf (findRelatedSkinCluster($s))`;}" );
+				menuItem -l "Select Verts Affected by Joints" -ann "selects the verticies affected by the selected joints" -c( "zooSurgeonUtils; { string $verts[] = {}; for( $s in `ls -type transform -sl` ) { string $temp[] = {}; zooGetJointVerts $s 0.0000000000001 {} {} $temp {} {}; $verts = `zooAddArray_str $verts $temp`;} select $verts; }" );
+				menuItem -d 1;
+				menuItem -l "Weights to Other" -ann "select the source joint, and then the target joint.  this will transfer all the weight from the source to the target joint" -c( "{string $sel[] = `ls -type transform -sl`; string $last = `zooGetElement_str -1 $sel`; if( `size $sel`>1 ) for( $n=0; $n<`size $sel`-1; $n++ ) zooWeightsToOther $sel[$n] (\"-other \"+ $last);}" );
+				menuItem -d 1;
+				menuItem -l "Weights to Parent" -ann "transfer weights from all selected joints to their respective parents" -c( "{string $sel[] = `ls -type transform -sl`; for( $s in $sel ) zooWeightsToOther $s \"\";}" );
+				menuItem -l "Weights to Parent on ALL" -ann "this will transfer weight from all joints named zooWeight_holder_* to their respective parent joints" -c( "zooAllWeightsToParents;" );
 				menuItem -d 1;
 				menuItem -l "Print Joints in Stored Weights" -c( "{string $sel[] = `ls -sl -tr`; string $toSel[] = {}; for( $a in $sel ) { string $existing[] = {}; zooGetJointsFromStored $a {} $existing {} {}; $toSel = `zooAddArray_str $toSel $existing`; } if( size(`ls -hl`)) zooGetJointsFromStoredVerts `ls -sl` {} $toSel {} {}; print \"\\n======SELECTED HAVE THE FOLLOWING JOINTS STORED IN THEM======\\n\"; print $toSel; }" );
 			menu -l "Help";

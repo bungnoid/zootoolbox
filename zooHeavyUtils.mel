@@ -91,7 +91,7 @@ global proc zooWeightsToOther( string $joint, string $optionStr ) {
 		string $inf[] = `skinCluster -q -inf $skins[$n]`;
 		int $idx = `zooGetIdxOfElement_str $inf $other`;
 
-		if( $idx == -1 ) skinCluster -e -ai $other $skins[$n];
+		if( $idx == -1 ) skinCluster -e -ibp -ai $other $skins[$n];
 		if( $idx == -1 ) print "wasn't in skin cluster\n";
 		}
 
