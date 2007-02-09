@@ -127,7 +127,7 @@ global proc zooAnimFileWrite( string $filename, string $optionStr ){
 		string $obj = $selObjs[$x];
 		string $miscInfo = "@";
 		string $attribs[] = `listAttr -keyable -visible -scalar -multi $obj`;
-		int $rotationOrder = ( `objExists ( $obj +".rotateOrder" )` )?`getAttr ( $obj +".rotateOrder" )`:-1;
+		int $rotationOrder = `objExists ( $obj +".ro" )`? `getAttr ( $obj +".ro" )`: -1;
 
 		if( !`size $attribs` ) continue;
 		if( !`size (keyframe("-q"))`) continue;
@@ -279,7 +279,7 @@ global proc zooAnimFileWritePose( string $filename, string $optionStr ){
 		string $obj = $selObjs[$x];
 		string $miscInfo = "@";
 		string $attribs[] = `listAttr -keyable -visible -scalar -multi $obj`;
-		int $rotationOrder = ( `objExists ( $obj +".rotateOrder" )` )?`getAttr ( $obj +".rotateOrder" )`:0;
+		int $rotationOrder = `objExists ( $obj +".ro" )`? `getAttr ( $obj +".ro" )` :0;
 
 		if( !`size $attribs` ) continue;
 		string $exportName = $obj;
@@ -367,7 +367,7 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 
 	//prepare the object lists - ie strip namespaces if they exist, and determine the namespace for the target list
 	string $namespace = "";
-	while( $namespace == "" ) $namespace = `zooGetNamespace $tgts[$n++]`;
+	while( $namespace == "" && $n<$numTgts ) $namespace = `zooGetNamespace $tgts[$n++]`;
 
 	string $globalItt = zooGetElement_str(0,`keyTangent -q -global -itt`);
 	string $globalOtt = zooGetElement_str(0,`keyTangent -q -global -ott`);
@@ -411,7 +411,7 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 		if( !`objExists $tgt` ) $tgt = $namespace + `match "[^:]+$" $tgt`;
 		if( !`objExists $tgt` ) continue;
 		if( $cont ) continue;
-		if( `objExists ( $tgt +".ro " )` ) setAttr ( $tgt +".ro " ) $rotOrder;
+		//if( `objExists ( $tgt +".ro " )`) if( `getAttr -se ( $tgt +".ro " )`) setAttr ( $tgt +".ro " ) $rotOrder;
 
 		//now that object level info has been loaded, start reading and writing attribute animation
 		while( true ) {
