@@ -340,7 +340,7 @@ global proc zooAnimFileWritePose( string $filename, string $optionStr ){
 //and because objD doesn't exist in the file, it gets ignored
 //------
 global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $tgts[] ) {
-	string $objs[] = {};
+	string $worldCache[] = {};
 	string $temp[] = {};
 	string $fileContents[] = {};
 	string $filename = "";
@@ -351,6 +351,7 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 	int $nocreate = 0;
 	int $numSrcs = `size $srcs`;
 	int $numTgts = `size $tgts`;
+	int $world = 0;
 	int $n = 0;
 
 	$temp = `zooGetFlagArguments $optionStr filename`; if( `size $temp` ) $filename = `zooArrayToStr_str $temp " "`;
@@ -359,6 +360,7 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 	$temp = `zooGetFlagArguments $optionStr increment`; if( `size $temp` ) if( `size $temp` ) $incrementalApply = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr additive`; if( `size $temp` ) $additive = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr nocreate`; if( `size $temp` ) $nocreate = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr world`; if( `size $temp` ) $world = $temp[0];
 
 	//look for problems
 	if( !`filetest -r $filename` ) { warning "the specified file doesn't exist"; return; }
@@ -368,6 +370,10 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 	//prepare the object lists - ie strip namespaces if they exist, and determine the namespace for the target list
 	string $namespace = "";
 	while( $namespace == "" && $n<$numTgts ) $namespace = `zooGetNamespace $tgts[$n++]`;
+	if( $world ) {
+		$worldCache = $tgts;
+		for( $n=0; $n<$numTgts; $n++ ) $tgts[$n] = `group -em`;
+		}
 
 	string $globalItt = zooGetElement_str(0,`keyTangent -q -global -itt`);
 	string $globalOtt = zooGetElement_str(0,`keyTangent -q -global -ott`);
@@ -411,7 +417,7 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 		if( !`objExists $tgt` ) $tgt = $namespace + `match "[^:]+$" $tgt`;
 		if( !`objExists $tgt` ) continue;
 		if( $cont ) continue;
-		//if( `objExists ( $tgt +".ro " )`) if( `getAttr -se ( $tgt +".ro " )`) setAttr ( $tgt +".ro " ) $rotOrder;
+		if( `objExists ( $tgt +".ro " )`) if( `getAttr -se ( $tgt +".ro " )`) setAttr ( $tgt +".ro " ) $rotOrder;
 
 		//now that object level info has been loaded, start reading and writing attribute animation
 		while( true ) {
@@ -480,6 +486,14 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 	fclose $fileID;
 	currentTime `currentTime -q`;  //this is to force maya to update - sometimes maya doesn't update the scene - often when incremental apply is turned on
 	progressWindow -ep;
+
+	//if the import mode was world space, we need to do some additional things convert the animation to world space
+	if( $world ) {
+		zooXferAnimUtils;
+		zooXferBatch "-mode 2 -keys 1" $tgts $worldCache;
+		delete $tgts;
+		$tgts = $worldCache;
+		}
 	}
 
 
@@ -639,7 +653,7 @@ global proc int zooIsObjAnimatedTransform( string $obj ) {
 global proc string zooAnimFileInfo ( string $function ) {
 	string $creationDate = "27 July 2003";
 	string $lastRevision = "07 June 2006";
-	string $currentVersion = "6.06.20";
+	string $currentVersion = "6.07.02";
 
 	if ( $function == "created" ) return $creationDate;
 	if ( $function == "modified" ) return $lastRevision;

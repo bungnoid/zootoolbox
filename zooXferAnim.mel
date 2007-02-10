@@ -23,9 +23,6 @@
 // macaroniKazoo Productions ©2007...
 
 
-zooAnimFile;
-zooArrays_float;
-zooArrays_int;
 zooArrays_str;
 zooFlags;
 zooShelveIt;
@@ -108,6 +105,7 @@ global proc zooXferAnim() {
 							checkBox -l "instance animation" zooXferAnimCheck1;
 							checkBox -l "match rotate order" -v 1 zooXferAnimCheck2;
 							checkBox -l "" -vis 0 -v 1 zooXferAnimCheck3;
+							checkBox -l "" -vis 0 -v 1 zooXferAnimCheck4;
 						setParent ..;
 					setParent ..;
 
@@ -289,6 +287,7 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 			checkBox -e -l "instance animation" -vis 1 zooXferAnimCheck1;
 			checkBox -e -l "match rotate order" -vis 1 -v 1 zooXferAnimCheck2;
 			checkBox -e -l "" -vis 0 -v 1 zooXferAnimCheck3;
+			checkBox -e -l "" -vis 0 -v 1 zooXferAnimCheck4;
 
 			if( $isTgtLoaded ) zooXferAnimWindowFunctions matchSrcTgt n;
 			if( $variable01!=0 ) zooXferAnimWindowFunctions storeConfig n;
@@ -315,9 +314,13 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 			string $fileHeader[] = `zooReadAnimFileHeader $filename`;
 			string $temp[] = {};
 			int $alphabetical = `optionVar -ex zooXferAnimAlphabetically`? `optionVar -q zooXferAnimAlphabetically`: 1;
+			int $add = 0;
 			int $world = 0;
+			int $nocreate = 0;
 
 			$temp = `zooGetFlagArguments $fileHeader[3] world`; if( `size $temp` ) $world = $temp[0];
+			$temp = `zooGetFlagArguments $fileHeader[3] nocreate`; if( `size $temp` ) $nocreate = $temp[0];
+			$temp = `zooGetFlagArguments $fileHeader[3] add`; if( `size $temp` ) $add = $temp[0];
 
 			textScrollList -e -ra zooXferAnimScrollSrcs;
 			textScrollList -e -ra zooXferAnimScrollSrcPaths;
@@ -332,9 +335,10 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 			radioButton -e -en 1 -sl -l "current time offset" zooXferAnimRadioModeCopy;
 			radioButton -e -en 0 -vis 0 -l "" zooXferAnimRadioModeTrace;
 
-			checkBox -e -l "additive key values" -vis 1 -v 0 zooXferAnimCheck1;
+			checkBox -e -l "additive key values" -vis 1 -v $add zooXferAnimCheck1;
 			checkBox -e -l "match rotate order" -vis 1 -v 0 zooXferAnimCheck2;
 			checkBox -e -l "import as world space" -vis 1 -v $world zooXferAnimCheck3;
+			checkBox -e -l "don't create new keys" -vis 1 -v $nocreate zooXferAnimCheck4;
 
 			if( $isTgtLoaded ) zooXferAnimWindowFunctions matchSrcTgt n;
 			if( $variable01=="n" ) zooXferAnimWindowFunctions storeConfig n;  //only store config if a filename isn't passed in
@@ -503,6 +507,7 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 			int $startTime = `intField -q -v zooXferAnimIntTraceStart`;
 			int $endTime = `intField -q -v zooXferAnimIntTraceEnd`;
 			int $world = `checkBox -q -v zooXferAnimCheck3`;
+			int $nocreate = `checkBox -q -v zooXferAnimCheck4`;
 
 			if( `checkBox -q -v zooXferAnimCheckWithin` ) $traceKeys = 2;
 			if( $addCurves ) $offset = "*";
@@ -515,10 +520,10 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 				$tgtObjs = `zooOrderArrayUsing_str $tgtObjs $srcParents`;
 				}
 
-			if( $filename != "" ) zooXferBatch ( "-mode 3 -offset "+$offset+" -additive "+$instance+" -filename "+$filename +" -world "+ $world ) $srcObjs $tgtObjs;
-			else if( $dupeCurves ) zooXferBatch ( "-mode 0 -instance "+$instance+" -matchRo "+$matchRo ) $srcObjs $tgtObjs;
-			else if( $isTraced ) zooXferBatch ( "-mode 2 -keys "+$traceKeys+" -matchRo "+$matchRo+" -range "+$startTime+" "+$endTime ) $srcObjs $tgtObjs;
-			else if( $addCurves ) zooXferBatch ( "-mode 1 -range "+ $startTime +" "+ $endTime +" -matchRo "+$matchRo ) $srcObjs $tgtObjs;
+			if( $filename != "" ) zooXferBatch ( "-mode 3 -offset "+ $offset +" -additive "+ $instance +" -filename "+ $filename +" -world "+ $world +" -nocreate "+ $nocreate ) $srcObjs $tgtObjs;
+			else if( $dupeCurves ) zooXferBatch ( "-mode 0 -instance "+ $instance +" -matchRo "+ $matchRo ) $srcObjs $tgtObjs;
+			else if( $isTraced ) zooXferBatch ( "-mode 2 -keys "+ $traceKeys +" -matchRo "+ $matchRo +" -range "+ $startTime +" "+ $endTime ) $srcObjs $tgtObjs;
+			else if( $addCurves ) zooXferBatch ( "-mode 1 -range "+ $startTime +" "+ $endTime +" -matchRo "+ $matchRo ) $srcObjs $tgtObjs;
 			break;
 
 		case "threshold":

@@ -1,9 +1,6 @@
-zooAnimFile;
 zooAnimStoreUtils;
 zooArrays_str;
 zooPresetManager;
-zooUtils;
-zooXferAnimUtils;
 
 
 global proc zooAnimStore() {

@@ -1,3 +1,10 @@
+zooAnimFile;
+zooArrays_str;
+zooPresetManager;
+zooUtils;
+zooXferAnimUtils;
+
+
 global proc zooAnimStoreUtils() {
 	return;
 	}
@@ -161,15 +168,19 @@ global proc zooRenameStore( string $name, string $newName ) {
 
 
 global proc zooDeleteStore( string $name ) {
-	string $locL = `zooGetPresetDirectory "local" zooAnimStore`;
-	string $locG = `zooGetPresetDirectory "global" zooAnimStore`;
+	string $locL = `zooGetPresetDirectory "local" zooAnimStore` + $name +"/";
+	string $locG = `zooGetPresetDirectory "global" zooAnimStore` + $name +"/";
 
-	//sysfile deleting isn't working for some reason...
-	//sysFile -delete ( $locL + $name );
-	chdir $locL;
-	print(system( "del /q /f "+ $name )+"\n");
-	print(system( "del /q /f \""+ `toNativePath($locG + $name)` +"\"" )+"\n");
-	//print( $name +" store deleted\n" );
+	//sysFile doesn't delete directories, so we must resort to system commands - hence we need an NT path and a *nix path
+	if( `about -nt` ) {
+		//the windows directory deletion commands
+		print(system( "rd /s/q \""+ `toNativePath $locL` +"\"" ) +"\n");
+		print(system( "rd /s/q \""+ `toNativePath $locG` +"\"" ) +"\n");
+		}
+	else {
+		//print(system( "rd /s "+ `toNativePath ( $locL + $name )`) +"\n");
+		}
+	print( $name +" store deleted\n" );
 	}
 
 
