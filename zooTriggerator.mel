@@ -11,7 +11,7 @@ global proc zooTriggerator() {
 
 	string $windowName = "zooTriggeratorWindow";
 	string $windowTitle = "zooTriggerator! v"+ `zooTriggeratorInfo version` +"  ::macaroniKazoo::";
-	string $cShapes[] = `getFileList -fld (zooTriggeratorBasePath()) -fs "*.shape"`;
+	string $cShapes[] = `zooListTriggeratorShapes`;
 	int $numShapes = `size $cShapes`;
 	string $initShape = $numShapes? `match "^[^.]+" $cShapes[0]`: "no shapes found";
 	int $showTips = `zooTipState zooTriggerator -1`;
@@ -55,7 +55,9 @@ global proc zooTriggerator() {
 						string $cNewFolderLbl = `text -l "Create New Folder:"`;
 						string $cNewFolder = `button -l "create folder" -c( "zooTriggeratorFunctions -createFolder;" )`;
 
-						string $sep2 = `separator`;
+						string $colLbl = `text -l "Shape Color:"`;
+						string $colName = `textField -tx "black 0.5" zooTriggeratorTextColour`;
+
 						string $cShapeLbl = `text -l "Create Shape (rmb):"`;
 						string $cShape = `textField -en $numShapes -tx $initShape -ed 0 zooTriggeratorTextShape`;
 						string $create = `button -en $numShapes -l "create" -c( "zooTriggeratorFunctions -createTrigger;" )`;
@@ -89,6 +91,20 @@ global proc zooTriggerator() {
 
 	tabLayout -e -tabLabel $createForm "Create Triggers" -tabLabel $triggerForm "Edit Triggers" -tabLabel $folder2Form "Edit Folders" $tabs;
 
+	popupMenu -p $colName;
+		menuItem -l "red" -c( "textField -e -tx \"red 0.5\" zooTriggeratorTextColour;" );
+		menuItem -l "pink" -c( "textField -e -tx \"pink 0.5\" zooTriggeratorTextColour;" );
+		menuItem -l "green" -c( "textField -e -tx \"green 0.5\" zooTriggeratorTextColour;" );
+		menuItem -l "blue" -c( "textField -e -tx \"blue 0.5\" zooTriggeratorTextColour;" );
+		menuItem -l "orange" -c( "textField -e -tx \"orange 0.5\" zooTriggeratorTextColour;" );
+		menuItem -l "yellow" -c( "textField -e -tx \"yellow 0.5\" zooTriggeratorTextColour;" );
+		menuItem -l "white" -c( "textField -e -tx \"white 0.5\" zooTriggeratorTextColour;" );
+		menuItem -l "black" -c( "textField -e -tx \"black 0.5\" zooTriggeratorTextColour;" );
+		menuItem -d 1;
+		menuItem -l "custom" -c( "textField -e -tx \"0.25 0.1 0.1 0.5\" zooTriggeratorTextColour;" );
+		menuItem -d 1;
+		menuItem -l "no colour" -c( "textField -e -tx \"\" zooTriggeratorTextColour;" );
+	setParent -m ..;
 	popupMenu -p $eTrigger -pmc( "zooTriggereatorBuildTriggersMenu zooTriggeratorPopupTriggers" ) zooTriggeratorPopupTriggers;
 	popupMenu -p $cShape -pmc( "zooTriggereatorBuildShapeMenu zooTriggeratorPopupShape" ) zooTriggeratorPopupShape;
 	popupMenu -p $folder2 -pmc( "zooTriggereatorTriggerFolderMenu zooTriggeratorPopupFolders" ) zooTriggeratorPopupFolders;
@@ -118,86 +134,65 @@ global proc zooTriggerator() {
 	formLayout -e
 		-af $cFolderLbl "top" 3
 		-af $cFolderLbl "left" 0
-		-an $cFolderLbl "right"
-		-an $cFolderLbl "bottom"
 
 		-af $cFolder "top" 0
 		-ac $cFolder "left" 5 $cFolderLbl
 		-ac $cFolder "right" 0 $cFolderBut
-		-an $cFolder "bottom"
 
 		-af $cFolderBut "top" 0
-		-an $cFolderBut "left"
 		-af $cFolderBut "right" 0
-		-an $cFolderBut "bottom"
 
 		-ac $sep1 "top" 10 $cFolder
 		-af $sep1 "left" 10
 		-af $sep1 "right" 10
-		-an $sep1 "bottom"
 
 		-ac $cNewFolderLbl "top" 13 $sep1
 		-af $cNewFolderLbl "left" 0
-		-an $cNewFolderLbl "right"
-		-an $cNewFolderLbl "bottom"
 
 		-ac $cNewFolder "top" 10 $sep1
 		-ac $cNewFolder "left" 5 $cNewFolderLbl
 		-af $cNewFolder "right" 0
-		-an $cNewFolder "bottom"
 
-		-ac $sep2 "top" 10 $cNewFolder
-		-af $sep2 "left" 10
-		-af $sep2 "right" 10
-		-an $sep2 "bottom"
+		-ac $colLbl "top" 13 $cNewFolder
+		-af $colLbl "left" 0
 
-		-ac $cShapeLbl "top" 13 $sep2
+		-ac $colName "top" 10 $cNewFolder
+		-ac $colName "left" 10 $colLbl
+		-af $colName "right" 0
+
+		-ac $cShapeLbl "top" 13 $colName
 		-af $cShapeLbl "left" 0
-		-an $cShapeLbl "right"
-		-an $cShapeLbl "bottom"
 
-		-ac $cShape "top" 10 $sep2
+		-ac $cShape "top" 10 $colName
 		-ac $cShape "left" 5 $cShapeLbl
 		-ac $cShape "right" 0 $create
-		-an $cShape "bottom"
 
-		-ac $create "top" 10 $sep2
-		-an $create "left"
+		-ac $create "top" 10 $colName
 		-af $create "right" 0
-		-an $create "bottom"
 
 		$createForm;
 
 	formLayout -e
 		-af $eTriggerLbl "top" 3
 		-af $eTriggerLbl "left" 0
-		-an $eTriggerLbl "right"
-		-an $eTriggerLbl "bottom"
 
 		-af $eTrigger "top" 0
 		-ac $eTrigger "left" 5 $eTriggerLbl
 		-ac $eTrigger "right" 0 $eTriggerBut
-		-an $eTrigger "bottom"
 
 		-af $eTriggerBut "top" 0
 		-an $eTriggerBut "left"
 		-af $eTriggerBut "right" 0
-		-an $eTriggerBut "bottom"
 
 		-ac $folder2Lbl "top" 3 $eTriggerBut
 		-af $folder2Lbl "left" 0
-		-an $folder2Lbl "right"
-		-an $folder2Lbl "bottom"
 
 		-ac $folder2 "top" 0 $eTriggerBut
 		-ac $folder2 "left" 5 $folder2Lbl
 		-ac $folder2 "right" 0 $folder2But
-		-an $folder2 "bottom"
 
 		-ac $folder2But "top" 0 $eTriggerBut
-		-an $folder2But "left"
 		-af $folder2But "right" 0
-		-an $folder2But "bottom"
 
 		-ac $connects "top" 0 $folder2But
 		-af $connects "left" 0
@@ -208,33 +203,23 @@ global proc zooTriggerator() {
 	formLayout -e
 		-af $folder3Lbl "top" 3
 		-af $folder3Lbl "left" 0
-		-an $folder3Lbl "right"
-		-an $folder3Lbl "bottom"
 
 		-af $folder3 "top" 0
 		-ac $folder3 "left" 5 $folder3Lbl
 		-ac $folder3 "right" 0 $folder3But
-		-an $folder3 "bottom"
 
 		-af $folder3But "top" 0
-		-an $folder3But "left"
 		-af $folder3But "right" 0
-		-an $folder3But "bottom"
 
 		-ac $foldParentLbl "top" 3 $folder3
 		-af $foldParentLbl "left" 0
-		-an $foldParentLbl "right"
-		-an $foldParentLbl "bottom"
 
 		-ac $foldParent "top" 0 $folder3
 		-ac $foldParent "left" 5 $foldParentLbl
 		-ac $foldParent "right" 0 $foldParentBut
-		-an $foldParent "bottom"
 
 		-ac $foldParentBut "top" 0 $folder3
-		-an $foldParentBut "left"
 		-af $foldParentBut "right" 0
-		-an $foldParentBut "bottom"
 
 		-ac $triggerList "top" 0 $foldParent
 		-af $triggerList "left" 0
@@ -307,7 +292,7 @@ global proc zooTriggereatorBuildShapeMenu( string $parent ) {
 	menu -e -dai $parent;
 	setParent -m $parent;
 
-	string $cShapes[] = `getFileList -fld (zooTriggeratorBasePath()) -fs "*.shape"`;
+	string $cShapes[] = `zooListTriggeratorShapes`;
 	for( $n=0; $n<`size $cShapes`; $n++ ) $cShapes[$n] = `match "^[^.]+" $cShapes[$n]`;
 	if( `size $cShapes` ) for( $cShape in $cShapes ) menuItem -l $cShape -c( "textField -e -tx "+ $cShape +" zooTriggeratorTextShape;" );
 	else menuItem -l "no shapes found";
@@ -320,9 +305,13 @@ global proc zooTriggereatorBuildImportMenu( string $parent ) {
 	menu -e -dai $parent;
 	setParent -m $parent;
 
-	string $presets[] = `getFileList -fld (zooTriggeratorBasePath()) -fs "*.preset"`;
+	string $localeList[] = {};
+	string $presets[] = `zooListAllPresets zooTriggerator preset $localeList 1`;
+
 	for( $n=0; $n<`size $presets`; $n++ ) $presets[$n] = `match "^[^.]+" $presets[$n]`;
 	for( $p in $presets ) menuItem -l $p -c( "zooImportFolder "+ $p +" \"\";" );
+	if( `size $presets` ) menuItem -d 1;
+	menuItem -l "manage presets" -c( "zooPresetManagerWin \"local\" zooTriggerator preset;" );
 	}
 
 
@@ -425,7 +414,8 @@ global proc zooTriggeratorFunctions( string $function ) {
 			string $sel[] = `ls -sl`;
 			string $folder = `nameField -q -o $UIFolder1`;
 			string $shape = `textField -q -tx zooTriggeratorTextShape`;
-			string $trigger = `zooBuildShape $shape ""`;
+			string $colour = `textField -q -tx zooTriggeratorTextColour`;
+			string $trigger = `zooBuildShape $shape ( "-colour "+ $colour )`;
 			string $eazel = `zooGetEazel 1`;
 
 			parent -r $trigger $folder;
@@ -439,9 +429,14 @@ global proc zooTriggeratorFunctions( string $function ) {
 			break;
 		case "-createFolder":
 			string $parent = `nameField -q -o zooTriggeratorTextFolder1`;
+			string $colour = `textField -q -tx zooTriggeratorTextColour`;
 			string $eazel = zooGetElement_str(0,ls("-l",`zooGetEazel 1`));
 			string $folder = `zooCreateFolder`;
 
+			if( $colour != "" ) {
+				zooShaders;
+				zooSetObjShader $folder `zooCreateShader $colour`;
+				}
 			if( !`objExists $parent` ) $parent = $eazel;
 			if( $parent == $eazel ) {
 				setAttr ( $folder +".s" ) 0.01 0.01 0.01;

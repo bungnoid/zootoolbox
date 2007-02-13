@@ -100,7 +100,7 @@ global proc string[] zooListTools( string $type ) {
 	string $otherTools[] = { "zooAutoSave","zooChangeLog","zooAssets","zooNameSpacey",
 		"zooRemind","zooRenamer","zooToggleUI","zooPanelCycler" };
 	string $hotkeys[] = { "zooTangentWks","zooCam","zooSetMenu","zooSetkey","zooAlign",
-		"toggle_shading","toggle_lights","toggle_texturing" };
+		"toggle_shading","toggle_lights","toggle_texturing","zooHeavy" };
 	string $unlisted[] = { "zooAlign","zooCurveLight","zooChangeRoo","zooChangeSpace",
 		"zooHotkeyer" };
 
@@ -268,14 +268,16 @@ global proc string zooToolCmd( string $tool ) {
 			return( $mmMsg +"zooHotkeyer zooSetkey \"zooSetkey;\" \"zooSetkeyKillUI;\" \"-default s -enableMods 0 -ann designed to replace the set key hotkey, this marking menu script lets you quickly perform all kinda of set key operations\";" );
 		case "zooTangentWks":
 			return( $mmMsg +"zooHotkeyer zooTangentWks \"zooTangentWks;\" \"zooTangentWksKillUI;\" \"-default q -enableMods 0 -ann tangent works is a marking menu script to speed up working with the graph editor\";" );
+		case "zooHeavy":
+			return( $mmMsg +"zooHotkeyer zooHeavy \"zooHeavyMenu;\" \"zooHeavyKillUI;\" \"-default h -enableMods 0 -ann heavy is a skin weighting tool\";" );
 		case "zooPanelCycler":
 			return "print \"\\n----------------\\ncreate a hotkey using the following command:\\nzooPanelCycler { \\\"graph\\\",\\\"dope\\\",\\\"hypershade\\\",\\\"hypergraph\\\" };\\nyou can add as many or as few panels as you want on the\\nhotkey.  pressing the hotkey will cycle through them all.\\nfollowing is a list of the panel names you can use:\\n----------------\\n\"; zooPanelCycler {};confirmDialog -m \"panel cycler will create a hotkey to cycle between mutiple panels - read the script editor for info on how to set it up\";";
 		case "toggle_lights":
 			return "zooHotkeyer toggleLights \"zooToggle lighting;\" \"\" \"-default 3 -enableMods 1 -ann toggles viewport lighting\"";
 		case "toggle_texturing":
-			return "zooHotkeyer toggleTexture \"zooToggle texturing;\" \"\" \"-default 3 -enableMods 1 -ann toggles viewport texturing\"";
+			return "zooHotkeyer toggleTexture \"zooToggle texturing;\" \"\" \"-default 2 -enableMods 1 -ann toggles viewport texturing\"";
 		case "toggle_shading":
-			return "zooHotkeyer toggleShading \"zooToggle shading;\" \"\" \"-default 3 -enableMods 1 -ann toggles viewport shading\"";
+			return "zooHotkeyer toggleShading \"zooToggle shading;\" \"\" \"-default 1 -enableMods 1 -ann toggles viewport shading\"";
 		}
 	return "";
 	}
@@ -294,6 +296,7 @@ global proc string zooToolIcon( string $tool ) {
 		case "zooSetMenu":
 		case "zooSetkey":
 		case "zooTangentWks":
+		case "zooHeavy":
 			return "zooHotkeyer";
 		case "zooAutoSave":
 			return "zooAutoSave_0";
@@ -341,6 +344,8 @@ global proc string zooToolOverlay( string $tool ) {
 			return "re-B";
 		case "zooHUDCtrl":
 			return "HUD";
+		case "zooHeavy":
+			return "heavy";
 		}
 	}
 

@@ -226,7 +226,7 @@ global proc zooXferAnimTransferAdd( string $src, string $tgt, string $rangeStr, 
 	if( $matchRo ) if( `objExists ($src+".ro")` && `objExists ($tgt+".ro")` ) setAttr ($tgt+".ro") `getAttr ($src+".ro")`;
 
 	copyKey -time $rangeStr -hierarchy none -animation objects -o curve $src;
-	pasteKey -time $time -option merge -animation objects -o curve $tgt;
+	pasteKey -time $time -option merge -animation objects $tgt;
 	}
 
 

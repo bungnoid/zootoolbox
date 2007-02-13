@@ -2,6 +2,7 @@ zooArrays_str;
 zooArrays_float;
 zooFlags;
 zooGreaseMonkeyUtils;
+zooNameSpaceyUtils;
 zooRegister;
 zooStrUtils;
 zooTriggeredPresets;
@@ -14,10 +15,20 @@ global proc zooTriggeratorUtils() {
 
 
 global proc string zooTriggeratorBasePath() {
+	return `zooGetPresetDirectory "local" zooTriggerator`;
+	}
+
+
+global proc string zooTriggeratorShapePath() {
 	return `zooGetPresetDirectory "global" zooTriggerator`;
-	//if( !`filetest -d $dir` ) $dir = `internalVar -uad` +"scripts/zooShapeLibrary/";
-	//if( !`filetest -d $dir` ) $dir = `getenv HOME` +"scripts/zooShapeLibrary/";
-	//return $dir;
+	}
+
+
+global proc string[] zooListTriggeratorShapes() {
+	string $shapePath = `zooTriggeratorShapePath`;
+	string $shapes[] = `getFileList -fld $shapePath -fs "*.shape"`;
+
+	return $shapes;
 	}
 
 
@@ -60,6 +71,7 @@ global proc int zooWOSForObject( string $obj, int $state ) {
 global proc zooExportFolder( string $folder, string $filename ){
 	zooTriggeredPresets;
 	string $exportStr = "";
+	string $eazel = `zooGetEazel 1`;
 	string $childFolders[] = {$folder};
 	string $allConnects[] = {};
 
@@ -69,6 +81,7 @@ global proc zooExportFolder( string $folder, string $filename ){
 		string $f_parent = zooGetElement_str(0,`listRelatives -p $childFolders[$n]`);
 
 		if( $f_parent == "" ) $f_parent = "<none>";
+		else if( $f_parent == $eazel ) $f_parent = "%EAZEL%";
 		$exportStr += "n="+ $childFolders[$n] +"\nt=folder\np="+ $f_parent +",";
 		$exportStr += `getAttr ( $childFolders[$n] +".tx" )` +","+ `getAttr ( $childFolders[$n] +".ty" )` +","+ `getAttr ( $childFolders[$n] +".rz" )` +","+ `getAttr ( $childFolders[$n] +".sx" )` +","+ `getAttr ( $childFolders[$n] +".sy" )` +","+ `getAttr ( $childFolders[$n] +".sz" )` +"\n";
 		$exportStr += "<end>\n";
@@ -84,8 +97,9 @@ global proc zooExportFolder( string $folder, string $filename ){
 				}
 
 			//export the parent of the current trigger
-			string $parent = zooGetElement_str(0,`listRelatives -p $triggers[$i]`);
+			string $parent = zooGetElement_str(0,`listRelatives -pa -p $triggers[$i]`);
 			if( $parent == "" ) $parent = "<none>";
+			else if( $parent == $eazel ) $parent = "%EAZEL%";
 			$exportStr += $baseStr;
 			$exportStr += "p="+ $parent +",";
 			$exportStr += `getAttr ( $triggers[$i] +".tx" )` +","+ `getAttr ( $triggers[$i] +".ty" )` +","+ `getAttr ( $triggers[$i] +".rz" )` +","+ `getAttr ( $triggers[$i] +".sx" )` +","+ `getAttr ( $triggers[$i] +".sy" )` +","+ `getAttr ( $triggers[$i] +".sz" )` +"\n";
@@ -155,6 +169,7 @@ global proc zooCreateTriggerFromData( string $tgtNamespace, string $n_data, stri
 	string $eazel = `zooGetEazel 1`;
 	string $parent = $temp[0];
 	string $connects[] = `zooTokenize $c_data ";"`;
+	string $namespaces[] = `zooGetRecursedNamespaces $tgtNamespace`;
 	int $numConnects = `size $connects`;
 	int $connectSlots[] = {};
 	float $posX = 0;
@@ -164,13 +179,19 @@ global proc zooCreateTriggerFromData( string $tgtNamespace, string $n_data, stri
 	float $sclY = 0;
 	float $sclZ = 0;
 
-	$n_data = `match "[^|:]+$" $n_data`;
+	$n_data = `match "[^|:]+$" $n_data`;  //strip namespace/path info from the name of the trigger to be created
 	for( $n=0; $n<$numConnects; $n++ ) {
 		if( $connects[$n] == "" ) continue;
-		string $connect = `match "[^#|:]+$" $connects[$n]`;
+		string $connect = `match "[^#]+$" $connects[$n]`;
+		string $cleanCon = `match "[^|:]+$" $connect`;
 		int $slot = `match "^[0-9]+" $connects[$n]`;
 
-		if( !`objExists $connect` ) $connect = $tgtNamespace + $connect;
+		//if the raw object doesn't exist, see if we can find a match
+		if( !`objExists $connect` ) for( $ns in $namespaces ) {
+			$connect = $ns + $cleanCon;
+			print( "trying namespace   "+ $ns +"   "+ $connect +"\n" );
+			if( `objExists $connect` ) break;
+			}
 		if( !`objExists $connect` ) continue;
 		$connects[$n] = $connect;
 		$connectSlots[$n] = $slot;
@@ -184,10 +205,13 @@ global proc zooCreateTriggerFromData( string $tgtNamespace, string $n_data, stri
 		$sclZ = $temp[6];
 		}
 	if( $t_data == "folder" ) {
-		string $folder = `zooCreateFolder`;
+		string $folder = `zooCreateFolder`;print( "folder name: "+ $folder +"\n" );
 		$folder = `rename $folder $n_data`;
+		if( $parent == "%EAZEL%" ) {
+			$parent = $eazel;
+			setAttr ( $folder +".tz" ) -1;
+			}
 		if( `objExists $parent` ) parent -r $folder $parent;
-		if( $parent == $eazel ) setAttr ( $folder +".tz" ) -1;
 		setAttr ( $folder +".tx" ) $posX;
 		setAttr ( $folder +".ty" ) $posY;
 		setAttr ( $folder +".rz" ) $rotZ;
@@ -372,6 +396,8 @@ global proc string zooCreateFolder() {
 	//now register the folder
 	string $folderManager = `zooGetRegister zoo 1`;
 	zooRegisterObj $folderManager triggerator $folder 1 1;
+	$folder = `rename $folder "zooFolder#"`;
+
 	return $folder;
 	}
 
@@ -380,16 +406,18 @@ global proc string zooCreateFolder() {
 global proc string zooBuildShape( string $shapeName, string $optionStr ) {
 	string $temp[] = {};
 	string $parent = "";
+	string $colour = "";
 	float $translate[] = { 0,0 };
 	float $rotate = 0;
 	float $scale[] = { 1,1 };
 
 	$temp = `zooGetFlagArguments $optionStr parent`; if( `objExists $temp[0]` ) $parent = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr colour`; if( `size $temp` ) $colour = `zooArrayToStr_str $temp " "`;
 	$temp = `zooGetFlagArguments $optionStr translate`; if( `size $temp` ) { $translate[0] = $temp[0]; $translate[1] = $temp[1]; }
 	$temp = `zooGetFlagArguments $optionStr rotate`; if( `size $temp` ) $rotate = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr scale`; if( `size $temp` ) { $scale[0] = $temp[0]; $scale[1] = $temp[1]; }
 
-	string $basePath = `zooTriggeratorBasePath`;
+	string $basePath = `zooTriggeratorShapePath`;
 	string $shapePreset = ( $basePath + $shapeName +".shape" );
 
 	//make sure the given file exists
@@ -410,6 +438,12 @@ global proc string zooBuildShape( string $shapeName, string $optionStr ) {
 	zooShapeFromData $xyPairs $objAndShape;
 	$obj = $objAndShape[0];
 	$shape = $objAndShape[1];
+
+	//colour the shape
+	if( $colour != "" ) {
+		zooShaders;print( $colour +"\n" );
+		zooSetObjShader $obj `zooCreateShader $colour`;
+		}
 
 	//now do trs offsets
 	setAttr ( $obj +".t" ) $translate[0] $translate[1] 0;

@@ -120,6 +120,10 @@ global proc string[] zooGetRecursedNamespaces( string $space ) {
 		if( $n>1000 ) break;
 		}
 
+	//make sure the : exists on the end of all namespaces
+	for( $n=0; $n<`size $pathsFound`; $n++ ) if( `match ":$" $pathsFound[$n]` == "" ) $pathsFound[$n] = $pathsFound[$n] + ":";
+
+	namespace -set ":";  //revert to the root namespace
 	return $pathsFound;
 	}
 

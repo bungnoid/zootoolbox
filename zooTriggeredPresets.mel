@@ -30,7 +30,7 @@ global proc zooImportTriggers( string $preset, string $optionStr, string $search
 	if( !`size $searchDomain` ) $searchDomain = `ls -type transform`;
 
 	string $temp[] = {};
-	string $locale = "global";
+	string $locale = "local";
 	float $threshold = 0.65;
 	int $guessTriggers = 0;
 	int $guessConnects = 0;
@@ -114,7 +114,7 @@ global proc zooImportTriggers( string $preset, string $optionStr, string $search
 
 
 global proc string[] zooGetNamespacesFromFile( string $preset ) {
-	string $locale = "global";
+	string $locale = "local";
 	string $presetFile = `zooGetPresetDirectory $locale zooTriggered` + $preset +".trigger";
 	string $fileContents[] = `zooReadFile $presetFile "-strip 1"`;
 	string $namespaces[] = {};
@@ -190,7 +190,7 @@ global proc string zooReplaceSymbol( string $cmdStr, int $symbolToReplace, int $
 
 
 global proc string zooExportTriggers( string $triggers[], string $exportTo ) {
-	string $locale = "global";
+	string $locale = "local";
 	string $base = `zooGetPresetDirectory $locale zooTriggered`;
 	string $presetFile = $base + $exportTo +".trigger";
 	if( !`filetest -d $base` ) sysFile -makeDir $base;
