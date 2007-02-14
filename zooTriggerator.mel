@@ -11,7 +11,7 @@ global proc zooTriggerator() {
 
 	string $windowName = "zooTriggeratorWindow";
 	string $windowTitle = "zooTriggerator! v"+ `zooTriggeratorInfo version` +"  ::macaroniKazoo::";
-	string $cShapes[] = `zooListTriggeratorShapes`;
+	string $cShapes[] = `zooListAllPresets zooTriggerator shape {} 0`;
 	int $numShapes = `size $cShapes`;
 	string $initShape = $numShapes? `match "^[^.]+" $cShapes[0]`: "no shapes found";
 	int $showTips = `zooTipState zooTriggerator -1`;
@@ -292,12 +292,14 @@ global proc zooTriggereatorBuildShapeMenu( string $parent ) {
 	menu -e -dai $parent;
 	setParent -m $parent;
 
-	string $cShapes[] = `zooListTriggeratorShapes`;
+	string $cShapes[] = `zooListAllPresets zooTriggerator shape {} 0`;
 	for( $n=0; $n<`size $cShapes`; $n++ ) $cShapes[$n] = `match "^[^.]+" $cShapes[$n]`;
 	if( `size $cShapes` ) for( $cShape in $cShapes ) menuItem -l $cShape -c( "textField -e -tx "+ $cShape +" zooTriggeratorTextShape;" );
 	else menuItem -l "no shapes found";
 	menuItem -d 1;
-	menuItem -l "write new shape" -c( "{string $sel[] = `ls -sl`; string $a=`promptDialog -m \"shape name\" -t \"shape name\" -b \"OK\" -b \"Cancel\"`; if( $a==\"OK\" ) zooExportObjShapeData $sel[0] `promptDialog -q -tx`;}" );
+	menuItem -l "write new shape" -c( "{string $sel[] = `ls -sl`; string $a=`promptDialog -m \"shape name\" -t \"shape name\" -b \"OK\" -b \"Cancel\" -db \"OK\"`; if( $a==\"OK\" ) zooExportObjShapeData $sel[0] `promptDialog -q -tx`;}" );
+	menuItem -d 1;
+	menuItem -l "manage shapes" -c( "zooPresetManagerWin \"local\" zooTriggerator shape;" );
 	}
 
 

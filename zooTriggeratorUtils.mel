@@ -14,24 +14,6 @@ global proc zooTriggeratorUtils() {
 	}
 
 
-global proc string zooTriggeratorBasePath() {
-	return `zooGetPresetDirectory "local" zooTriggerator`;
-	}
-
-
-global proc string zooTriggeratorShapePath() {
-	return `zooGetPresetDirectory "global" zooTriggerator`;
-	}
-
-
-global proc string[] zooListTriggeratorShapes() {
-	string $shapePath = `zooTriggeratorShapePath`;
-	string $shapes[] = `getFileList -fld $shapePath -fs "*.shape"`;
-
-	return $shapes;
-	}
-
-
 global proc int zooWOSForObject( string $obj, int $state ) {
 	string $sel[] = `ls -sl`;
 	switch( $state ) {
@@ -109,7 +91,7 @@ global proc zooExportFolder( string $folder, string $filename ){
 
 	string $namespaces[] = `zooGetAllNamespaces $allConnects`;
 	if( `size $namespaces` ) $exportStr = `zooArrayToStr_str $namespaces "\n"` +"\n<endnamespaces>\n"+ $exportStr;
-	int $fileID = `fopen ((zooTriggeratorBasePath()) + $filename +".preset" ) "w"`;
+	int $fileID = `fopen ((zooGetPresetDirectory("local","zooTriggerator")) + $filename +".preset" ) "w"`;
 	fprint $fileID $exportStr;
 	fclose $fileID;
 	}
@@ -119,7 +101,7 @@ global proc zooImportFolder( string $preset, string $tgtNamespace ) {
 	string $sel[] = `ls -sl`;
 	if( $tgtNamespace == "" ) if( `size $sel` ) $tgtNamespace = `zooGetNamespace $sel[0]`;
 
-	string $presetFile = `zooTriggeratorBasePath` + $preset +".preset";
+	string $presetFile = `zooGetPresetDirectory "local" zooTriggerator` + $preset +".preset";
 	string $fileContents[] = `zooReadFile $presetFile "-strip 1"`;
 	string $trigger = "";
 	string $trigCmd = "";
@@ -238,7 +220,7 @@ global proc zooCreateTriggerFromData( string $tgtNamespace, string $n_data, stri
 
 
 global proc zooExportObjShapeData( string $obj, string $name ) {
-	string $presetFile = `zooTriggeratorBasePath` + $name +".shape";
+	string $presetFile = `zooGetPresetDirectory "local" zooTriggerator` + $name +".shape";
 	string $preset[] = {};
 	string $presetStr = "";
 	string $shapes[] = `listRelatives -s -pa $obj`;
@@ -405,23 +387,32 @@ global proc string zooCreateFolder() {
 //this proc loads a shape from the shape library
 global proc string zooBuildShape( string $shapeName, string $optionStr ) {
 	string $temp[] = {};
+	string $locale = "global";
 	string $parent = "";
 	string $colour = "";
 	float $translate[] = { 0,0 };
 	float $rotate = 0;
 	float $scale[] = { 1,1 };
 
+	$temp = `zooGetFlagArguments $optionStr locale`; if( `size $temp` ) $locale = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr parent`; if( `objExists $temp[0]` ) $parent = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr colour`; if( `size $temp` ) $colour = `zooArrayToStr_str $temp " "`;
 	$temp = `zooGetFlagArguments $optionStr translate`; if( `size $temp` ) { $translate[0] = $temp[0]; $translate[1] = $temp[1]; }
 	$temp = `zooGetFlagArguments $optionStr rotate`; if( `size $temp` ) $rotate = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr scale`; if( `size $temp` ) { $scale[0] = $temp[0]; $scale[1] = $temp[1]; }
 
-	string $basePath = `zooTriggeratorShapePath`;
+	string $basePath = `zooGetPresetDirectory $locale zooTriggerator`;
 	string $shapePreset = ( $basePath + $shapeName +".shape" );
 
-	//make sure the given file exists
-	if( !`filetest -r $shapePreset` ) return "";
+	//make sure the given file exists - if not in the given locale, try the other
+	if( !`filetest -r $shapePreset` ) {
+		$locale = $locale == "local"? "global": "local";
+		$basePath = `zooGetPresetDirectory $locale zooTriggerator`;
+		$shapePreset = ( $basePath + $shapeName +".shape" );
+		if( !`filetest -r $shapePreset` ) error "shape not found!";  //if it still doesn't exist, bail
+		}
+
+	//now read the file and build the shape
 	string $contents[] = `zooReadFile $shapePreset "-strip 1"`;
 	string $objAndShape[] = {};
 	string $obj = "";

@@ -304,8 +304,6 @@ global proc string zooToolIcon( string $tool ) {
 			return "zooTriggered_0";
 		case "zooToggleUI":
 			return "zooIcon";
-		case "zooTriggerator":
-			return "zooIcon";
 		case "zooReblender":
 			return "zooIcon";
 		case "zooHUDCtrl":
