@@ -399,7 +399,7 @@ global proc string[] zooSplitCamelCase( string $name ) {
 	int $word = 0;
 
 	for( $n=0; $n<$len; $n++ ) {
-		if( `match "[A-Z]" $letters[$n]` != "" ) $word++;
+		if( $n ) if( `match "[A-Z]" $letters[$n]` != "" ) $word++;
 		if( `match "[_0-9]" $letters[$n]` != "" ) {
 			$word++;
 			while( `match "[_0-9]" $letters[$n]` != "" ) {
@@ -412,6 +412,26 @@ global proc string[] zooSplitCamelCase( string $name ) {
 		}
 
 	return $words;
+	}
+
+
+//returns an array of "words" contained in a given string.  words are defined by
+//any of the delimeters: _ : | [space] or are camel case alpha strings.  numeric characters
+//are also delimeters
+//
+//for example:
+// zooStrToWords "thisIsAString";
+// returns { "this", "Is", "A", "String" }
+// zooStrToWords "another:string_this is";
+// returns { "another", "string", "this", "is" }
+global proc string[] zooStrToWords( string $string ) {
+	string $toks[] = {};
+	string $camelWords[] = {};
+	int $numToks = `tokenize $string " :|_" $toks`;
+
+	for( $n=0; $n<$numToks; $n++ ) $camelWords = zooAddArray_str($camelWords,`zooSplitCamelCase $toks[$n]`);
+
+	return $camelWords;
 	}
 
 

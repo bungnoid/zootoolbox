@@ -58,7 +58,8 @@ global proc zooXferAnim() {
 			menuItem -l "Batch Remove" -c( "zooXferAnimWindowFunctions batchRemove n;" ) zooXferAnimMenuRemove;
 			menuItem -l "Check Mapping" -c( "zooXferAnimWindowFunctions mappingCheck 0;" ) zooXferAnimMenuCheck;
 			menuItem -d 1;
-			menuItem -l( "Matching Threshold: "+ $threshold ) -c( "zooXferAnimWindowFunctions threshold \"*\";" );
+			menuItem -l "Strip Prefixes" -cb( `optionVar -ex zooXferAnimStrip`? `optionVar -q zooXferAnimStrip`: 1 ) -c( "optionVar -iv zooXferAnimStrip #1;" ) xferMenuStrip;
+			menuItem -l( "Matching Threshold: "+ $threshold ) -c( "zooXferAnimWindowFunctions threshold \"*\";" ) xferMenuThreshold;
 			menuItem -d 1;
 			menuItem -l "Sort Alphabetically" -cb( $alphabetical ) -c( "optionVar -iv zooXferAnimAlphabetically #1;" ) zooXferAnimMenuAlphabetically;
 		menu -l "Load Items" zooXferAnimMenuQss;
@@ -409,7 +410,8 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 		case "matchSrcTgt":  //used to do start the auto object mapping process
 			string $srcs[] = `textScrollList -q -ai zooXferAnimScrollSrcPaths`;
 			string $tgts[] = `textScrollList -q -ai zooXferAnimScrollTgts`;
-			string $matches[] = `zooMatchNames $srcs $tgts ( "-strip 1 -threshold "+ $threshold +" -unique 1 -parity 1" )`;
+			int $strip = `optionVar -ex zooXferAnimStrip`? `optionVar -q zooXferAnimStrip`: 1;
+			string $matches[] = `zooMatchNames $srcs $tgts ( "-strip "+ $strip +" -threshold "+ $threshold +" -unique 1 -parity 1" )`;
 
 			textScrollList -e -ra zooXferAnimScrollSrcsTgts;
 			for( $n=0; $n<`size $srcs`; $n++ ) {
@@ -534,6 +536,7 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 				$new = `match "^[0-9.]+$" $new`;
 				if( $new == "" ) return;
 				optionVar -fv zooXferAnimThreshold ((float)$new);
+				menuItem -e -l ( "Matching Threshold: "+ $variable01 ) xferMenuThreshold
 				zooXferAnimWindowFunctions matchSrcTgt n;
 				zooXferAnimWindowFunctions srcChange n;
 				}

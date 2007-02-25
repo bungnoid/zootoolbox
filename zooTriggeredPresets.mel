@@ -196,7 +196,7 @@ global proc string zooExportTriggers( string $triggers[], string $exportTo ) {
 	if( !`filetest -d $base` ) sysFile -makeDir $base;
 
 	string $namespaces[] = `zooGetAllNamespaces $triggers`;
-	string $exportStr = `zooWriteTriggersExportStr $triggers`;
+	string $exportStr = `zooWriteTriggersExportStr $triggers 0`;
 
 	$exportStr = `zooArrayToStr_str $namespaces "\n"` +"\n<endnamespaces>\n"+ $exportStr;
 
@@ -216,24 +216,28 @@ global proc string[] zooGetAllNamespaces( string $triggers[] ) {
 	}
 
 
-global proc string zooWriteTriggersExportStr( string $triggers[] ) {
+global proc string zooWriteTriggersExportStr( string $triggers[], int $scrubNamespace ) {
 	if( !`size $triggers` ) $triggers = `zooGetAllTriggers`;
 	string $exportStr = "";
-	for( $n=0; $n<`size $triggers`; $n++ ) $exportStr += `zooWriteTriggerExportStr $triggers[$n]` +"<end>\n";
+	for( $n=0; $n<`size $triggers`; $n++ ) $exportStr += `zooWriteTriggerExportStr $triggers[$n] $scrubNamespace` +"<end>\n";
 
 	return $exportStr;
 	}
 
 
-global proc string zooWriteTriggerExportStr( string $trigger ) {
+global proc string zooWriteTriggerExportStr( string $trigger, int $scrubNamespace ) {
 	if( !`objExists $trigger` ) return "";
 	string $exportStr = "n="+ `match "[^:]+$" $trigger` +"\n";
 
 	//export the connects list
 	int $connects[] = `zooGetAllTriggerSlots $trigger`;
-
 	string $c_string = "";
-	for( $i=0; $i<`size $connects`; $i++ ) $c_string += $connects[$i] +"#"+ `zooGetConnectObject $trigger $connects[$i]` +";";
+
+	for( $i=0; $i<`size $connects`; $i++ ) {
+		string $ct = `zooGetConnectObject $trigger $connects[$i]`;
+		if( $scrubNamespace ) $ct = `match "[^:|]+$" $ct`;
+		$c_string += $connects[$i] +"#"+ $ct +";";
+		}
 	if( `size $c_string` ) $exportStr += "c="+ $c_string +"\n";
 
 	//export the trigger command

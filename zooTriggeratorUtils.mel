@@ -68,7 +68,8 @@ global proc zooExportFolder( string $folder, string $filename ){
 		$exportStr += `getAttr ( $childFolders[$n] +".tx" )` +","+ `getAttr ( $childFolders[$n] +".ty" )` +","+ `getAttr ( $childFolders[$n] +".rz" )` +","+ `getAttr ( $childFolders[$n] +".sx" )` +","+ `getAttr ( $childFolders[$n] +".sy" )` +","+ `getAttr ( $childFolders[$n] +".sz" )` +"\n";
 		$exportStr += "<end>\n";
 		for( $i=0; $i<`size $triggers`; $i++ ) {
-			string $baseStr = `zooWriteTriggerExportStr $triggers[$i]`;
+			$triggers[$i] = `match "[^:|]+$" $triggers[$i]`;
+			string $baseStr = `zooWriteTriggerExportStr $triggers[$i] 1`;
 			string $shapes[] = `listRelatives -s -pa $triggers[$i]`;
 
 			$allConnects = `zooAddArray_str $allConnects (zooGetConnects($triggers[$i]))`;
@@ -110,19 +111,24 @@ global proc zooImportFolder( string $preset, string $tgtNamespace ) {
 	string $shapes[] = {};
 	string $objMenus[] = {};
 	string $namespaces[] = {};
+	int $num = `size $fileContents`;
 
-	for( $n=0; $n<`size $fileContents`; $n++ ) {
+	for( $n=0; $n<$num; $n++ ) {
 		if( $fileContents[$n] == "<endnamespaces>" ) break;
 		$namespaces[( `size $namespaces` )] = $fileContents[$n];
 		}
 
-	for( $n; $n<`size $fileContents`; $n++ ) {
+	for( $n; $n<$num; $n++ ) {
 		string $prefix = `substring $fileContents[$n] 1 2`;
 		string $data = `substring $fileContents[$n] 3 (size($fileContents[$n]))`;
 
 		//if we've reached the end of the trigger definition, flush all registers
 		if( $fileContents[$n] == "<end>" ) {
-			zooCreateTriggerFromData $tgtNamespace $trigger $trigCmd $connects $placement $shapes $objMenus;
+			string $new = `zooCreateTriggerFromData $tgtNamespace $trigger $trigCmd $connects $placement $shapes $objMenus`;
+
+			//make sure the trigger created by the zooCreateTriggerFromData command has the name it was given - otherwise other triggers may need to have their parents modified
+			if( $new != $trigger ) for( $i=$n; $i<$num; $i++ ) $fileContents[$i] = `substitute ( "^p="+ $trigger +"," ) $fileContents[$i] ( "p="+ $new +"," )`;
+
 			$trigger = "";
 			$trigCmd = "";
 			$connects = "";
@@ -146,7 +152,10 @@ global proc zooImportFolder( string $preset, string $tgtNamespace ) {
 //triggerators as connects - as they may not be build till later in the read.  not
 //entirely sure what the solution to this one is...  either a storage of failed
 //connects, or the entire file will need to be read
-global proc zooCreateTriggerFromData( string $tgtNamespace, string $n_data, string $t_data, string $c_data, string $p_data, string $s_data[], string $m_data[] ) {
+global proc string zooCreateTriggerFromData( string $tgtNamespace, string $n_data, string $t_data, string $c_data, string $p_data, string $s_data[], string $m_data[] ) {
+	//make sure the namespace - if there is one - is a top level namespace - as we recurse all child namespaces anyway
+	if( $tgtNamespace != "" ) $tgtNamespace = `match "^[^:]+" $tgtNamespace`;
+
 	string $temp[] = `zooTokenize $p_data ","`;
 	string $eazel = `zooGetEazel 1`;
 	string $parent = $temp[0];
@@ -187,18 +196,18 @@ global proc zooCreateTriggerFromData( string $tgtNamespace, string $n_data, stri
 		$sclZ = $temp[6];
 		}
 	if( $t_data == "folder" ) {
-		string $folder = `zooCreateFolder`;print( "folder name: "+ $folder +"\n" );
+		string $folder = `zooCreateFolder`;
 		$folder = `rename $folder $n_data`;
 		if( $parent == "%EAZEL%" ) {
 			$parent = $eazel;
 			setAttr ( $folder +".tz" ) -1;
 			}
-		if( `objExists $parent` ) parent -r $folder $parent;
+		if( `objExists $parent` ) $folder = zooGetElement_str(0,`parent -r $folder $parent`);
 		setAttr ( $folder +".tx" ) $posX;
 		setAttr ( $folder +".ty" ) $posY;
 		setAttr ( $folder +".rz" ) $rotZ;
 		setAttr ( $folder +".s" ) $sclX $sclY $sclZ;
-		return;
+		return $folder;
 		}
 
 	string $shapeData[] = {};
@@ -216,6 +225,8 @@ global proc zooCreateTriggerFromData( string $tgtNamespace, string $n_data, stri
 	setAttr ( $trigger +".rz" ) $rotZ;
 	setAttr ( $trigger +".s" ) $sclX $sclY $sclZ;
 	$trigger = `rename $trigger $n_data`;
+
+	return $trigger;
 	}
 
 
@@ -342,8 +353,9 @@ global proc string[] zooListFoldersUnder( string $parent ) {
 
 	zooListRegistered $folderManager triggerator {} $folders;
 	for( $folder in $folders ) {
+		if( !`objExists $folder` ) continue;
 		string $curParent = zooGetElement_str(0,`listRelatives -p $folder`);
-		if( $curParent == $parent ) $childFolders[( `size $childFolders` )] = $folder;
+		if( $curParent == $parent ) $childFolders[`size $childFolders`] = $folder;
 		}
 
 	return $childFolders;
