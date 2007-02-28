@@ -1,3 +1,8 @@
+zooArrays_str;
+zooStrUtils;
+zooUtils;
+
+
 global proc p4() {
 	return;
 	}
@@ -18,30 +23,63 @@ global proc p4() {
 		string $fileArrayStr = "{ \""+ `zooArrayToStr_str $files "\",\""` +"\" }";
 		int $isEdit = `isEdit $files[0] {} {}`;
 
+		for( $n=0; $n<`size $files`; $n++ ) $files[$n] = `zooScrubPath $files[$n]`;
 		if( `window -exists $windowName` ) deleteUI $windowName;
-		window -title $windowTitle -mb 1 -resizeToFitChildren 0 -maximizeButton 0 -sizeable 1 -width 300 -height 200 $windowName;
+		window -title $windowTitle -mb 1 -resizeToFitChildren 0 -maximizeButton 0 -sizeable 1 -width 600 -height 450 $windowName;
 			string $form = `formLayout`;
-				string $text = `scrollField -tx "" -ww 1`;
-				string $save = `button -en $isEdit -l "submit file" -c( "p4submitUIAction "+ $fileArrayStr +" "+ $text +";" )`;
+				string $pane = `paneLayout -cn "horizontal2" -ps 1 100 40 p4SubmitPane`;
+					string $text = `scrollField -tx "" -ww 1`;
+					string $listForm = `formLayout`;
+						string $fileLbl = `text -l "files being submitted - right click to list all files open for edit options (this is slow)"`;
+						string $fileUI = `textScrollList -ams 1`;
+					setParent ..;
+				setParent ..;
+				string $save = `button -en $isEdit -l(size($files)?"submit file":"submit files") -c( "p4submitUIAction "+ $fileUI +" "+ $text +";" )`;
 				string $canc = `button -l "cancel" -c( "deleteUI "+ $windowName )`;
 			menu -p $windowName -l "Comment Templates" -pmc( "p4CommentTemplateMenu p4TemplateMenu "+ $text ) p4TemplateMenu;
 
+		for( $file in $files ) {
+			textScrollList -e -a(tolower($file)) $fileUI;
+			textScrollList -e -si(tolower($file)) $fileUI;
+			}
+		popupMenu -b 3 -p $fileUI;
+			menuItem -l "list all files opened for edit" -c( "p4submitUIListAll "+ $fileUI );
+
 		formLayout -e
-			-af $text "top" 0
-			-af $text "left" 0
-			-af $text "right" 0
-			-ac $text "bottom" 0 $save
+			-af $fileLbl "top" 3
+			-af $fileLbl "left" 0
 
-			-af $save "left" 0
-			-ap $save "right" 0 50
-			-af $save "bottom" 0
+			-ac $fileUI "top" 3 $fileLbl
+			-af $fileUI "left" 0
+			-af $fileUI "right" 0
+			-af $fileUI "bottom" 0
+			$listForm;
 
-			-ap $canc "left" 0 50
-			-af $canc "right" 0
-			-af $canc "bottom" 0
+		formLayout -e
+			-af $pane "top" 2
+			-af $pane "left" 2
+			-af $pane "right" 2
+			-ac $pane "bottom" 2 $save
+
+			-af $save "left" 2
+			-ap $save "right" 1 50
+			-af $save "bottom" 2
+
+			-ap $canc "left" 1 50
+			-af $canc "right" 2
+			-af $canc "bottom" 2
 			$form;
 
 		showWindow $windowName;
+		}
+
+
+	global proc p4submitUIListAll( string $fileUI ) {
+		string $opened[] = `p4_openedClient`;
+		string $files[] = `textScrollList -q -si $fileUI`;
+
+		for( $file in $opened ) textScrollList -e -a(tolower($file)) $fileUI;
+		for( $file in $files ) textScrollList -e -si(tolower($file)) $fileUI;
 		}
 
 
@@ -63,7 +101,8 @@ global proc p4() {
 		}
 
 
-	global proc p4submitUIAction( string $files[], string $scrollField ) {
+	global proc p4submitUIAction( string $filesTSL, string $scrollField ) {
+		string $files[] = `textScrollList -q -si $filesTSL`;
 		string $comment = zooReplaceNewlines(`scrollField -q -tx $scrollField`,"\\n\\t");
 		string $cur = `file -q -sn`;
 		int $isCurFileInList = 0;
@@ -104,7 +143,7 @@ global proc p4() {
 
 		//query perforce data about the current file
 		string $dataNames[] = {};
-		string $data[] = `p4_fstat $file $dataNames {}`;
+		string $data[] = `p4_fstat $file $dataNames {} 1`;
 		string $revStr = "x/x";
 		int $have = `zooGetIdxOfElement_str $dataNames haveRev`;
 		int $head = `zooGetIdxOfElement_str $dataNames headRev`;
@@ -117,15 +156,11 @@ global proc p4() {
 		}
 
 
-	global proc string[] p4OpenedFullPaths() {
+	global proc string[] p4_openedClient() {
 		string $files[] = `p4_opened`;
 		string $filepaths[] = {};
 
-		for( $n=0; $n<`size $files`; $n++ ) {
-			$files[$n] = `tolower $files[$n]`;
-			if( `match "^//" $files[$n]` != "" ) $filepaths[$n] = `substitute "^//" $files[$n] "d:/studiooz/"`;
-			else $filepaths[$n] = $files[$n];
-			}
+		for( $n=0; $n<`size $files`; $n++ ) $filepaths[$n] = `clientPath $files[$n]`;
 
 		return $filepaths;
 		}
@@ -183,7 +218,7 @@ global proc p4() {
 		int $oneIsAlreadyOpen = 0;
 		for( $n=0; $n<`size $files`; $n++ ) {
 			string $dataNames[] = {};
-			string $data[] = `p4_fstat $files[$n] $dataNames {}`;
+			string $data[] = `p4_fstat $files[$n] $dataNames {} 1`;
 			int $openIdx = `zooGetIdxOfElement_str $dataNames otherOpen`;
 
 			if( $openIdx > 0 ) if( $data[$openIdx] == "1" ) {
@@ -246,12 +281,15 @@ global proc p4() {
 	//returns the p4 stats for the file in question.  the two arrays get filled with
 	//the field names, and the corresponding data for those fields, and the data gets
 	//returned - for convenience
-	global proc string[] p4_fstat( string $file, string $dataNames[], string $data[] ) {
+	global proc string[] p4_fstat( string $file, string $dataNames[], string $data[], int $zooScrubPath ) {
 		clear $dataNames;
 		clear $data;
 
-		$filepath = `zooScrubPath $file`;
-		string $nativeFile = `zooReplaceChars $file "/" "\\"`;
+		string $nativeFile = $file;
+		if( $zooScrubPath ) {
+			$file = `zooScrubPath $file`;
+			$nativeFile = `zooReplaceChars $file "/" "\\"`;
+			}
 		string $p4Cmd = `system( "p4 fstat \""+ $nativeFile +"\"" )`;
 		string $outputToks[] = `zooTokenize (strip($p4Cmd)) "\n"`;
 
@@ -278,7 +316,7 @@ global proc p4() {
 	//are optional.  if present, they get filled with the fstat results, so they can
 	//be reused without re-querying
 	global proc int isLatest( string $file, string $dataNames[], string $data[] ) {
-		$data = `p4_fstat $file $dataNames {}`;
+		$data = `p4_fstat $file $dataNames {} 1`;
 		int $headRev = `zooGetIdxOfElement_str $dataNames "headRev"`;
 		int $haveRev = `zooGetIdxOfElement_str $dataNames "haveRev"`;
 		int $actIdx = `zooGetIdxOfElement_str $dataNames "action"`;
@@ -299,12 +337,13 @@ global proc p4() {
 
 	//returns whether a given file is already open for edit or not
 	global proc int isEdit( string $file, string $dataNames[], string $data[] ) {
-		$data = `p4_fstat $file $dataNames {}`;
+		$data = `p4_fstat $file $dataNames {} 1`;
 		int $isEdit = 0;
 		int $actIdx = `zooGetIdxOfElement_str $dataNames "action"`;
 
 		if( $actIdx != -1 ) {
 			if( $data[$actIdx] == "edit" ) $isEdit = 1;
+			else if( $data[$actIdx] == "add" ) $isEdit = 1;
 			}
 		if( `size $data` <= 1 ) $isEdit = -1;  //indicates that the file isn't in perforce
 
@@ -316,11 +355,25 @@ global proc p4() {
 	//repository - some p4 commands use repository relative paths...
 	global proc string p4Path( string $filepath ) {
 		string $names[] = {};
-		string $data[] = `p4_fstat $filepath $names {}`;
+		string $data[] = `p4_fstat $filepath $names {} 1`;
 		int $base = `zooGetIdxOfElement_str $names "depotFile"`;
 
 		if( $base == -1 ) return $filepath;
 
+		return $data[$base];
+		}
+
+
+	//given a filepath, this proc returns a path relative to the perforce
+	//repository - some p4 commands use repository relative paths...
+	global proc string clientPath( string $filepath ) {
+		string $names[] = {};
+		string $data[] = `p4_fstat $filepath $names {} 0`;
+		int $base = `zooGetIdxOfElement_str $names "clientFile"`;
+
+		if( $base == -1 ) return $filepath;
+
+		$data[$base] = `substituteAllString $data[$base] "\\" "/"`;
 		return $data[$base];
 		}
 

@@ -237,7 +237,7 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 			delete `parentConstraint $elbow $elbowWristAim`;
 			$orgArmConstraints = zooAddArray_str($orgArmConstraints,`aimConstraint -aim $twistAxis[0] $twistAxis[1] $twistAxis[2] -wuo $driverMid -wut objectrotation $driverLower $elbowWristAim`);
 			delete `parentConstraint $wrist $wristElbowAim`;
-			string $eAim = zooGetElement_str(0,`aimConstraint -aim (-1*$twistAxis[0]) (-1*$twistAxis[1]) (-1*$twistAxis[2]) -wuo $wristElbowAimUp -wut object $driverMid $wristElbowAim`);
+			string $eAim = zooGetElement_str(0,`aimConstraint -aim (-1*$twistAxis[0]) (-1*$twistAxis[1]) (-1*$twistAxis[2]) -u ($otherAxes[0]=="x"?1:0) ($otherAxes[0]=="y"?1:0) ($otherAxes[0]=="z"?1:0) -wuo $wristElbowAimUp -wut object $driverMid $wristElbowAim`);
 			$orgArmConstraints = `zooAddArray_str $orgArmConstraints {$eAim}`;
 			connectAttr ( $wristElbowAim +".r" ) ( $wristDistrib +".input1" );
 			setAttr ( $wristDistrib +".input2" ) ( $numWristTwists+1 ) ( $numWristTwists+1 ) ( $numWristTwists+1 );

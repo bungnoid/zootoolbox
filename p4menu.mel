@@ -1,3 +1,6 @@
+p4;
+
+
 global proc p4menu() {
 	global string $gMainWindow;
 	string $menuName = "p4menu";
@@ -19,7 +22,7 @@ global proc p4buildMenu( string $parent, string $file ) {
 		menuItem -en 0 -l "file not saved";
 		menuItem -d 1;
 		menuItem -l "Perforce Scene File Lister" -c( "p4Lister {};" );
-		menuItem -l "List All Files Currently \"open for edit\"" -c( "p4Lister `p4OpenedFullPaths`;" );
+		menuItem -l "List All Files Currently \"open for edit\"" -c( "p4Lister `p4_openedClient`;" );
 		return;
 		}
 
@@ -47,7 +50,7 @@ global proc p4buildMenu( string $parent, string $file ) {
 	menuItem -l "Explore to File" -c( "zooExploreTo \""+ $file +"\";" );
 	//menuItem -d 1;
 	//menuItem -l "Perforce Scene File Lister" -c( "p4Lister {};" );
-	//menuItem -l "List All Files Currently \"open for edit\"" -c( "p4Lister `p4OpenedFullPaths`;" );
+	//menuItem -l "List All Files Currently \"open for edit\"" -c( "p4Lister `p4_openedClient`;" );
 	}
 
 
