@@ -4,6 +4,11 @@ zooTangentWksUtils;
 zooUtils;
 
 
+global proc zooStriderUtils() {
+	return;
+	}
+
+
 global proc zooGetStrides( string $obj, string $optionStr, float $strideStarts[], float $strideEnds[] ) {
 	string $temp[] = {};
 	float $tolerance = 0.01;

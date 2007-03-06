@@ -37,8 +37,16 @@ global proc zooBuildTriggeredPresetMenu( string $parent ) {
 	zooPresetManager;
 	string $locale = "global";
 	string $presets[] = `zooListPresets $locale zooTriggered "trigger"`;
+
 	for( $n=0; $n<`size $presets`; $n++ ) $presets[$n] = `match "^[^.]+" $presets[$n]`;
 	for( $p in $presets ) menuItem -l $p -c( "zooImportTriggers \""+ $p +"\" \"-clear 1 -guessTriggers 1 -guessConnects 1\" {};" );
+
+	clear $presets;
+	$locale = "local";
+	$presets = `zooListPresets $locale zooTriggered "trigger"`;
+	for( $n=0; $n<`size $presets`; $n++ ) $presets[$n] = `match "^[^.]+" $presets[$n]`;
+	for( $p in $presets ) menuItem -l $p -c( "zooImportTriggers \""+ $p +"\" \"-locale local -clear 1 -guessTriggers 1 -guessConnects 1\" {};" );
+
 	menuItem -d 1;
 	menuItem -l "manage presets" -c( "zooPresetManagerWin \""+ $locale +"\" zooTriggered trigger;" );
 	}
@@ -387,7 +395,7 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			break;
 
 		case "-export":
-			string $ans = `promptDialog -t "export selected triggers" -m "preset name" -tx "trigger" -b "OK" -b "Cancel"`;
+			string $ans = `promptDialog -t "export selected triggers" -m "preset name" -tx "trigger" -b "OK" -b "Cancel" -db "OK"`;
 			if( $ans != "OK" ) return;
 			string $preset = `promptDialog -q -tx`;
 			string $sel[] = `ls -sl`;

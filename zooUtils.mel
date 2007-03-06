@@ -310,6 +310,47 @@ global proc string zooScrubPath( string $path ) {
 	}
 
 
+//resolves a path string.  path strings may contain unresolved env var references
+//as well as the .. path op
+global proc string zooResolvePath( string $path ) {
+	$path = `zooScrubPath $path`;
+	string $paths[] = `zooTokenize $path "/"`;
+	int $num = `size $paths`;
+
+	//first resolve any env variables
+	for( $n=0; $n<$num; $n++ ) {
+		while( `match "\%[^%]+\%" $paths[$n]` != "" ) {
+			string $envName = `match "\%[^%]+\%" $paths[$n]`;
+			string $envVal = `substring $envName 2 (size($envName)-1)`;
+
+			$envVal = `getenv $envVal`;
+			$paths[$n] = `substitute $envName $paths[$n] $envVal`;
+			}
+		}
+
+	//now split the paths up again
+	$path = `zooArrayToStr_str $paths "/"`;
+	$paths = `zooTokenize $path "/"`;
+	$num = `size $paths`;
+	string $usePaths[] = {};
+	int $i = 0;
+
+	//now resolve any path manipulation
+	for( $n=0; $n<$num; $n++ ) {
+		if( $paths[$n] == ".." ) {
+			$usePaths = `zooIndexCrop_str $usePaths ":-1"`;
+			$i--;
+			}
+		else {
+			$usePaths[$i] = $paths[$n];
+			$i++;
+			}
+		}
+
+	return `zooArrayToStr_str $usePaths "/"`;
+	}
+
+
 //opens an explorer window with the given file/directory selected
 global proc zooExploreTo( string $filepath ) {
 	$filepath = `zooScrubPath $filepath`;

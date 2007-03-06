@@ -163,12 +163,12 @@ global proc float zooNameLikeness( string $src, string $tgt, int $stripPrefix ) 
 					if( `match $lowSrcTok $lowTgtTok` == $lowSrcTok ) {
 						$bestMatch = $subWordWeight;
 						$bestMatchIdx = $n;
-						print( "partial src match: "+ $srcTok +"  "+ $tgtTok +"  "+ $bestMatch +"  "+ $bestMatchIdx +"\n" );
+						//print( "partial src match: "+ $srcTok +"  "+ $tgtTok +"  "+ $bestMatch +"  "+ $bestMatchIdx +"\n" );
 						}
 					else if( `match $lowTgtTok $lowSrcTok` == $lowTgtTok ) {
 						$bestMatch = $subWordWeight;
 						$bestMatchIdx = $n;
-						print( "partial tgt match: "+ $srcTok +"  "+ $tgtTok +"  "+ $bestMatch +"  "+ $bestMatchIdx +"\n" );
+						//print( "partial tgt match: "+ $srcTok +"  "+ $tgtTok +"  "+ $bestMatch +"  "+ $bestMatchIdx +"\n" );
 						}
 					}
 				}

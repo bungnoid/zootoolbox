@@ -5,7 +5,7 @@ global proc remEds( string $objs[], string $cmd ) {
 	string $refNodes[] = {};
 	int $loadStates[] = {};
 
-	for( $obj in $objs ) $refNodes[`size $refNodes`] = `referenceQuery -rfn $obj`;
+	for( $obj in $objs ) if( `referenceQuery -inr $obj` ) $refNodes[`size $refNodes`] = `referenceQuery -rfn $obj`;
 	for( $node in $refNodes ) $loadStates[`size $loadStates`] = size(`referenceQuery -n $node`);
 	$refNodes = `stringArrayRemoveDuplicates $refNodes`;
 
