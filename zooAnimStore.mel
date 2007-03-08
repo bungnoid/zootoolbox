@@ -458,6 +458,7 @@ global proc zooAnimStoreWindowFunctions_var( string $function, string $variable 
 			string $name = `promptDialog -q -text`;
 			string $objs[] = `ls -sl`;
 
+			$name = `zooReplaceChars $name "" "_"`;
 			if( `checkBox -q -v $checkCurUI` ) $optionStr = $optionStr +" -start "+ `playbackOptions -q -min` +" -end "+ `playbackOptions -q -max`;
 			else $optionStr = $optionStr +" -start "+ `playbackOptions -q -ast` +" -end "+ `playbackOptions -q -aet`;
 			if( `checkBox -q -v $checkRigUI` || $parentqss ) {
@@ -476,6 +477,7 @@ global proc zooAnimStoreWindowFunctions_var( string $function, string $variable 
 			if( $ans == "Cancel" ) return;
 			string $name = `promptDialog -q -text`;
 
+			$name = `zooReplaceChars $name "" "_"`;
 			if( `checkBox -q -v $checkRigUI` || $parentqss ) {
 				string $ctrls[] = `zooGetCtrlsFromQss $parentqss`;
 				if( `size $ctrls` ) select -r $ctrls;
