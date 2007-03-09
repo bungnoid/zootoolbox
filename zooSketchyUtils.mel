@@ -10,6 +10,25 @@ global proc zooSketchyUtils() {
 	}
 
 
+global proc string[] zooGetSketchyObjs() {
+	string $objs[] = {};
+	string $board = `zooBuildSkethcyBoard "" 1`;
+	int $slots[] = `zooGetUsedTriggerSlots $board`;
+
+	for( $slot in $slots ) $objs[`size $objs`] = `zooGetConnectObject $board $slot`;
+
+	return $objs;
+	}
+
+
+global proc zooSetSketchyObjs( string $objs[] ) {
+	string $board = `zooBuildSkethcyBoard "" 1`;
+	int $slots[] = `zooGetAllTriggerSlots $board`;
+	for( $slot in $slots ) zooRemoveTriggerSlots $board $slot;
+	for( $obj in $objs ) if( `objExists $obj` ) zooAddConnect $board $obj;
+	}
+
+
 global proc zooDistributeAlongSketch( string $objs[] ) {
 	string $curve = `zooGetSketchyCurve`;
 	string $lookat = `zooGetLookat 1`;
@@ -28,9 +47,12 @@ global proc zooDistributeAlongSketch( string $objs[] ) {
 		zooAlign ( "-src "+ $grp +" -tgt "+ $objs[$n] );
 		$grps[$n] = `group -em`;
 		zooAlignSimple $grp $grps[$n];
+		if( $n ) parent $grps[$n] $grps[$n-1];
 		$count += $inc;
 		}
 
+	float $moveTo[] = `zooBetweenVector $objs[0] $grps[0]`;
+	move -r (-1*$moveTo[0]) (-1*$moveTo[1]) (-1*$moveTo[2]) $grps[0];
 	//delete $grp;
 	//now deal with aims
 	for( $n=0; $n<$num-1; $n++ ) {

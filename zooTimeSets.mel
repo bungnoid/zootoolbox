@@ -94,7 +94,7 @@ global proc zooTimeSetsWindow() {
 	string $windowTitle = "zooTimeSets v" + `zooTimeSetsInfo version` + "   ::macaroniKazoo::";
 	int $dockUI = `optionVar -ex zooTimeSetsDocking`? `optionVar -q zooTimeSetsDocking`: 0;
 	int $isReorderInstalled = `exists zooReorderAttribs`;
-	int $isDefaultFrame = ( `optionVar -q zooTimeSetsDefaultBehaviour` == "zooTimeSetsFrame" )? 1: 0;
+	int $isDefaultFrame = `optionVar -ex zooTimeSetsPress`? `optionVar -q zooTimeSetsPress`: 1;
 	int $isDefaultEditor = !$isDefaultFrame;
 
 	if( `window -ex $windowName` ) deleteUI $windowName;
@@ -114,8 +114,8 @@ global proc zooTimeSetsWindow() {
 		menu -label "Misc";
 			menuItem -l "Dock to Channel Box" -cb $dockUI -c ( "optionVar -iv zooTimeSetsDocking `menuItem -q -checkBox zooTimeSetsCheckDocking`" ) zooTimeSetsCheckDocking;
 		menu -label "Press Behaviour";
-			menuItem -l "Editor Window" -cb $isDefaultEditor -c( "optionVar -rm zooTimeSetsDefaultBehaviour; menuItem -e -checkBox 1 zooTimeSetsEditor; menuItem -e -checkBox 0 zooTimeSetsFrame;" ) zooTimeSetsEditor;
-			menuItem -l "Frame Selected Range" -cb $isDefaultFrame -c( "optionVar -sv zooTimeSetsDefaultBehaviour zooTimeSetsFrame; menuItem -e -checkBox 0 zooTimeSetsEditor; menuItem -e -checkBox 1 zooTimeSetsFrame;" ) zooTimeSetsFrame;
+			menuItem -l "Editor Window" -cb $isDefaultEditor -c( "optionVar -iv zooTimeSetsPress 0; menuItem -e -cb 1 zooTimeSetsEditor; menuItem -e -cb 0 zooTimeSetsFrame;" ) zooTimeSetsEditor;
+			menuItem -l "Frame Selected Range" -cb $isDefaultFrame -c( "optionVar -iv zooTimeSetsPress 1; menuItem -e -cb 0 zooTimeSetsEditor; menuItem -e -cb 1 zooTimeSetsFrame;" ) zooTimeSetsFrame;
 
 	if( $dockUI ) scrollLayout -childResizable 1 -hst 0 -vst 1 zooTimeSetsScrollBar;
 		formLayout zooTimeSetsForm;
@@ -422,12 +422,14 @@ global proc string[] zooTimeSetsGetNodes() {
 global proc zooTimeSetsKillUI() {
 	global int $zooIsClicked;
 	string $currentEditor = `getPanel -up`;
+	int $pressAct = `optionVar -ex zooTimeSetsPress`? `optionVar -q zooTimeSetsPress`: 1;
 
+	if( `optionVar -ex zooTimeSetsDefaultBehaviour` ) optionVar -rm zooTimeSetsDefaultBehaviour;
 	if( `popupMenu -ex tempMM` ){
 		deleteUI tempMM;
 		if ( $zooIsClicked ) $zooIsClicked = 0;
 		else {
-			if( `optionVar -q zooTimeSetsDefaultBehaviour` == "zooTimeSetsFrame" ) {
+			if( $pressAct ) {
 				if( $currentEditor == "graphEditor1" || $currentEditor == "dopeSheetPanel1" ) zooTimeSetsFrameTime;
 				else zooTimeSetsGoToSelectedTime;
 				}

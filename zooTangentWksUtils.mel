@@ -113,7 +113,7 @@ global proc zooFlatenStaticKeys() {
 	for( $obj in $objs ) {
 		string $channels[] = `listAttr -k -u $obj`;
 		for( $channel in $channels ) {
-			float $flatKeys[] = `zooGetStaticKeys $obj $channel "" "" {} {} {}`;
+			float $flatKeys[] = `zooGetStaticKeys $obj $channel "" "" "" {} {} {}`;
 			float $selectedKeyTimes[] = `keyframe -q -sl ( $obj +"."+ $channel )`;
 			float $keysToFlatten[] = $flatKeys;
 
@@ -145,9 +145,9 @@ global proc zooSelectStaticKeys( string $type, int $useEditor ) {
 		int $idxs[] = {};
 
 		$attr = `match "[^.]+$" $attr`;
-		if( $type == "inner" ) zooGetInnerStaticKeys $obj $attr "!" "!" {} {} $idxs;
-		else if( $type == "outer" ) zooGetOuterStaticKeys $obj $attr "!" "!" {} {} $idxs;
-		else zooGetStaticKeys $obj $attr "!" "!" {} {} $idxs;
+		if( $type == "inner" ) zooGetInnerStaticKeys $obj $attr "!" "!" "" {} {} $idxs;
+		else if( $type == "outer" ) zooGetOuterStaticKeys $obj $attr "!" "!" "" {} {} $idxs;
+		else zooGetStaticKeys $obj $attr "!" "!" "" {} {} $idxs;
 
 		string $selCmd = "selectKey -add -k -in ";
 		$selCmd = $selCmd + `zooArrayToStr_int $idxs " -in "`;
@@ -157,7 +157,7 @@ global proc zooSelectStaticKeys( string $type, int $useEditor ) {
 	}
 
 
-global proc float[] zooGetInnerStaticKeys( string $obj, string $attr, string $start, string $end, float $innerTimes[], float $innerValues[], int $innerIdxs[] ) {
+global proc float[] zooGetInnerStaticKeys( string $obj, string $attr, string $start, string $end, string $tolStr, float $innerTimes[], float $innerValues[], int $innerIdxs[] ) {
 	clear $innerTimes;
 	clear $innerValues;
 	clear $innerIdxs;
@@ -168,7 +168,8 @@ global proc float[] zooGetInnerStaticKeys( string $obj, string $attr, string $st
 	float $tol = 0.000001;
 	int $idxs[] = {};
 
-	zooGetStaticKeys $obj $attr $start $end $keys $values $idxs;
+	if( $tolStr != "" ) $tol = $tolStr;
+	zooGetStaticKeys $obj $attr $start $end $tolStr $keys $values $idxs;
 	int $num = `size $keys`;
 	int $i = 0;
 
@@ -193,7 +194,7 @@ global proc float[] zooGetInnerStaticKeys( string $obj, string $attr, string $st
 //middle three of the same value, the outer static keys are the second key and the fourth
 //key.  the inner static key is the third key, and the first and last keys are irrelevant
 //------
-global proc float[] zooGetOuterStaticKeys( string $obj, string $attr, string $start, string $end, float $outerTimes[], float $outerValues[], int $outerIdxs[] ) {
+global proc float[] zooGetOuterStaticKeys( string $obj, string $attr, string $start, string $end, string $tolStr, float $outerTimes[], float $outerValues[], int $outerIdxs[] ) {
 	clear $outerTimes;
 	clear $outerValues;
 	clear $outerIdxs;
@@ -204,7 +205,8 @@ global proc float[] zooGetOuterStaticKeys( string $obj, string $attr, string $st
 	float $tol = 0.000001;
 	int $idxs[] = {};
 
-	zooGetStaticKeys $obj $attr $start $end $keys $values $idxs;
+	if( $tolStr != "" ) $tol = $tolStr;
+	zooGetStaticKeys $obj $attr $start $end $tolStr $keys $values $idxs;
 	int $num = `size $keys`-1;
 	int $i = 0;
 
@@ -243,7 +245,7 @@ global proc float[] zooGetOuterStaticKeys( string $obj, string $attr, string $st
 //a hold of some description.  this proc populates the last three array args with key useful details,
 //and takes four args
 //------
-global proc float[] zooGetStaticKeys( string $obj, string $attr, string $start, string $end, float $flatKeys[], float $keyValues[], int $keyIdxs[] ) {
+global proc float[] zooGetStaticKeys( string $obj, string $attr, string $start, string $end, string $tolStr, float $flatKeys[], float $keyValues[], int $keyIdxs[] ) {
 	clear $flatKeys;
 	clear $keyValues;
 	clear $keyIdxs;
@@ -252,30 +254,33 @@ global proc float[] zooGetStaticKeys( string $obj, string $attr, string $start, 
 	if( $end == "!" ) $end = `playbackOptions -q -max`;
 
 	string $attrPath = $obj +"."+ $attr;
-	float $allKeys[] = `keyframe -t( $start +":"+ $end ) -q $attrPath`;
-	float $allValues[] = `keyframe -t( $start +":"+ $end ) -q -vc $attrPath`;
+	string $timeStr = $start +":"+ $end;
+	float $allKeys[] = `keyframe -t $timeStr -q $attrPath`;
+	float $allValues[] = `keyframe -t $timeStr -q -vc $attrPath`;
+	int $allIdxs[] = `keyframe -t $timeStr -q -iv $attrPath`;
 	float $tol = 0.000001;
 	int $num = `size $allKeys`;
 	int $i = 0;
 
+	if( $tolStr != "" ) $tol = $tolStr;
 	if( `zooEqTol $allValues[0] $allValues[1] $tol` ) {
 		$flatKeys[$i] = $allKeys[0];
 		$keyValues[$i] = $allValues[0];
-		$keyIdxs[$i] = 0;
+		$keyIdxs[$i] = $allIdxs[0];
 		$i++;
 		}
 	for( $n=1; $n<$num-1; $n++ ) {
 		if( `zooEqTol $allValues[$n] $allValues[$n-1] $tol` || `zooEqTol $allValues[$n] $allValues[$n+1] $tol` ) {
 			$flatKeys[$i] = $allKeys[$n];
 			$keyValues[$i] = $allValues[$n];
-			$keyIdxs[$i] = $n;
+			$keyIdxs[$i] = $allIdxs[$n];
 			$i++;
 			}
 		}
-	if( `zooEqTol $allValues[$n] $allValues[$n-1] $tol` ) {
-		$flatKeys[$i] = $allKeys[$n];
-		$keyValues[$i] = $allValues[$n];
-		$keyIdxs[$i] = $n;
+	if( `zooEqTol $allValues[$num-2] $allValues[$num-1] $tol` ) {
+		$flatKeys[$i] = $allKeys[$num-1];
+		$keyValues[$i] = $allValues[$num-1];
+		$keyIdxs[$i] = $allIdxs[$num-1];
 		}
 
 	return $flatKeys;
