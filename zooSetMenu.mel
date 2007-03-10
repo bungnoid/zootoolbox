@@ -46,15 +46,14 @@ global proc zooSetMenuUI( string $parent ) {
 	setParent -m $parent;
 	menu -e -dai $parent;
 
+	global string $zooSetMenuPreviousSet;
 	global int $zooIsClicked;
 	$zooIsClicked = 1;
 	if( `optionVar -ex zooSetMenuMarkingMode` ) optionVar -rm zooSetMenuMarkingMode;
 
 	string $charSets[] = `zoolsqss`;
-	string $zooSetMenuPreviousSet = "";
 	int $zooSetMenuOption = 0;
 
-	if( `optionVar -ex zooSetMenuPreviousSet` ) $zooSetMenuPreviousSet = `optionVar -q zooSetMenuPreviousSet`;
 	if( `optionVar -ex zooSetMenuOption` ) $zooSetMenuOption = `optionVar -q zooSetMenuOption`;
 
 	string $clear = "select -d;";
@@ -81,19 +80,19 @@ global proc zooSetMenuUI( string $parent ) {
 
 
 global proc zooSetPreviousSet( string $qss ) {
-	optionVar -sv zooSetMenuPreviousSet $qss;
+	global string $zooSetMenuPreviousSet;
+	$zooSetMenuPreviousSet = $qss;
 	}
 
 
 global proc zooSetMenuWindow() {
+	global string $zooSetMenuPreviousSet;
 	string $windowName = "zooSetMenuWindow";
 	string $windowTitle = "Control Centre v"+ `zooSetMenuToolsInfo version` +"   ::macaroniKazoo::";
 	string $sets[] = `zoolsqss`;
 	string $buttonLabel = "s->";
-	string $zooSetMenuPreviousSet = "";
 	int $zooSetMenuOption = 0;
 
-	if( `optionVar -ex zooSetMenuPreviousSet` ) $zooSetMenuPreviousSet = `optionVar -q zooSetMenuPreviousSet`;
 	if( `optionVar -ex zooSetMenuOption` ) $zooSetMenuOption = `optionVar -q zooSetMenuOption`;
 
 	if( `window -ex $windowName` ) deleteUI $windowName;
@@ -129,7 +128,7 @@ global proc zooSetMenuWindow() {
 			setParent ..;
 
 			string $functionNames[] = { "open control window","select previous set","select previous/current set","select parent set","nothing" };
-			string $currentDefault = ( `optionVar -ex zooSetMenuPressMode` )?`optionVar -q zooSetMenuPressMode`:"nothing";
+			string $currentDefault = ( `optionVar -ex zooSetMenuPressMode` )?`optionVar -q zooSetMenuPressMode`:"select previous/current set";
 			int $selection = 1;
 			int $n = 1;
 
@@ -299,14 +298,13 @@ global proc zooSetMenuPostFunctions ( string $function, string $set ) {
 
 
 global proc zooSetMenuWindowFunctions( string $function, string $rowName, string $newSetName ) {
+	global string $zooSetMenuPreviousSet;
 	string $set = `zooSetNameFromRowName $rowName`;
 	string $sets[] = `zoolsqss`;
 	string $windowName = "zooSetMenuWindow";
 	string $flag = "-r";
-	string $zooSetMenuPreviousSet = "";
 	int $zooSetMenuOption = 0;
 
-	if( `optionVar -ex zooSetMenuPreviousSet` ) $zooSetMenuPreviousSet = `optionVar -q zooSetMenuPreviousSet`;
 	if( `optionVar -ex zooSetMenuOption` ) $zooSetMenuOption = `optionVar -q zooSetMenuOption`;
 	if( $zooSetMenuOption ) $flag = "-add";
 	switch ( $function ) {
@@ -357,19 +355,16 @@ global proc zooSetMenuRemoveOptionVars () {
 
 
 global proc string zooGetSetToSelect( string $mode ) {
+	global string $zooSetMenuPreviousSet;
 	if( $mode == "" ) $mode = `optionVar -q zooSetMenuPressMode`;
 	switch( $mode ) {
-		default:
-			return "";
-			break;
-
 		case "select previous set":
-			return `optionVar -q zooSetMenuPreviousSet`;
+			return $zooSetMenuPreviousSet;
 			break;
 
-		case "select previous/current set":
+		default:
 			string $selObjs[] = `ls -sl`;
-			if( !`size $selObjs` ) return `optionVar -q zooSetMenuPreviousSet`;
+			if( !`size $selObjs` ) return $zooSetMenuPreviousSet;
 
 			string $currentSet[] = `listConnections -s 0 -type objectSet`;
 			return $currentSet[0];
@@ -378,7 +373,7 @@ global proc string zooGetSetToSelect( string $mode ) {
 		case "select parent set":
 			string $currentSet[] = `listConnections -s 0 -type objectSet`;
 			if( `objExists $currentSet[0]` ) return `zooGetObjSet $currentSet[0]`;
-			return zooGetObjSet(`optionVar -q zooSetMenuPreviousSet`);
+			return `zooGetObjSet $zooSetMenuPreviousSet`;
 			break;
 		}
 	}
@@ -386,6 +381,7 @@ global proc string zooGetSetToSelect( string $mode ) {
 
 //this simple function is basically used by the "select" button
 global proc zooSetSelector( string $setName ) {
+	global string $zooSetMenuPreviousSet;
 	string $function;
 	string $flag;
 	string $attrName = "postCommandString";
@@ -396,6 +392,7 @@ global proc zooSetSelector( string $setName ) {
 	if( `objExists $setName` ) {
 		//now select the set objects
 		eval( "select "+ $flag +" "+ $setName );
+		$zooSetMenuPreviousSet = $setName;
 
 		//now call post command
 		if( `objExists ( $setName +"."+ $attrName )` ) {
