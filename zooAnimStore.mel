@@ -5,7 +5,7 @@ zooPresetManager;
 
 global proc zooAnimStore() {
 	string $windowName = "zooAnimStoreWindow";
-	string $windowTitle = "zooAnimStore v1.07.02   ::macaroniKazoo::";
+	string $windowTitle = "zooAnimStore v1.07.03   ::macaroniKazoo::";
 	int $alphabetical = `optionVar -ex zooAnimStoreAlphabetical`? `optionVar -q zooAnimStoreAlphabetical`: 1;
 	int $spacing = `optionVar -ex zooAnimStoreSpacing`? `optionVar -q zooAnimStoreSpacing`: 0;
 
@@ -30,8 +30,8 @@ global proc zooAnimStore() {
 		string $form = `formLayout`;
 			string $storesLbl = `text -l "anim stores"`;
 			string $stores = `textScrollList -nr 10 -sc "zooAnimStoreWindowFunctions -updateClips;" zooStoreUIStores`;
-			string $animChk = `checkBox -l "show anims" -v 1 -cc( "zooAnimStoreWindowFunctions -updateClips;" ) zooStoreUICheckAnims`;
-			string $poseChk = `checkBox -l "show poses" -v 1 -cc( "zooAnimStoreWindowFunctions -updateClips;" ) zooStoreUICheckPoses`;
+			string $animChk = `checkBox -l "show anims" -v(optionVar("-ex","zooAnimStoreAnims")?optionVar("-q","zooAnimStoreAnims"):1) -cc( "if( #1 ) optionVar -rm zooAnimStoreAnims; else optionVar -iv zooAnimStoreAnims 0; zooAnimStoreWindowFunctions -updateClips;" ) zooStoreUICheckAnims`;
+			string $poseChk = `checkBox -l "show poses" -v(optionVar("-ex","zooAnimStorePoses")?optionVar("-q","zooAnimStorePoses"):1) -cc( "if( #1 ) optionVar -rm zooAnimStorePoses; else optionVar -iv zooAnimStorePoses 0; zooAnimStoreWindowFunctions -updateClips;" ) zooStoreUICheckPoses`;
 			string $searchLbl = `text -l "filter:" `;
 			string $searchTxt = `textField -tx "" -cc( "zooAnimStoreWindowFunctions -updateClips;" ) zooStoreUITextFilter`;
 			string $storePanes = `paneLayout -configuration "vertical2" -smc( "zooAnimStoreWindowFunctions -storeConfig;" ) zooStoreUIPane`;
@@ -47,21 +47,21 @@ global proc zooAnimStore() {
 					setParent ..;
 				setParent ..;
 			setParent ..;
-			string $frame = `frameLayout -height 51 -l "options" -la bottom -cll 1 -bs etchedOut`;
+			string $frame = `frameLayout -height(optionVar("-q","zooAnimStoreShowOpts")? 22: 85) -l "options" -la bottom -cll 1 -cl(optionVar("-q","zooAnimStoreShowOpts")) -cc( "optionVar -iv zooAnimStoreShowOpts 1;" ) -ec( "optionVar -rm zooAnimStoreShowOpts;" ) -bs etchedOut`;
 				string $optsLayout = `formLayout`;
 					string $colA = `columnLayout`;
-						string $wsCheck = `checkBox -v 1 -l "current time only" zooStoreUICheckCur`;
-						string $ofCheck = `checkBox -v 1 -l "current time offset" zooStoreUICheckOffset`;
-						//string $wsCheck = `checkBox -en 0 -l "world space" zooStoreUICheckWS`;
-						//string $adCheck = `checkBox -en 0 -l "additive" zooStoreUICheckAdd`;
+						checkBox -v(optionVar("-ex","zooAnimStoreCurTime")?optionVar("-q","zooAnimStoreCurTime"):1) -l "current time only" -cc( "if( #1 ) optionVar -rm zooAnimStoreCurTime; else optionVar -iv zooAnimStoreCurTime 0;" ) zooStoreUICheckCur;
+						checkBox -v(optionVar("-ex","zooAnimStoreTimeOffset")?optionVar("-q","zooAnimStoreTimeOffset"):1) -l "current time offset" -cc( "if( #1 ) optionVar -rm zooAnimStoreTimeOffset; else optionVar -iv zooAnimStoreTimeOffset 0;" ) zooStoreUICheckOffset;
+						checkBox -v 0 -l "world space" zooStoreUICheckWS;
+						checkBox -v 0 -l "additive" zooStoreUICheckAdd;
 					setParent ..;
 					string $colB = `columnLayout`;
-						string $ofCheck = `checkBox -v 0 -l "apply to parent qss (all)" -onc( "checkBox -e -v 1 -en 0 zooStoreUICheckRig;" ) -ofc( "checkBox -e -en 1 zooStoreUICheckRig;" ) zooStoreUICheckRigAll`;
-						string $ofCheck = `checkBox -v 1 -l "apply to current qss" zooStoreUICheckRig`;
+						checkBox -v 0 -l "apply to parent qss (all)" -onc( "checkBox -e -v 1 -en 0 zooStoreUICheckRig;" ) -ofc( "checkBox -e -en 1 zooStoreUICheckRig;" ) zooStoreUICheckRigAll;
+						checkBox -v 1 -l "apply to current qss" zooStoreUICheckRig;
 					setParent ..;
 					string $colC = `columnLayout -adj 1`;
-						string $incrementOn = `text -l "incremental apply"`;//`checkBox -v 0 -l "incremental apply" zooStoreUICheckIncrementOn`;
-						string $slider = `floatSlider -min 0 -max 1 -value(optionVar("-ex","zooStoreIncrement")? optionVar("-q","zooStoreIncrement"): 1) -step 0.05 -cc( "optionVar -fv zooStoreIncrement `floatSlider -q -v zooStoreUIFloatIncrement`;" ) zooStoreUIFloatIncrement`;
+						text -l "incremental apply";//`checkBox -v 0 -l "incremental apply" zooStoreUICheckIncrementOn`;
+						floatSlider -min 0 -max 1 -v(optionVar("-ex","zooStoreIncrement")? optionVar("-q","zooStoreIncrement"): 1) -step 0.05 -cc( "optionVar -fv zooStoreIncrement `floatSlider -q -v zooStoreUIFloatIncrement`;" ) zooStoreUIFloatIncrement;
 					setParent ..;
 				setParent ..;
 			setParent ..;
@@ -210,6 +210,7 @@ global proc zooStoreListPopup( string $popup ) {
 
 global proc zooClipListPopup( string $popup, string $locale ) {
 	string $store = zooGetElement_str(0,`textScrollList -q -si zooStoreUIStores`);
+	string $loc = `zooGetPresetDirectory $locale zooAnimStore`;
 
 	menu -e -dai $popup;
 	setParent -m $popup;
@@ -220,6 +221,8 @@ global proc zooClipListPopup( string $popup, string $locale ) {
 		}
 	menuItem -l "create anim clip" -c( "zooAnimStoreWindowFunctions -createAnimClip_"+ $locale );
 	menuItem -l "create pose clip" -c( "zooAnimStoreWindowFunctions -createPoseClip_"+ $locale );
+	menuItem -d 1;
+	menuItem -l "explore to store" -c( "zooExploreTo \""+ $loc + $store +"\";" );
 	}
 
 
@@ -260,10 +263,6 @@ global proc zooAnimStoreWindowFunctions( string $function ) {
 	string $storeUI = "zooStoreUIStores";
 	string $clipLUI = "zooStoreUIClipsL";
 	string $clipGUI = "zooStoreUIClipsG";
-	string $checkCurUI = "zooStoreUICheckCur";
-	//string $checkAddUI = "zooStoreUICheckAdd";
-	string $checkOffsetUI = "zooStoreUICheckOffset";
-	string $checkRigUI = "zooStoreUICheckRig";
 	string $checkRigAllUI = "zooStoreUICheckRigAll";
 	int $iconSize = 60;
 
@@ -283,13 +282,15 @@ global proc zooAnimStoreWindowFunctions( string $function ) {
 			string $stores[] = `zooAddArray_str $stores_l $stores_g`;
 			int $alphabetical = `optionVar -ex zooAnimStoreAlphabetical`? `optionVar -q zooAnimStoreAlphabetical`: 1;
 			int $orders[] = `zooGetAlphabeticalIdx $stores`;
-			//string $stores[] = `zooListStores "global"`;
 
-			//$stores = `sort $stores`;
 			if( $alphabetical ) $stores = `zooOrderArrayUsing_str $stores $orders`;
 			$stores = `stringArrayRemoveDuplicates $stores`;
 			textScrollList -e -ra $storeUI;
 			for( $s in $stores ) textScrollList -e -a $s $storeUI;
+
+			//select the previously selected store
+			if( $selStore != "" ) textScrollList -e -si $selStore $storeUI;
+			else if( `size $stores` ) textScrollList -e -si $stores[0] $storeUI;
 			break;
 		case "-updateSpacing":
 			int $spacing = `optionVar -ex zooAnimStoreSpacing`? `optionVar -q zooAnimStoreSpacing`: 0;
@@ -503,8 +504,8 @@ global proc zooApplyClip( string $clip, string $store, string $locale, float $na
 	string $objs[] = `ls -sl`;
 	string $opts = "";
 	int $parentqss = `checkBox -q -v zooStoreUICheckRigAll`;
-	//int $world = `checkBox -q -v zooStoreUICheckWS`;
-	int $add = 0;//`checkBox -q -v zooStoreUICheckAdd`;
+	int $world = `checkBox -q -v zooStoreUICheckWS`;
+	int $add = `checkBox -q -v zooStoreUICheckAdd`;
 	string $offset = `checkBox -q -v zooStoreUICheckOffset`? "*": "0";
 	float $increment = `floatSlider -q -v zooStoreUIFloatIncrement`;
 
@@ -513,7 +514,7 @@ global proc zooApplyClip( string $clip, string $store, string $locale, float $na
 		string $fromQss[] = `zooGetCtrlsFromQss $parentqss`;
 		if( `size $fromQss` ) $objs = $fromQss;
 		}
-	zooXferBlindTransfer ( "-threshold "+ $nameThreshold +" -mode 3 -additive "+ $add +" -offset "+ $offset +" -filename "+ $location + $clip +".znm"+ $opts ) {} $objs;
+	zooXferBlindTransfer ( "-threshold "+ $nameThreshold +" -world "+ $world +" -mode 3 -additive "+ $add +" -offset "+ $offset +" -filename "+ $location + $clip +".znm"+ $opts ) {} $objs;
 	}
 
 
