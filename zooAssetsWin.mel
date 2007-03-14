@@ -35,36 +35,34 @@ if( $infoDate > `optionVar -q zooAssetsPreviousTipDate` ) {
 	}
 optionVar -iv zooAssetsPreviousTipDate $infoDate;  //When new tips are added, this counter in incremented.  If the number stored in the script is bigger than the one stored in the userPrefs, then the user hasn't seen the new tips
 
-if( `window -ex $windowName` ) {
-	if( `window -q -i $windowName` ) window -e -i 0 $windowName;
-	return;
-	}
+if( `window -ex $windowName` ) deleteUI $windowName;
 window -t $windowTitle -resizeToFitChildren 0 -maximizeButton 0 -sizeable 1 -width 650 -height 350 $windowName;
 	menuBarLayout zooAssetsMenuMain;
 		menu -l "Manage";
-			menuItem -l "Import Assets From..." -c( "zooAssetsWindowFunctions importAssets n" );
+			menuItem -l "Import Assets From..." -c( "zooAssetsWindowFunctions importAssets n;" );
 			menuItem -d 1;
-			menuItem -l "Add Empty Slot" -c( "zooAssetsWindowFunctions emptySlot n" );
-			menuItem -l "Delete un-used Slots" -c( "zooAssetsWindowFunctions deleteUnused n" );
-			menuItem -l "Delete disabled Slots" -c( "zooAssetsWindowFunctions deleteDisabled n" );
+			menuItem -l "Add Empty Slot" -c( "zooAssetsWindowFunctions emptySlot n;" );
+			menuItem -l "Delete un-used Slots" -c( "zooAssetsWindowFunctions deleteUnused n;" );
+			menuItem -l "Delete disabled Slots" -c( "zooAssetsWindowFunctions deleteDisabled n;" );
 			menuItem -d 1;
-			menuItem -l "Install Shelf Button" -c( "zooAssetsSetup" );
-			menuItem -l "Remove Shelf Button" -c ( "deleteUI `zooShelveItGetShelfButton zooAssets`" );
+			menuItem -l "Install Shelf Button" -c( "zooAssetsSetup;" );
+			menuItem -l "Remove Shelf Button" -c ( "deleteUI `zooShelveItGetShelfButton zooAssets`;" );
 		menu -l "View";
-			menuItem -l "Show Full Names" -cb $showNames -c( "zooAssetsWindowFunctions toggleNameView #1" ) zooShowActualAssetNames;
-			menuItem -l "Hide Disabled" -cb( `optionVar -ex zooHideDisabledAssets`? `optionVar -q zooHideDisabledAssets`: 0 ) -c( "zooAssetsWindowFunctions toggleHideOption #1" ) zooHideDisabledAssets;
+			menuItem -l "Show Perforce Menu Items" -cb( `optionVar -ex zooAssetsP4Menu`?`optionVar -q zooAssetsP4Menu`:1) -c( "if( #1 ) optionVar -rm zooAssetsP4Menu; else `optionVar -iv zooAssetsP4Menu 0;" );
+			menuItem -l "Show Full Names" -cb $showNames -c( "zooAssetsWindowFunctions toggleNameView #1;" ) zooShowActualAssetNames;
+			menuItem -l "Hide Disabled" -cb( `optionVar -ex zooHideDisabledAssets`? `optionVar -q zooHideDisabledAssets`: 0 ) -c( "zooAssetsWindowFunctions toggleHideOption #1;" ) zooHideDisabledAssets;
 			menuItem -d 1;
-			menuItem -l "Order by Slot Number" -cb 0 -c( "zooAssetsWindowFunctions order slot" ) zooAssetsOrder_slot;
-			menuItem -l "Order by Start Range" -cb 0 -c( "zooAssetsWindowFunctions order range" ) zooAssetsOrder_range;
-			menuItem -l "Order by Colour" -cb 0 -c( "zooAssetsWindowFunctions order colour" ) zooAssetsOrder_colour;
-			menuItem -l "Order by Name" -cb 0 -c( "zooAssetsWindowFunctions order name" ) zooAssetsOrder_name;
+			menuItem -l "Order by Slot Number" -cb 0 -c( "zooAssetsWindowFunctions order slot;" ) zooAssetsOrder_slot;
+			menuItem -l "Order by Start Range" -cb 0 -c( "zooAssetsWindowFunctions order range;" ) zooAssetsOrder_range;
+			menuItem -l "Order by Colour" -cb 0 -c( "zooAssetsWindowFunctions order colour;" ) zooAssetsOrder_colour;
+			menuItem -l "Order by Name" -cb 0 -c( "zooAssetsWindowFunctions order name;" ) zooAssetsOrder_name;
 			menuItem -d 1;
-			menuItem -l "Highlight Current" -c( "zooHighlightActiveAsset 1" );
+			menuItem -l "Highlight Current" -c( "zooHighlightActiveAsset 1;" );
 			menuItem -l "Auto Highlight Current" -cb (`optionVar -ex zooHighlightActiveAsset`? `optionVar -q zooHighlightActiveAsset`: 1) -c( "optionVar -iv zooHighlightActiveAsset `menuItem -q -cb zooAssetsHighlight`; zooRevertAssetColour -1;" ) zooAssetsHighlight;
 		menu -l "Export" -aob 1;
-			menuItem -l "Export All..." -c( "zooAssetsWindowFunctions exportAll n" );
+			menuItem -l "Export All..." -c( "zooAssetsWindowFunctions exportAll n;" );
 			menuItem -d 1;
-			menuItem -l "Select Node" -c( "select `zooGetAssetNode`" );
+			menuItem -l "Select Node" -c( "select `zooGetAssetNode 0`;" );
 		menu -l "Help";
 			menuItem -l "Help..." -c ( "zooHelp zooAssets 1;" );
 			menuItem -l "Technical Info" -c ( "zooHelp zooAssets 3;" );
@@ -76,7 +74,7 @@ window -t $windowTitle -resizeToFitChildren 0 -maximizeButton 0 -sizeable 1 -wid
 		string $frame = `frameLayout -l "export options" -collapsable 1 -collapse 0 -labelAlign "center" -borderStyle "etchedIn"`;
 			string $topForm = `formLayout`;
 				string $expLbl = `text -l "export path"`;
-				textField -tx `zooGetGlobalAttrData xPath` -cc( "zooSetGlobalAttrData xPath \"#1\"; textField -e -tx `zooGetGlobalAttrData xPath` zooAssetsTextGlobalPath;" ) zooAssetsTextGlobalPath;
+				textField -tx `zooGetGlobalAttrData path` -cc( "zooSetGlobalAttrData path \"#1\"; textField -e -tx `zooGetGlobalAttrData path` zooAssetsTextGlobalPath;" ) zooAssetsTextGlobalPath;
 				popupMenu -p zooAssetsTextGlobalPath -pmc( "zooBuildExportPathMenu zooAssetsPopupMasterPath" ) zooAssetsPopupMasterPath;
 
 				string $prefixLbl = `text -l "global prefix"`;

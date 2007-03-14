@@ -32,7 +32,6 @@ global proc zooAssets() {
 //this proc controls the UI - most UI control functions are done through this proc
 //------
 global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
-	string $node = `zooGetAssetNode`;
 	string $windowName = "zooAssetsWindow";
 	int $idx_select = 0;
 	int $idx_slot = 1;
@@ -63,13 +62,11 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			zooRevertAssetColour -1;
 			zooHighlightActiveAsset 0;
 			break;
-
 		case "updateMenus":
 			if( !`window -ex $windowName` ) return;
 			textField -e -tx `zooGetGlobalAttrData path` zooAssetsTextGlobalPath;
 			textField -e -tx `zooGetGlobalAttrData prefix` zooAssetsTextGlobalPrefix;
 			break;
-
 		case "updateNote":
 			if( !`window -ex $windowName` ) return;
 			int $slot = $variable01;
@@ -79,11 +76,10 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			float $colB = 0.784;
 
 			button -e -ann $noteStr -vis 0 ( "zooAssetsFormTextNotes"+ $slot );
-			if( $noteStr == "" ) button -e -l "" -bgc $colR $colG $colB ( "zooAssetsFormTextNotes"+ $slot );
+			if( $noteStr == "" ) button -e -l "n" -bgc $colR $colG $colB ( "zooAssetsFormTextNotes"+ $slot );
 			else button -e -bgc 0.8 0.8 1.0 ( "zooAssetsFormTextNotes"+ $slot );
 			button -e -vis 1 ( "zooAssetsFormTextNotes"+ $slot );
 			break;
-
 		case "updateMEL":
 			if( !`window -ex $windowName` ) return;
 			int $slot = $variable01;
@@ -94,11 +90,10 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			float $colB = 0.784;
 
 			button -e -ann $noteStr -vis 0 ( "zooAssetsFormTextMEL"+ $slot );
-			if( $preStr == "" && $postStr == "" ) button -e -l "" -bgc $colR $colG $colB ( "zooAssetsFormTextMEL"+ $slot );
+			if( $preStr == "" && $postStr == "" ) button -e -l "mel" -bgc $colR $colG $colB ( "zooAssetsFormTextMEL"+ $slot );
 			else button -e -bgc 0.5 0.5 0.5 ( "zooAssetsFormTextMEL"+ $slot );
 			button -e -vis 1 ( "zooAssetsFormTextMEL"+ $slot );
 			break;
-
 		case "updateEditable":
 			if( !`window -ex $windowName` ) return;
 			//disable the parts of the UI that are meant to be disabled, and hide the disabled slots if they're meant to be hidden
@@ -122,7 +117,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 				textField -e -ed (!$locked&&!$showNames) $children2[$idx_name];
 				}
 			break;
-
 		case "updateHeight":
 			if( !`window -ex $windowName` ) return;
 			int $slots[] = `zooListAssets`;
@@ -136,7 +130,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 
 			paneLayout -e -height( $numVisibleSlots*20+4 ) zooAssetsPane;
 			break;
-
 		case "updateFilter":
 			if( !`window -ex $windowName` ) return;
 			string $filterStr = `textField -q -tx zooAssetsTextViewFilter`;
@@ -212,7 +205,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			paneLayout -e -height( $numVis*20+4 ) zooAssetsPane;
 			zooAssetsWindowFunctions updateText "*";
 			break;
-
 		case "updateText":
 			if( !`window -ex $windowName` ) return;
 			int $numAssets = size(`zooListAssets`);
@@ -221,7 +213,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 
 			text -e -l( "selected: "+ $numSel +"  visible: "+ $numVis +"  total: "+ $numAssets ) zooAssetsTextInfo;
 			break;
-
 		case "updateTime":
 			if( !`window -ex $windowName` ) return;
 			int $slots[] = {};
@@ -236,7 +227,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 				intField -e -v $end $UIs[$idx_end];
 				}
 			break;
-
 		case "updateName":
 			if( !`window -ex $windowName` ) return;
 			int $showNames = `optionVar -ex zooShowActualAssetNames`? `optionVar -q zooShowActualAssetNames`: 0;
@@ -253,7 +243,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 				textField -e -ed( !$showNames ) -tx $displayName $UIs[$idx_name];
 				}
 			break;
-
 		//this sub-proc builds the elements of the UI - adds all managed objects to the UI
 		case "rebuild":
 			if( !`window -ex $windowName` ) return;
@@ -274,45 +263,38 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			zooAssetsWindowFunctions updateName "*";
 			zooAssetsWindowFunctions updateText "*";
 			break;
-
 		case "toggleHideOption":
 			int $val = $variable01;
 			optionVar -iv zooHideDisabledAssets $val;
 			zooAssetsWindowFunctions updateFilter n;
 			break;
-
 		case "toggleNameView":
 			int $val = $variable01;
 			optionVar -iv zooShowActualAssetNames $val;
 			checkBox -e -v $val zooAssetsCheckFullNames;
 			zooAssetsWindowFunctions updateName "*";
 			break;
-
 		case "toggleFilterEnable":
 			int $state = `control -q -docTag $variable01`;
 			$state = !$state;
 			control -e -en $state -docTag $state $variable01;
 			zooAssetsWindowFunctions updateFilter n;
 			break;
-
 		case "nameChange":
 			int $slot = $variable01;
 			string $uiElts[] = `formLayout -q -ca ( "zooAssetsFormText"+ $slot )`;
 			string $name = `zooGetAttrData $slot name`;
 			textField -e -tx $name $uiElts[0];
 			break;
-
 		case "order":
 			optionVar -sv zooAssetsOrderMode $variable01;
 			zooAssetsWindowFunctions rebuild n;
 			zooAssetsWindowFunctions updateFilter n;
 			break;
-
 		case "savePrefs":
 			int $paneConfig[] = `paneLayout -q -ps zooAssetsPane`;
 			optionVar -iv zooAssetsPane $paneConfig[0];
 			break;
-
 		case "setDefaultPath":
 			string $filepath;
 			string $previousDir = ( `optionVar -ex zooAssetsPath`)? `optionVar -q zooAssetsPath`: "c:/temp/";
@@ -320,7 +302,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			$filepath = `fileDialog -directoryMask ( $previousDir + "/*.*" )`;
 			if( $filepath != "" ) optionVar -sv zooAssetsPath $filepath;
 			break;
-
 		//changes the timeline to the start of a shot
 		case "start":
 			float $time = `currentTime -q`;
@@ -329,7 +310,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			playbackOptions -min $start;
 			if( $time < $start ) currentTime -e $start;
 			break;
-
 		case "end":
 			float $time = `currentTime -q`;
 			int $slot = $variable01;
@@ -337,7 +317,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			playbackOptions -max $end;
 			if( $time > $end ) currentTime -e $end;
 			break;
-
 		case "both":
 			float $time = `currentTime -q`;
 			int $slot = $variable01;
@@ -347,7 +326,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			if( $time < $start ) currentTime -e $start;
 			if( $time > $end ) currentTime -e $end;
 			break;
-
 		//manages the selected object(s) - ie connects it to the management node
 		case "manage":
 			string $objs[] = {};
@@ -362,29 +340,26 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 
 			for( $a in $objs ) {
 				int $slot = `zooCreateAsset $a`;
-				zooSetAttrData $slot name $a;
 				zooAddAssetToUI $slot;
 				}
 			zooAssetsWindowFunctions updateHeight "*";
 			zooAssetsWindowFunctions updateText "*";
 			break;
-
 		case "importAssets":
 			string $filepath = `fileDialog -directoryMask ( "c:/*.ma" )`;
 			string $buildImported[] = `zooGetAssetsFromFile $filepath`;
+			string $node = `zooGetAssetNode 0`;
 
-			delete `zooGetAssetNode`;  //delete any existing assets node
+			if( `objExists $node` ) delete $node;  //delete any existing assets node
 			print $buildImported;
 			for( $cmd in $buildImported ) catch(eval($cmd));
 			zooAssetsWindowFunctions rebuild n;
 			break;
-
 		case "expandRefs":
 			global int $mvExpandReferences;
 			int $val = (int)$variable01;
 			$mvExpandReferences = $val;
 			break;
-
 		case "exportObj":
 			string $objs[] = {};
 			int $slots[] = `zooGetSelectedAssets`;
@@ -392,15 +367,13 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			if( `size $slots` ) $slots[0] = $variable01;
 			for( $s in $slots ) $objs[( `size $objs` )] = `zooGetAssetObj $s`;
 			$objs = `stringArrayRemoveDuplicates $objs`;
-			for( $obj in $objs ) zooExportObj $obj "";
+			for( $obj in $objs ) zooExportObj $obj;
 			break;
-
 		case "emptySlot":
 			int $slot = `zooCreateAsset ""`;
 			zooAddAssetToUI $slot;
 			zooAssetsWindowFunctions updateHeight "*";
 			break;
-
 		case "delete":
 			int $slots[] = `zooGetSelectedAssets`;
 			int $slot = $variable01;
@@ -422,7 +395,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			zooAssetsWindowFunctions updateHeight "*";
 			zooAssetsWindowFunctions updateText "*";
 			break;
-
 		case "deleteUnused":
 			int $slots[] = `zooListAssets`;
 			for( $a in $slots ) if( !`zooIsSlotUsed $a` ) {
@@ -434,7 +406,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			zooAssetsWindowFunctions updateHeight "*";
 			zooAssetsWindowFunctions updateText "*";
 			break;
-
 		case "deleteDisabled":
 			int $slots[] = `zooListAssets`;
 			for( $a in $slots ) if( `zooGetAttrData $a disable` ) {
@@ -446,7 +417,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			zooAssetsWindowFunctions updateHeight "*";
 			zooAssetsWindowFunctions updateText "*";
 			break;
-
 		case "duplicate":
 			int $slot = $variable01;
 			int $slots[] = `zooGetSelectedAssets`;
@@ -458,7 +428,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			zooAssetsWindowFunctions updateHeight "*";
 			zooAssetsWindowFunctions updateText "*";
 			break;
-
 		case "replaceObj":
 			string $obj = zooGetElement_str(0,`ls -sl`);
 			int $slot = $variable01;
@@ -471,14 +440,12 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 				nameField -e -o $obj $nameField;
 				}
 			break;
-
 		case "lock":
 			int $slots[] = `zooGetSelectedAssets`;
 			if( !`size $slots` ) $slots = { (int)$variable01 };
 			for( $slot in $slots ) zooLockAsset ( "-edit 1 -val 2 -slot "+ $slot );
 			zooAssetsWindowFunctionsSel updateEditable $slot;
 			break;
-
 		case "disable":
 			int $slot = $variable01;
 			int $slots[] = `zooGetSelectedAssets`;
@@ -488,7 +455,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			for( $slot in $slots ) zooChangeDataWrapper $slot disable ( !$disable );
 			zooAssetsWindowFunctionsSel updateEditable $slot;
 			break;
-
 		case "copyFrom":
 			int $slot = $variable01;
 			zooCopyAttrDataTo $slot {"name"} `zooGetSelectedAssets`;
@@ -498,7 +464,6 @@ global proc zooAssetsWindowFunctions( string $function, string $variable01 ) {
 			zooAssetsWindowFunctionsSel updateMEL $slot;
 			zooAssetsWindowFunctionsSel updateNote $slot;
 			break;
-
 		case "select":
 			int $slot = $variable01;
 			select -add `zooGetAssetObj $slot`;
@@ -545,8 +510,8 @@ global proc zooAddAssetToUI( int $slot ) {
 	setParent zooAssetsListB;
 	string $form2 = `formLayout ( "zooAssetsFormText"+ $slot )`;
 		string $name = `textField -height 20 -cc( "zooSetAttrData "+ $slot +" name \"#1\"; zooAssetsWindowFunctions nameChange "+ $slot ) ( "zooAssetNameInput"+ $slot )`;
-		string $notes = `button -height 20 -width 15 -ann $noteStr -l "" -c( "zooAssetsOpenNotesWindow "+ $slot ) ( "zooAssetsFormTextNotes"+ $slot )`;
-		string $mel = `button -height 20 -width 15 -ann "edit pre/post export MEL commands" -l "" -c( "zooAssetsMELWindow "+ $slot ) ( "zooAssetsFormTextMEL"+ $slot )`;
+		string $notes = `button -height 20 -width 15 -ann $noteStr -l "n" -c( "zooAssetsOpenNotesWindow "+ $slot ) ( "zooAssetsFormTextNotes"+ $slot )`;
+		string $mel = `button -height 20 -width 15 -ann "edit pre/post export MEL commands" -l "mel" -c( "zooAssetsMELWindow "+ $slot ) ( "zooAssetsFormTextMEL"+ $slot )`;
 	setParent..;
 
 	formLayout -e
@@ -1156,6 +1121,7 @@ global proc zooBuildAssetMenu( string $parent, string $slot ) {
 	string $template = `zooGetAttrData $slot template`;
 	string $path = `zooGetAttrData $slot path`;
 	string $prefix = "";
+	string $exportFile = `zooGetSlotExportFilepath $slot` +".ext";
 	int $disable = `zooGetAttrData $slot disable`;
 	int $locked = `zooLockAsset ( "-slot "+ $slot )`;
 	int $linkToShots = `zooGetAttrData $slot linkToShots`;
@@ -1166,6 +1132,7 @@ global proc zooBuildAssetMenu( string $parent, string $slot ) {
 	int $selected[] = `zooGetSelectedAssets`;
 	int $sel = size($selected);
 	int $warn = $sel;
+	int $p4Menu = `optionVar -ex zooAssetsP4Menu`? `optionVar -q zooAssetsP4Menu`: 1;
 
 	if( $sel ) $prefix = "*selected* ";
 	for( $x in $selected ) if( $slot == $x ) $warn = 0;
@@ -1184,19 +1151,34 @@ global proc zooBuildAssetMenu( string $parent, string $slot ) {
 	if( $sel ) menuItem -l "export selected..." -enable $sel -ann "export all selected assets" -c( "{ for( $a in `zooGetSelectedAssets` ) zooExportAsset $a; }" );
 	else menuItem -l "export..." -ann "export this asset" -c( "zooExportAsset "+ $slot );
 	menuItem -l "export all object's assets" -ann "export all assets that the current asset's object is associated with" -c( "zooAssetsWindowFunctions exportObj "+ $slot );
-	menuItem -l "view this asset" -ann "launches this asset in the model viewer" -c( "zooAssetsWindowFunctions both "+ $slot +"; select -r -hi `zooGetAssetObj "+ $slot +"`; select -r (listRelatives(\"-p\",`ls -type mesh (listHistory(\"-f\",1))`)); mvLaunch false;" );
-	menuItem -divider 1;
+	menuItem -l "explore to file" -ann "opens explorer with the dmx file selected" -c( "zooExploreTo \""+ $exportFile +"\";" );
+	menuItem -d 1;
 
 	menuItem -en(`size $selObjs`) -l( $prefix + "use selected object" ) -c( "zooAssetsWindowFunctions replaceObj "+ $slot );
-	menuItem -divider 1;
+	menuItem -d 1;
 
+	//add perforce menu items
+	if( $p4Menu ) {
+		string $data[] = {};
+		string $dataNames[] = {};
+		int $isEdit = `isEdit $exportFile $dataNames $data`;
+
+		if( $isEdit != -1 ) {
+			menuItem -en $isEdit -l "Submit" -c( "p4submitUI {\""+ $exportFile +"\"};" );
+			menuItem -l "Open for Edit" -cb $isEdit -c( "p4_edit \""+ $exportFile +"\";" );
+			menuItem -en $isEdit -l "Revert" -c( "p4_revert \""+ $exportFile +"\";" );
+			}
+		else menuItem -l "Add to Perforce" -c( "" );
+		menuItem -d 1;
+		}
+
+	menuItem -d 1;
 	menuItem -l( $prefix +"custom export path" ) -cb( $path != "" ) -c( "zooSetAssetAttrWindow "+ $slot +" path" );
-	menuItem -divider 1;
 
 	if( `exists zooShotsUtils` ) menuItem -l( $prefix +"link to shots" ) -cb $linkToShots -c( "zooChangeDataWrapper "+ $slot +" linkToShots "+ (!$linkToShots) +"; zooAssetsWindowFunctionsSel updateTime "+ $slot );
 	if( `exists zooShotsUtils` ) menuItem -ob 1 -c( "zooAssetsOpenShotsWindow "+ $slot );
 
-	menuItem -l "Set Attribute" -sm 1;
+	menuItem -l "set attribute" -sm 1;
 		menuItem -l "name" -c( "zooSetAssetAttrWindow "+ $slot +" name;" );
 		menuItem -l "start" -c( "zooSetAssetAttrWindow "+ $slot +" start;" );
 		menuItem -l "end" -c( "zooSetAssetAttrWindow "+ $slot +" end;" );
@@ -1205,12 +1187,12 @@ global proc zooBuildAssetMenu( string $parent, string $slot ) {
 	menuItem -l( $prefix +"select asset's object" ) -ann "select the object that this asset manages" -c( "select -cl; zooAssetsWindowFunctionsSel select "+ $slot );
 	menuItem -l( $prefix +"duplicate asset" ) -ann "duplicate this asset and all its settings" -c( "zooAssetsWindowFunctions duplicate "+ $slot );
 
-	menuItem -divider 1;
+	menuItem -d 1;
 	menuItem -l( $prefix +"lock asset" ) -cb $locked -c( "zooAssetsWindowFunctions lock "+ $slot );
 	menuItem -en(!$locked) -l( $prefix +"disable asset" ) -cb $disable -c( "zooAssetsWindowFunctions disable "+ $slot );
-	menuItem -divider 1;
+	menuItem -d 1;
 	menuItem -en(!$locked) -l( $prefix +"delete asset" ) -c( "zooAssetsWindowFunctions delete "+ $slot );
-	menuItem -divider 1;
+	menuItem -d 1;
 	menuItem -enable 0 -l( "-slot "+ $slot +":  "+ ( $end-$start+1 ) +" frames-" );
 	}
 
@@ -1415,9 +1397,9 @@ global proc zooAssetsBuildPopMenu( string $parent ) {
 	menuItem -d 1;
 	menuItem -l "show full names" -cb $showNames -c( "zooAssetsWindowFunctions toggleNameView "+ (!$showNames));
 	menuItem -l "hide disabled" -cb $hideDisabled -c( "zooAssetsWindowFunctions toggleHideOption "+ (!$hideDisabled));
-	menuItem -l "open assets..." -c( "zooAssets" );
+	menuItem -l "open assets..." -c( "zooAssets;" );
 	menuItem -d 1;
-	menuItem -l "export all" -c( "zooExportAll" );
+	menuItem -l "export all" -c( "zooExportAll;" );
 	}
 
 
