@@ -48,7 +48,7 @@ window -t $windowTitle -resizeToFitChildren 0 -maximizeButton 0 -sizeable 1 -wid
 			menuItem -l "Install Shelf Button" -c( "zooAssetsSetup;" );
 			menuItem -l "Remove Shelf Button" -c ( "deleteUI `zooShelveItGetShelfButton zooAssets`;" );
 		menu -l "View";
-			menuItem -l "Show Perforce Menu Items" -cb( `optionVar -ex zooAssetsP4Menu`?`optionVar -q zooAssetsP4Menu`:1) -c( "if( #1 ) optionVar -rm zooAssetsP4Menu; else `optionVar -iv zooAssetsP4Menu 0;" );
+			menuItem -l "Show Perforce Menu Items" -cb( `optionVar -ex zooAssetsP4Menu`?`optionVar -q zooAssetsP4Menu`:1) -c( "if( #1 ) optionVar -rm zooAssetsP4Menu; else optionVar -iv zooAssetsP4Menu 0;" );
 			menuItem -l "Show Full Names" -cb $showNames -c( "zooAssetsWindowFunctions toggleNameView #1;" ) zooShowActualAssetNames;
 			menuItem -l "Hide Disabled" -cb( `optionVar -ex zooHideDisabledAssets`? `optionVar -q zooHideDisabledAssets`: 0 ) -c( "zooAssetsWindowFunctions toggleHideOption #1;" ) zooHideDisabledAssets;
 			menuItem -d 1;

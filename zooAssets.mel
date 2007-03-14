@@ -1172,7 +1172,6 @@ global proc zooBuildAssetMenu( string $parent, string $slot ) {
 		menuItem -d 1;
 		}
 
-	menuItem -d 1;
 	menuItem -l( $prefix +"custom export path" ) -cb( $path != "" ) -c( "zooSetAssetAttrWindow "+ $slot +" path" );
 
 	if( `exists zooShotsUtils` ) menuItem -l( $prefix +"link to shots" ) -cb $linkToShots -c( "zooChangeDataWrapper "+ $slot +" linkToShots "+ (!$linkToShots) +"; zooAssetsWindowFunctionsSel updateTime "+ $slot );
@@ -1419,7 +1418,7 @@ global proc zooAssetsSetup() {
 //------
 global proc string zooAssetsInfo( string $function ) {
 	string $creationDate = "09 June 2004";
-	string $currentVersion = "4.06.11";
+	string $currentVersion = "4.07.03";
 
 	if ( $function == "created" ) $info = $creationDate;
 	if ( $function == "version" ) $info = $currentVersion;
