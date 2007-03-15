@@ -5,3 +5,4 @@ trace can be used to transfer animation between similarly proportioned character
 instancing animation allows you to have the same animation on two objects, and lets you alter animation on one object and have the same changes propagate to the other
 to delete a mapping, just select the source name in the UI and hit the delete key
 if you right click in the source pane, you can remove many source objects at once by using the "batch remove" function
+you can save custom mappings to a file if the name matching algorithm isn't giving what you want, and you need to re-use the mapping relationship more than once.||to save a mapping relationship, simply go to the mapping menu, and choose to save the mapping||NOTE: to restore a mapping, you need to load the objects up in the UI before applying the mapping

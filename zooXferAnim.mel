@@ -26,6 +26,7 @@
 zooArrays_str;
 zooFlags;
 zooShelveIt;
+zooStrUtils;
 zooTips;
 zooUtils;
 zooXferAnimUtils;
@@ -37,13 +38,13 @@ global proc zooXferAnim() {
 	float $defaultThreshold = 1.0;
 	float $threshold = `optionVar -ex zooXferAnimThreshold`?`optionVar -q zooXferAnimThreshold`:$defaultThreshold;
 	int $alphabetical = `optionVar -ex zooXferAnimAlphabetically`? `optionVar -q zooXferAnimAlphabetically`: 1;
-	int $infoDate = 61020;
+	int $infoDate = 70315;
 	int $showTips = `zooTipState zooXferAnim -1`;
 	int $latestTip = -1;
 
 	if( $infoDate > `optionVar -q zooXferAnimDisplayInfo` ) {
 		$showTips = 1;
-		$latestTip = 0;
+		$latestTip = 7;
 		optionVar -iv zooXferAnimDisplayInfo $infoDate;
 		}
 	if( `window -ex $windowName` ) deleteUI $windowName;
@@ -57,6 +58,9 @@ global proc zooXferAnim() {
 			menuItem -l "Remap Objects" -c( "zooXferAnimWindowFunctions matchSrcTgt n; zooXferAnimWindowFunctions update n;" ) zooXferAnimMenuRemap;
 			menuItem -l "Batch Remove" -c( "zooXferAnimWindowFunctions batchRemove n;" ) zooXferAnimMenuRemove;
 			menuItem -l "Check Mapping" -c( "zooXferAnimWindowFunctions mappingCheck 0;" ) zooXferAnimMenuCheck;
+			menuItem -d 1;
+			menuItem -l "Save/Load Mappings" -sm 1 -pmc( "zooBuildXferMappingMenu zooXferAnimMenuMappingPresets;" ) zooXferAnimMenuMappingPresets;
+			setParent -m ..;
 			menuItem -d 1;
 			menuItem -l "Strip Prefixes" -cb( `optionVar -ex zooXferAnimStrip`? `optionVar -q zooXferAnimStrip`: 1 ) -c( "optionVar -iv zooXferAnimStrip #1;" ) xferMenuStrip;
 			menuItem -l( "Matching Threshold: "+ $threshold ) -c( "zooXferAnimWindowFunctions threshold \"*\";" ) xferMenuThreshold;
@@ -389,6 +393,7 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 			break;
 		case "srcChange":  //called when an object is "selected" in the source pane.  Its only a UI update function, to display the source's target
 			int $srcIdx = zooGetElement_int(0,`textScrollList -q -sii zooXferAnimScrollSrcs`)-1;
+			if( $srcIdx == -1 ) return;
 			string $allMaps[] = `textScrollList -q -ai zooXferAnimScrollSrcsTgts`;
 			string $tgt = $allMaps[$srcIdx];
 
@@ -495,6 +500,13 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 				else confirmDialog -title "You are good to go!" -message "There are no duplicate mappings" -button "rockin!";
 				}
 			break;
+		case "saveMapping":
+			string $ans = `promptDialog -m "mapping preset name:" -t "enter name" -b "OK" -db "OK" -b "Cancel"`;
+			if( $ans != "OK" ) return;
+			string $name = `promptDialog -q -tx`;
+			$name = `zooReplaceChars $name "" ""`;  //clean up the name
+			zooSaveXferMapping $name "local" "";
+			break;
 		case "xferAnim":  //this is the function that deals with doing the xfer essentially.  it figures out how the xfer needs to be handled, but the actual xferring is done in other procs
 			string $filename = `control -q -docTag zooXferAnimForm`;
 			string $srcObjs[] = `textScrollList -q -ai zooXferAnimScrollSrcPaths`;
@@ -563,6 +575,78 @@ global proc zooXferBatchRemove( string $tsl ) {
 			textScrollList -e -rii $idx zooXferAnimScrollSrcsTgts;
 			}
 		}
+	}
+
+
+global proc zooBuildXferMappingMenu( string $parent ) {
+	setParent -m $parent;
+	menu -e -dai $parent;
+
+	string $locales[] = {};
+	string $presets[] = `zooListAllPresets zooXferAnim xfermap $locales 1`;
+	int $num = `size $locales`;
+
+	for( $n=0; $n<$num; $n++ ) {
+		string $name = `match "^[^.]+" $presets[$n]`;
+		menuItem -l $name -c( "zooLoadXferMapping \""+ $name +"\" \""+ $locales[$n] +"\" \"\";" );
+		}
+	menuItem -d 1;
+	menuItem -l "save mapping" -c( "zooXferAnimWindowFunctions saveMapping;" );
+	menuItem -d 1;
+	menuItem -l "manage mappings" -c( "zooPresetManagerWin \"local\" zooXferAnim xfermap;" );
+	}
+
+
+//takes the current object to object mapping in the xferAnim UI and saves it out
+//as a file.  this mapping file can then be used to apply a custom mapping at a
+//later date.  its useful for xfering animation between very different rigs that
+//the name mapper can't get right - saves user from the tedium of redoing the
+//mapping multiple times
+global proc zooSaveXferMapping( string $name, string $locale, string $optionStr ) {
+	string $temp[] = {};
+
+	//$temp = `zooGetFlagArguments $optionStr `; if( `size $temp` ) ;
+
+	string $mappingStr = "-version "+ `zooXferAnimInfo version` +" "+ $optionStr +"\n";
+	string $srcs[] = `textScrollList -q -ai zooXferAnimScrollSrcPaths`;
+	string $tgts[] = `textScrollList -q -ai zooXferAnimScrollSrcsTgts`;
+	int $num = `size $srcs`;
+
+	for( $n=0; $n<$num; $n++ ) $mappingStr += $srcs[$n] +"="+ $tgts[$n] +"\n";
+	zooSavePreset $locale zooXferAnim xfermap $name $mappingStr;
+	}
+
+
+//given a mapping file, applies the mapping data to objects already loaded in the UI
+global proc zooLoadXferMapping( string $name, string $locale, string $optionStr ) {
+	string $mappingFile[] = `zooReadPreset $locale zooXferAnim xfermap $name`;
+	string $mapping[] = {};
+	string $srcs[] = `textScrollList -q -ai zooXferAnimScrollSrcPaths`;
+	string $tgts[] = `textScrollList -q -ai zooXferAnimScrollTgts`;
+	string $opts = $mappingFile[0];
+	int $num = `size $mappingFile`;
+
+	textScrollList -e -ra zooXferAnimScrollSrcsTgts;  //clear any existing mapping data
+	for( $n=1; $n<$num; $n++ ) {
+		string $src = `match "^[^=]+" $mappingFile[$n]`;
+		string $tgt = `match "[^=]+$" $mappingFile[$n]`;
+		string $bestSrcMatch = zooGetElement_str(0,`zooMatchNames {$src} $srcs $optionStr`);
+		int $srcIdx = `zooGetIdxOfElement_str $srcs $bestSrcMatch`;
+
+		if( $srcIdx == -1 ) continue;  //if the source object in the mapping data can't be matched with a source object in the list, keep loopin
+		string $bestTgtMatch = zooGetElement_str(0,`zooMatchNames {$tgt} $tgts $optionStr`);
+		$mapping[$srcIdx] = $bestTgtMatch;
+		if( $bestTgtMatch == "" ) $mapping[$srcIdx] = "!";  //if a target can't be found, then append a ! character to indicate no match
+		}
+
+	//now load the mapping data into the map TSL
+	for( $map in $mapping ) {
+		if( $map == "" ) textScrollList -e -a "!" zooXferAnimScrollSrcsTgts;
+		else textScrollList -e -a $map zooXferAnimScrollSrcsTgts;
+		}
+
+	//finally, update the selection UI to reflect new mapping, should a source object be selected
+	zooXferAnimWindowFunctions srcChange n;
 	}
 
 
@@ -715,9 +799,9 @@ global proc zooXferAnimBuildQssMenu( string $subCmd, string $parent ) {
 	}
 
 
-global proc string zooXferAnimInfo ( string $function ) {
+global proc string zooXferAnimInfo( string $function ) {
 	string $creationDate = "10 May 2003";
-	string $currentVersion = "4.07.02";
+	string $currentVersion = "4.07.04";
 
 	if( $function == "created" ) return $creationDate;
 	if( $function == "version" ) return $currentVersion;
