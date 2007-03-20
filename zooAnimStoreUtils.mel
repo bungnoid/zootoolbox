@@ -79,11 +79,32 @@ global proc zooDeleteClip( string $name, string $store, string $locale ) {
 
 global proc string[] zooListClips( string $store, string $locale, string $type ) {
 	string $loc = `zooGetPresetDirectory $locale zooAnimStore`;
-	string $clips[] = `zooGetFiles ( $loc + $store +"/" ) ( "*"+ $type +".znm" )`;
+	string $clips[] = `zooGetFiles ( $loc + $store +"/" ) ( "*."+ $type +".znm" )`;
+	int $num = `size $clips`;
 
-	for( $n=0; $n<`size $clips`; $n++ ) $clips[$n] = `match "^[^.]+" $clips[$n]`;
+	for( $n=0; $n<$num; $n++ ) $clips[$n] = `match "^[^.]+" $clips[$n]`;
 
 	return $clips;
+	}
+
+
+proc string[] zooListClips_adv( string $store, string $locale, string $type ) {
+	string $loc = `zooGetPresetDirectory $locale zooAnimStore`;
+	string $clips[] = `zooGetFiles ( $loc + $store +"/" ) ( "*.znm" )`;
+	string $clipsOfType[] = {};
+	int $num = `size $clips`;
+
+	for( $n=0; $n<$num; $n++ ) {
+		string $header[] = `zooReadAnimFileHeader ( $loc + $store +"/"+ $clips[$n] )`;
+		string $optionStr = $header[3];
+		string $temp[] = {};
+		int $typeAns = 0;
+
+		$temp = `zooGetFlagArguments $optionStr $type`; if( `size $temp` ) $typeAns = $temp[0];
+		if( $typeAns ) $clipsOfType[`size $clipsOfType`] = `substitute ".znm$" $clips[$n] ""`;
+		}
+
+	return $clipsOfType;
 	}
 
 
@@ -178,7 +199,7 @@ global proc zooDeleteStore( string $name ) {
 		print(system( "rd /s/q \""+ `toNativePath $locG` +"\"" ) +"\n");
 		}
 	else {
-		//print(system( "rd /s "+ `toNativePath ( $locL + $name )`) +"\n");
+		print(system("rm -fdr "+ $locL + $name) +"\n");
 		}
 	print( $name +" store deleted\n" );
 	}

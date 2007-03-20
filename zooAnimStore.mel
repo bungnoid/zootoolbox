@@ -5,7 +5,7 @@ zooPresetManager;
 
 global proc zooAnimStore() {
 	string $windowName = "zooAnimStoreWindow";
-	string $windowTitle = "zooAnimStore v1.07.03   ::macaroniKazoo::";
+	string $windowTitle = "zooAnimStore v1.07.04   ::macaroniKazoo::";
 	int $alphabetical = `optionVar -ex zooAnimStoreAlphabetical`? `optionVar -q zooAnimStoreAlphabetical`: 1;
 	int $spacing = `optionVar -ex zooAnimStoreSpacing`? `optionVar -q zooAnimStoreSpacing`: 0;
 
@@ -32,6 +32,7 @@ global proc zooAnimStore() {
 			string $stores = `textScrollList -nr 10 -sc "zooAnimStoreWindowFunctions -updateClips;" zooStoreUIStores`;
 			string $animChk = `checkBox -l "show anims" -v(optionVar("-ex","zooAnimStoreAnims")?optionVar("-q","zooAnimStoreAnims"):1) -cc( "if( #1 ) optionVar -rm zooAnimStoreAnims; else optionVar -iv zooAnimStoreAnims 0; zooAnimStoreWindowFunctions -updateClips;" ) zooStoreUICheckAnims`;
 			string $poseChk = `checkBox -l "show poses" -v(optionVar("-ex","zooAnimStorePoses")?optionVar("-q","zooAnimStorePoses"):1) -cc( "if( #1 ) optionVar -rm zooAnimStorePoses; else optionVar -iv zooAnimStorePoses 0; zooAnimStoreWindowFunctions -updateClips;" ) zooStoreUICheckPoses`;
+			string $deltChk = `checkBox -l "show deltas" -v(optionVar("-ex","zooAnimStorePoses")?optionVar("-q","zooAnimStorePoses"):1) -cc( "if( #1 ) optionVar -rm zooAnimStoreDeltas; else optionVar -iv zooAnimStoreDeltas 0; zooAnimStoreWindowFunctions -updateClips;" ) zooStoreUICheckDeltas`;
 			string $searchLbl = `text -l "filter:" `;
 			string $searchTxt = `textField -tx "" -cc( "zooAnimStoreWindowFunctions -updateClips;" ) zooStoreUITextFilter`;
 			string $storePanes = `paneLayout -configuration "vertical2" -smc( "zooAnimStoreWindowFunctions -storeConfig;" ) zooStoreUIPane`;
@@ -110,8 +111,11 @@ global proc zooAnimStore() {
 		-af $poseChk "top" 3
 		-ac $poseChk "left" 10 $animChk
 
+		-af $deltChk "top" 3
+		-ac $deltChk "left" 10 $poseChk
+
 		-af $searchLbl "top" 3
-		-ac $searchLbl "left" 10 $poseChk
+		-ac $searchLbl "left" 10 $deltChk
 
 		-af $searchTxt "top" 0
 		-ac $searchTxt "left" 3 $searchLbl
@@ -272,6 +276,9 @@ global proc zooAnimStoreWindowFunctions( string $function ) {
 	string $locG = `zooGetPresetDirectory "global" zooAnimStore`;
 	string $locale = "local";
 	string $optionStr = "-strip 0 ";
+	int $anims = `checkBox -q -v zooStoreUICheckAnims`;
+	int $poses = `checkBox -q -v zooStoreUICheckPoses`;
+	int $delts = `checkBox -q -v zooStoreUICheckDeltas`;
 	int $parentqss = `checkBox -q -v $checkRigAllUI`;
 
 	switch( $function ) {
@@ -311,14 +318,14 @@ global proc zooAnimStoreWindowFunctions( string $function ) {
 			string $search = `textField -q -tx zooStoreUITextFilter`;
 			string $clipsL_anim[] = `zooListClips $selStore "local" anim`;
 			string $clipsL_pose[] = `zooListClips $selStore "local" pose`;
+			string $clipsL_delt[] = `zooListClips $selStore "local" delta`;
 			string $existingL[] = `shelfLayout -q -ca $clipLUI`;
-			int $anims = `checkBox -q -v zooStoreUICheckAnims`;
-			int $poses = `checkBox -q -v zooStoreUICheckPoses`;
 
 			if( $search != "" ) $search = `tolower $search`;
 			for( $ui in $existingL ) deleteUI $ui;
 			if( $anims ) for( $clipUI in $clipsL_anim ) if( `match $search (tolower($clipUI))` != "" || strip($search) == "" ) zooAddClipToUI $clipLUI $clipUI $selStore "local" anim;
 			if( $poses ) for( $clipUI in $clipsL_pose ) if( `match $search (tolower($clipUI))` != "" || strip($search) == "" ) zooAddClipToUI $clipLUI $clipUI $selStore "local" pose;
+			if( $delts ) for( $clipUI in $clipsL_delt ) if( `match $search (tolower($clipUI))` != "" || strip($search) == "" ) zooAddClipToUI $clipLUI $clipUI $selStore "local" delta;
 			break;
 		//deals with refreshing the global clip list
 		case "-updateClipsG":
@@ -326,14 +333,14 @@ global proc zooAnimStoreWindowFunctions( string $function ) {
 			string $search = `textField -q -tx zooStoreUITextFilter`;
 			string $clipsG_anim[] = `zooListClips $selStore "global" anim`;
 			string $clipsG_pose[] = `zooListClips $selStore "global" pose`;
+			string $clipsG_delt[] = `zooListClips $selStore "global" delta`;
 			string $existingG[] = `shelfLayout -q -ca $clipGUI`;
-			int $anims = `checkBox -q -v zooStoreUICheckAnims`;
-			int $poses = `checkBox -q -v zooStoreUICheckPoses`;
 
 			if( $search != "" ) $search = `tolower $search`;
 			for( $ui in $existingG ) deleteUI $ui;
 			if( $anims ) for( $clipUI in $clipsG_anim ) if( `match $search (tolower($clipUI))` != "" || strip($search) == "" ) zooAddClipToUI $clipGUI $clipUI $selStore "global" anim;
 			if( $poses ) for( $clipUI in $clipsG_pose ) if( `match $search (tolower($clipUI))` != "" || strip($search) == "" ) zooAddClipToUI $clipGUI $clipUI $selStore "global" pose;
+			if( $delts ) for( $clipUI in $clipsG_delt ) if( `match $search (tolower($clipUI))` != "" || strip($search) == "" ) zooAddClipToUI $clipGUI $clipUI $selStore "global" delta;
 			break;
 		//deals with gathering user info for creating a new store
 		case "-createStore":

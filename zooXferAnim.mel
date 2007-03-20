@@ -325,7 +325,11 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 
 			$temp = `zooGetFlagArguments $fileHeader[3] world`; if( `size $temp` ) $world = $temp[0];
 			$temp = `zooGetFlagArguments $fileHeader[3] nocreate`; if( `size $temp` ) $nocreate = $temp[0];
-			$temp = `zooGetFlagArguments $fileHeader[3] add`; if( `size $temp` ) $add = $temp[0];
+			$temp = `zooGetFlagArguments $fileHeader[3] additive`; if( `size $temp` ) $add = $temp[0];
+			$temp = `zooGetFlagArguments $fileHeader[3] delta`; if( `size $temp` ) {
+				$add = $temp[0];
+				$nocreate = $temp[0];
+				}
 
 			textScrollList -e -ra zooXferAnimScrollSrcs;
 			textScrollList -e -ra zooXferAnimScrollSrcPaths;

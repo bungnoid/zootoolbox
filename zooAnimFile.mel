@@ -35,7 +35,7 @@ global proc zooAnimFile() {
 //------
 //takes a filepath to write animation of all keyable attributes from the current selection
 //
-// -world [bool]				**export keys in world space - default is false - not yet implemented!!!**
+// -world [bool]				if true, animation is transformed to world space before export.  if only non-transform attributes are animated, obviously this flag makes no difference
 // -strip [bool]				if true, strips the prefix from object names - prefixes come from importing (namespaces only) and referencing - default is false
 // -start [float]				specify a start time - keys before this time are not exported
 // -end [float]				specify an end frame - keys beyond this time are not exported
@@ -338,6 +338,16 @@ global proc zooAnimFileWritePose( string $filename, string $optionStr ){
 //and the target list has objB and objD
 //then the animation from objA in the file will get applied to the target objB
 //and because objD doesn't exist in the file, it gets ignored
+//
+//the available import flags are:
+// -filename [string]		full path to the filename
+// -offset [float]			time offset for the animation
+// -incrementOn [int]		if true, the values are multiplied by the increment float
+// -increment [float]		this 0-1 float value acts as a value multiplier.  when increment is turned on, the current attribute value gets blended with the file attribute value based on this increment amount
+// -additive [int]			applies the animation in an additive fashion, instead of doing value replacement
+// -subtract [int]			similar to additive, except values are subtracted from their current value
+// -nocreate [int]			if true, this flag tells the importer not to create keys when importing animation
+// -world [int]				if true, the importer assumes all tranform attribute values are worldspace values, and places mapped controllers to those positions in world space, instead of simply setting attribute values
 //------
 global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $tgts[] ) {
 	string $worldCache[] = {};
@@ -348,6 +358,7 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 	float $incrementalApply = 1.0;
 	int $incrementOn = 0;
 	int $additive = 0;
+	int $subtract = 0;
 	int $nocreate = 0;
 	int $numSrcs = `size $srcs`;
 	int $numTgts = `size $tgts`;
@@ -359,6 +370,7 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 	$temp = `zooGetFlagArguments $optionStr incrementOn`; if( `size $temp` ) if( `size $temp` ) $incrementOn = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr increment`; if( `size $temp` ) if( `size $temp` ) $incrementalApply = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr additive`; if( `size $temp` ) $additive = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr subtract`; if( `size $temp` ) $subtract = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr nocreate`; if( `size $temp` ) $nocreate = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr world`; if( `size $temp` ) $world = $temp[0];
 
@@ -424,6 +436,7 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 			string $attrib = `zooGetNextAttr $fileID`;
 			if( $attrib == "" ) break;  //if the next attribute name is empty, then we've hit the end of this object's attributes
 
+			string $attrPath = $tgt +"."+ $attrib;
 			string $weighted[] = {};
 			string $keyData[] = {};
 			string $keyLocks[] = {};
@@ -432,52 +445,59 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 			int $proceed = `zooGetNextAttrInfo $fileID $weighted $keyData $keyLocks $tangentTypes $tangentValues`;
 
 			if( $proceed != 1 ) break;
-			if( !`objExists ( $tgt +"."+ $attrib )` ) continue;
-			if( !`getAttr -k ( $tgt +"."+ $attrib )` ) continue;
-			if( !`getAttr -se ( $tgt +"."+ $attrib )` ) continue;
+			if( !`objExists $attrPath` ) continue;
+			if( !`getAttr -k $attrPath` ) continue;
+			if( !`getAttr -se $attrPath` ) continue;
 
 			int $numKeys = `size $keyData`/2;
 			int $weight = $weighted[0];
+			float $keyVals[] = {};
+			float $keyTimes[] = {};
+			float $curAttrVals[] = {};
 
-			keyTangent -e -wt $weight ( $tgt +"."+ $attrib );
+			//make sure the curve's weighted state matches the file
+			keyTangent -e -wt $weight $attrPath;
+			for( $t=0; $t<$numKeys; $t++ ) {
+				$keyVals[$t] = $keyData[$t*2];
+				$keyTimes[$t] = ((float)$keyData[$t*2+1]) + $timeOffset;
+				}
+
+			//if additive mode is true, we want to add the already existing attribute
+			//value at the given time to the value we're loading - but first we need to
+			//get the attribute values at the given time before applying any new animation
+			if( $additive || $subtract || $incrementOn ) {
+				$curAttrVals = `zooGetAttrAtTimes $attrPath $keyTimes`;
+				if( $additive ) for( $t=0; $t<$numKeys; $t++ ) $keyVals[$t] += $curAttrVals[$t];
+				else if( $subtract ) for( $t=0; $t<$numKeys; $t++ ) $keyVals[$t] = $curAttrVals[$t] - $keyVals[$t];
+				if( $incrementOn ) for( $t=0; $t<$numKeys; $t++ ) $keyVals[$t] = ($keyVals[$t]*$incrementalApply) + $curAttrVals[$t]*(1.0-$incrementalApply);
+				}
+
+			//now apply the key data read from the file
 			for( $t=0; $t<$numKeys; $t++ ) {
 				string $ittType = $tangentTypes[( $t*2 )];
 				string $ottType = $tangentTypes[( $t*2+1 )];
-				float $keyVal = $keyData[( $t*2 )];
-				float $keyTime = $keyData[( $t*2+1 )];
+				float $keyVal = $keyVals[$t];
+				float $keyTime = $keyTimes[$t];
 				float $inAngle = $tangentValues[( $t*4 )];
 				float $inWeight = $tangentValues[( $t*4+1 )];
 				float $outAngle = $tangentValues[( $t*4+2 )];
 				float $outWeight = $tangentValues[( $t*4+3 )];
 				int $lock = $keyLocks[$t];
 
-				$keyTime += $timeOffset;
-				//apply the incremental key value
-				if( $incrementOn ) {
-					float $cur = `getAttr ( $tgt +"."+ $attrib )`*(1.0-$incrementalApply);
-					float $fileVal = $keyVal*$incrementalApply;
-					$keyVal = $cur + $fileVal;
-					}
-
-				if( $additive ) {
-					float $cur = `getAttr ( $tgt +"."+ $attrib )`;
-					$keyVal = $cur + $keyVal;
-					}
-
 				//if nocreate is turned on - this means don't create keys, only modify existing keys.
 				//not very useful for anim clip loading, but useful for pose clip loading sometimes
-				if( $nocreate ) if( !`keyframe -t $keyTime -q -kc ( $tgt +"."+ $attrib )`) continue;
+				if( $nocreate ) if( !`keyframe -t $keyTime -q -kc $attrPath`) continue;
 
 				//process keyframe and tangent information, provided the target attribute exists and is keyable
 				int $isPose = 0;
-				setKeyframe -t $keyTime -v $keyVal ( $tgt +"."+ $attrib );
+				setKeyframe -t $keyTime -v $keyVal $attrPath;
 				if( $inWeight == -1 && $outWeight == -1 ) $tangents = 0;
 				if( $ittType == "global" ) $ittType = $globalItt;
 				if( $ottType == "global" ) $ottType = $globalOtt;
 				if( $inAngle == -1 && $outAngle == -1 && $inWeight == -1 && $outWeight == -1 ) $isPose = 1;
 				if( !$isPose ) {
-					keyTangent -e -t $keyTime -l $lock -ia $inAngle -oa $outAngle -iw $inWeight -ow $outWeight ( $tgt +"."+ $attrib );
-					if( $ottType == "step" ) keyTangent -e -ott step ( $tgt +"."+ $attrib );
+					keyTangent -e -t $keyTime -l $lock -ia $inAngle -oa $outAngle -iw $inWeight -ow $outWeight $attrPath;
+					if( $ottType == "step" ) keyTangent -e -ott step $attrPath;
 					}
 				}
 			}
@@ -494,6 +514,21 @@ global proc zooAnimFileLoadObjects( string $optionStr, string $srcs[], string $t
 		delete $tgts;
 		$tgts = $worldCache;
 		}
+	}
+
+
+//given an array of times, this proc simply returns values of a given attribute
+//at those times by sampling the anim curve
+global proc float[] zooGetAttrAtTimes( string $attrPath, float $times[] ) {
+	float $vals[] = {};
+	int $num = `size $times`;
+
+	for( $n=0; $n<$num; $n++ ) {
+		float $valAtTime = zooGetElement_float(0,`keyframe -t $times[$n] -q -eval $attrPath`);
+		$vals[$n] = $valAtTime;
+		}
+
+	return $vals;
 	}
 
 
