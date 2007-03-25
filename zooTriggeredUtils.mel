@@ -144,13 +144,13 @@ global proc string zooPopulateCmdStrRaw( string $trigger, string $cmdStr ) {
 	//the % symbol allows the user to work on a single target object.  the object
 	//is handled as a string, as it is a single object only
 	//NOTE %0 refers to the trigger itself
-	while( `match "(%[0-9]+)+" $cmdStr` != "" ) {
-		string $custom = `match "(%[0-9]+)+" $cmdStr`;
+	while( `match "%[0-9]+" $cmdStr` != "" ) {
+		string $custom = `match "%[0-9]+" $cmdStr`;
 		int $targetNum = `substring $custom 2 (size($custom))`;
 		int $idx = `zooGetIdxOfElement_int $connectSlots $targetNum`;
 
-		if( $idx < 0 ) $cmdStr = `substitute "(%[0-9]+)+" $cmdStr "*invalidConnect*"`;
-		else $cmdStr = `substitute "(%[0-9]+)+" $cmdStr $objectList[$idx]`;
+		if( $idx < 0 ) $cmdStr = `substitute "%[0-9]+" $cmdStr "*invalidConnect*"`;
+		else $cmdStr = `substitute "%[0-9]+" $cmdStr $objectList[$idx]`;
 		}
 
 	return $cmdStr;
@@ -380,7 +380,13 @@ global proc string[] zooGetConnects( string $trigger ) {
 	string $slotPrefix = "zooTrig";
 	string $matchStr = "^"+ $slotPrefix +"[0-9]+$";
 
-	for( $attr in $attrs ) if( `match $matchStr $attr` != "" ) $objects[( `size $objects` )] = `connectionInfo -sfd ( $trigger +"."+ $attr )`;
+	for( $attr in $attrs )
+	{
+		if( `match $matchStr $attr` != "" )
+		{
+			$objects[(int)( `match "[0-9]+$" $attr` )] = `connectionInfo -sfd ( $trigger +"."+ $attr )`;
+		}
+	}
 	for( $n=0; $n<`size $objects`; $n++ ) if( `objExists $objects[$n]` ) $validObjs[( `size $validObjs` )] = `match "^[^.]+" $objects[$n]`;
 
 	return $validObjs;

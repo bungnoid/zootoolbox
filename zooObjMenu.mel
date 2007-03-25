@@ -74,11 +74,14 @@ global proc zooObjMenuEditCmd( string $obj, int $cmdNum ){
 			textField -tx $cmdName -cc( "zooObjMenuSaveCmd "+ $obj +" "+ $cmdNum ) zooOMTextCmdName;
 
 			string $currentCmd = `text -l "current command:"`;
-			intField -width 80 -min 0 -step 1 -v $cmdNum -cc( "zooObjMenuEditCmd "+ $obj +" #1" ) zooOMIntCurrentCmd;
+			intField -width 80 -min 0 -step 1 -v $cmdNum -cc( "{zooObjMenuSaveCmd "+ $obj +" "+ $cmdNum + "; zooObjMenuEditCmd "+ $obj +" #1;}" ) zooOMIntCurrentCmd;
 
 			string $cmd = `text -l "command sting:"`;
 			scrollField -ed 1 -tx $cmdStr -ec( "zooObjMenuSaveCmd "+ $obj +" "+ $cmdNum ) zooOMCmdText;
-			string $previewCheck = `checkBox -l "preview command string" -cc( "{scrollField -e -ed(!(#1)) zooOMCmdText; string $c = `zooGetObjMenuCmdStr "+ $obj +" "+ $cmdNum +"`; if( #1 ) $c = `zooPopulateCmdStr "+ $obj +" $c`; scrollField -e -tx $c zooOMCmdText;}" ) zooOMCheckPreview`;
+
+			// Note that it's important to call zooObjMenuSaveCmd before changing the editable state of zooOMCmdText
+			// for an explanation of why, see the definition of zooObjMenuSaveCmd
+			string $previewCheck = `checkBox -l "preview command string" -cc( "{zooObjMenuSaveCmd "+ $obj +" "+ $cmdNum + "; scrollField -e -ed(!(#1)) zooOMCmdText; string $c = `zooGetObjMenuCmdStr "+ $obj +" "+ $cmdNum +"`; if( #1 ) $c = `zooPopulateCmdStr "+ $obj +" $c`; scrollField -e -tx $c zooOMCmdText;}" ) zooOMCheckPreview`;
 			string $closeButt = `button -height 20 -label "close" -c( "zooObjMenuSaveCmd "+ $obj +" "+ $cmdNum +"; deleteUI "+ $windowName )`;
 			string $deleteButt = `button -height 20 -label "delete" -c( "zooRemoveMenu "+ $obj +" "+ $cmdNum +"; deleteUI "+ $windowName )`;
 
@@ -130,7 +133,7 @@ global proc zooObjMenuEditCmd( string $obj, int $cmdNum ){
 		$form;
 
 	popupMenu -p zooOMIntCurrentCmd;
-	for( $a in $cmdList ) menuItem -l ( `zooGetObjMenuCmdName $obj $a` ) -c( "zooObjMenuEditCmd "+ $obj +" "+ $a );
+	for( $a in $cmdList ) menuItem -l ( `zooGetObjMenuCmdName $obj $a` ) -c( "{zooObjMenuSaveCmd "+ $obj +" "+ $cmdNum + "; zooObjMenuEditCmd "+ $obj +" "+ $a + ";}");
 
 	showWindow $windowName;
 	}
@@ -139,12 +142,27 @@ global proc zooObjMenuEditCmd( string $obj, int $cmdNum ){
 //------
 //returns the attribute name of the command string created
 //------
-global proc zooObjMenuSaveCmd( string $obj, string $cmdNum ){
+global proc zooObjMenuSaveCmd( string $obj, string $cmdNum )
+{
+	// Check if the command field is enabled before saving what's in the text box - this way,
+	// the populated text if the "preview" box is checked
+	// Note that we don't check the state of the ACTUAL checkbox, because we wish to call this function from within the
+	// checkbox callback - at which point the state of the checkbox has been changed, but the actual text hasn't yet.  If
+	// we call zooObjMenuSaveCmd before changing the enabled state of zooOMCmdText, we avoid this problem...
 	string $cmdAttr = "zooCmd"+ $cmdNum;
 	string $cmdName = `textField -q -tx zooOMTextCmdName`;
-	string $cmdStr = `scrollField -q -tx zooOMCmdText`;
-	setAttr -type "string" ( $obj +"."+ $cmdAttr ) ( $cmdName +"^"+ $cmdStr );
+	string $cmdStr;
+	if(`scrollField -q -ed zooOMCmdText`)
+	{
+		$cmdStr = `scrollField -q -tx zooOMCmdText`;
 	}
+	else
+	{
+		 $cmdStr = zooGetObjMenuCmdStr($obj, $cmdNum);
+	}
+
+	setAttr -type "string" ( $obj +"."+ $cmdAttr ) ( $cmdName +"^"+ $cmdStr );
+}
 
 
 //------

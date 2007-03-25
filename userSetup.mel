@@ -39,7 +39,7 @@ alias l listProcs;
 //load zooTriggered
 zooTriggeredUtils;
 zooTriggeredLoad;
-zooTrigUpdateState;
+zooTrigUpdateUIState;
 
 //load auto save
 zooAutoSave;
