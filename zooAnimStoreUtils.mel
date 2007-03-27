@@ -126,7 +126,8 @@ global proc string[] zooGetCtrlsFromQss( int $parent ) {
 //the playblast command doesn't support panel specification - it always uses the
 //panel with focus
 global proc string zooWriteIcon( string $name, string $location, string $panel ) {
-	if( $panel == "" ) $panel = `getPanel -wf`;
+	if( $panel == "" ) $panel = `zooGetMostLikelyModelView`;
+	if( $panel == "" ) return "";
 
 	//store some initial settings, change them to what is required, and then restored at the very end
 	string $settings[] = { "-df","-cv","-ca","-lt","-ha","-dim","-pv","-ikh","-j","-dy" };
@@ -147,6 +148,18 @@ global proc string zooWriteIcon( string $name, string $location, string $panel )
 	for( $n=0; $n<`size $settings`; $n++ ) eval("modelEditor -e "+ $settings[$n] +" "+ $states[$n] +" "+ $panel +";");
 
 	return $icon;
+	}
+
+
+global proc string zooGetMostLikelyModelView() {
+	string $cur = `getPanel -wf`;
+	string $curType = `getPanel -to $cur`;
+
+	if( $curType == "modelPanel" ) return $cur;
+	string $visPanels[] = `getPanel -vis`;
+	for( $p in $visPanels ) if( `getPanel -to $p` == "modelPanel" ) return $p;
+
+	return "";
 	}
 
 

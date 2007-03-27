@@ -92,13 +92,15 @@ global proc string zooExportAsset( int $slot ) {
 	string $dataNames[] = {};
 	string $data[] = {};
 	int $isEdit = `isEdit $path $dataNames $data`;
-	if( !$isEdit ) p4_edit $path;
+
+	if( !$isEdit ) p4_edit {$path};
 
 	//execute pre export MEL command
 	string $cmd = `zooGetAssetMEL $slot pre`;
 	if( $cmd != "" ) if( catch( `eval $cmd` )) warning( "pre-export command failed for slot "+ $slot );
 
 	//exportPluginExportCommand;  put the command to invoke the exporter here
+	//if( $isEdit == -1 ) p4_add {$path};  //if the edit is -1, then the file isn't being managed by perforce - so add it
 
 	//execute post export MEL command
 	$cmd = `zooGetAssetMEL $slot post`;

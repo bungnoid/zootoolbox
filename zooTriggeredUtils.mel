@@ -216,19 +216,15 @@ global proc string zooPresetTriggerCmds( string $preset ) {
 		case "-selectConnected":
 			$cmd = "select -d #;\nselect -add @;";
 			break;
-
 		case "-keyConnected":
 			string $cmd = "select -d #;\nsetKeyframe @;";
 			break;
-
 		case "-toggleConnected":
 			string $cmd = "string $sel[] = `ls -sl`;\nint $vis = !`getAttr %1.v`;\nfor($obj in @) setAttr ($obj +\".v\") $vis;\nif( `size $sel` ) select $sel;";
 			break;
-
 		case "-toolToMove":
 			$cmd = "setToolTo $gMove;";
 			break;
-
 		case "-toolToRotate":
 			$cmd = "setToolTo $gRotate;";
 			break;
@@ -380,13 +376,7 @@ global proc string[] zooGetConnects( string $trigger ) {
 	string $slotPrefix = "zooTrig";
 	string $matchStr = "^"+ $slotPrefix +"[0-9]+$";
 
-	for( $attr in $attrs )
-	{
-		if( `match $matchStr $attr` != "" )
-		{
-			$objects[(int)( `match "[0-9]+$" $attr` )] = `connectionInfo -sfd ( $trigger +"."+ $attr )`;
-		}
-	}
+	for( $attr in $attrs ) if( `match $matchStr $attr` != "" ) $objects[(int)( `match "[0-9]+$" $attr` )] = `connectionInfo -sfd ( $trigger +"."+ $attr )`;
 	for( $n=0; $n<`size $objects`; $n++ ) if( `objExists $objects[$n]` ) $validObjs[( `size $validObjs` )] = `match "^[^.]+" $objects[$n]`;
 
 	return $validObjs;

@@ -23,9 +23,9 @@ global proc p4() {
 		string $fileArrayStr = "{ \""+ `zooArrayToStr_str $files "\",\""` +"\" }";
 		int $isEdit = `isEdit $files[0] {} {}`;
 
-		for( $n=0; $n<`size $files`; $n++ ) $files[$n] = `zooScrubPath $files[$n]`;
+		for( $n=0; $n<`size $files`; $n++ ) $files[$n] = `zooResolvePath $files[$n]`;
 		if( `window -exists $windowName` ) deleteUI $windowName;
-		window -title $windowTitle -mb 1 -resizeToFitChildren 0 -maximizeButton 0 -sizeable 1 -width 600 -height 450 $windowName;
+		window -t $windowTitle -mb 1 -rtf 0 -maximizeButton 0 -sizeable 1 -width 600 -height 450 $windowName;
 			string $form = `formLayout`;
 				string $pane = `paneLayout -cn "horizontal2" -ps 1 100 40 p4SubmitPane`;
 					string $text = `scrollField -tx "" -ww 1`;
@@ -78,6 +78,7 @@ global proc p4() {
 		string $opened[] = `p4_openedClient`;
 		string $files[] = `textScrollList -q -si $fileUI`;
 
+		textScrollList -e -ra $fileUI;
 		for( $file in $opened ) textScrollList -e -a(tolower($file)) $fileUI;
 		for( $file in $files ) textScrollList -e -si(tolower($file)) $fileUI;
 		}
@@ -174,12 +175,20 @@ global proc p4() {
 
 
 	//adds a given file to perforce - returns the success of the command
-	global proc int p4_add( string $file ) {
-		$file = `zooScrubPath $file`;
-		string $nativeFile = `zooReplaceChars $file "/" "\\"`;
-		string $p4Cmd = `system( "p4 add \""+ $nativeFile +"\"" )`;
+	global proc int p4_add( string $files[] ) {
+		string $fileStr = "";
+		int $num = `size $files`;
 
-		print $p4Cmd;
+		for( $n=0; $n<$num; $n++ ) {
+			$files[$n] = `zooResolvePath $files[$n]`;
+			$files[$n] = `zooReplaceChars $files[$n] "/" "\\"`;
+			$fileStr += "\""+ $files[$n] +"\" ";
+			}
+
+		string $p4Cmd = "p4 add "+ $fileStr;
+		print( $p4Cmd +"\n" );
+		print `system $p4Cmd`;
+
 		$p4Cmd = strip($p4Cmd);
 		if( `match "opened for add$" $p4Cmd` != "" ) return 1;
 		return 0;
@@ -187,12 +196,20 @@ global proc p4() {
 
 
 	//returns whether the file was successfully opened for edit or not
-	global proc int p4_edit( string $file ) {
-		$file = `zooScrubPath $file`;
-		string $nativeFile = `zooReplaceChars $file "/" "\\"`;
-		string $p4Cmd = `system( "p4 edit \""+ $nativeFile +"\"" )`;
+	global proc int p4_edit( string $files[] ) {
+		string $fileStr = "";
+		int $num = `size $files`;
 
-		print $p4Cmd;
+		for( $n=0; $n<$num; $n++ ) {
+			$files[$n] = `zooResolvePath $files[$n]`;
+			$files[$n] = `zooReplaceChars $files[$n] "/" "\\"`;
+			$fileStr += "\""+ $files[$n] +"\" ";
+			}
+
+		string $p4Cmd = "p4 edit "+ $fileStr;
+		print( $p4Cmd +"\n" );
+		print `system $p4Cmd`;
+
 		$p4Cmd = strip($p4Cmd);
 		if( `match "currently opened for edit$" $p4Cmd` != "" ) return 1;
 		if( `match "opened for edit$" $p4Cmd` != "" ) return 1;
@@ -200,12 +217,32 @@ global proc p4() {
 		}
 
 
-	//forces a sync on a given file
-	global proc p4_sync( string $file ) {
-		$file = `zooScrubPath $file`;
-		string $nativeFile = `zooReplaceChars $file "/" "\\"`;
-		string $p4Cmd = `system( "p4 sync -f \""+ $nativeFile +"\"" )`;
-		print $p4Cmd;
+	//syncs to a given revision number for all files - if the number is zero or negative,
+	//then its relative to the head revision.  so p4_syncRev {} -2; does a sync to the
+	//second last revision for all files, and 0 is the head revision
+	global proc p4_sync( string $files[], int $rev ) {
+		string $fileStr = "";
+		int $num = `size $files`;
+
+		for( $n=0; $n<$num; $n++ ) {
+			$files[$n] = `zooResolvePath $files[$n]`;
+			$files[$n] = `zooReplaceChars $files[$n] "/" "\\"`;
+			if( $rev==0 ) $fileStr += "\""+ $files[$n] +"\" ";
+			else if( $rev<0 ) {
+				string $dataNames[] = {};
+				string $data[] = `p4_fstat $files[$n] $dataNames {} 1`;
+				int $headIdx = `zooGetIdxOfElement_str $dataNames headRev`;
+
+				if( $headIdx != -1 ) $rev = ((int)$dataNames[$headIdx]) + $rev;
+				if( $rev<=0 ) $rev = 1;  //can't have a negative or zero revision, so crop to 1
+				$fileStr += "\""+ $files[$n] +"#"+ $rev +"\" ";
+				}
+			else $fileStr += "\""+ $files[$n] +"#"+ $rev +"\" ";
+			}
+
+		string $p4Cmd = "p4 sync "+ $fileStr;
+		print( $p4Cmd +"\n" );
+		print `system $p4Cmd`;
 		}
 
 
@@ -213,7 +250,7 @@ global proc p4() {
 	//data, and publishing the changelist to perforce - returns the success state
 	global proc int p4_submit( string $files[], string $comment ) {
 		int $num = `size $files`;
-		for( $n=0; $n<$num; $n++ ) $files[$n] = `zooScrubPath $files[$n]`;
+		for( $n=0; $n<$num; $n++ ) $files[$n] = `zooResolvePath $files[$n]`;
 
 		int $oneIsAlreadyOpen = 0;
 		for( $n=0; $n<`size $files`; $n++ ) {
@@ -232,7 +269,7 @@ global proc p4() {
 		string $user = `getenv USER`;
 		string $p4User = `p4User`;
 		string $computer = `getenv COMPUTERNAME`;
-		string $tempPath = zooScrubPath(`getenv TEMP`+"/");
+		string $tempPath = zooResolvePath(`getenv TEMP`+"/");
 		string $tempFile = $tempPath +"p4_changelist_from_maya.txt";
 		string $tempDirNative = `zooReplaceChars $tempFile "/" "\\"`;
 		string $changelist = "Change:\tnew\n\nClient:\t"+ $computer +"\n\nUser:\t"+ $p4User +"\n\nStatus:\tnew\n\nDescription:\n\t"+ $comment +"\n\nFiles:";
@@ -256,12 +293,19 @@ global proc p4() {
 		}
 
 
-	global proc int p4_revert( string $file ) {
-		$file = `zooScrubPath $file`;
-		string $nativeFile = `zooReplaceChars $file "/" "\\"`;
-		string $p4Cmd = `system( "p4 revert \""+ $nativeFile +"\"" )`;
+	global proc int p4_revert( string $files[] ) {
+		string $fileStr = "";
+		int $num = `size $files`;
 
-		print $p4Cmd;
+		for( $n=0; $n<$num; $n++ ) {
+			$files[$n] = `zooResolvePath $files[$n]`;
+			$files[$n] = `zooReplaceChars $files[$n] "/" "\\"`;
+			$fileStr += "\""+ $files[$n] +"\" ";
+			}
+
+		string $p4Cmd = "p4 revert "+ $fileStr;
+		print( $p4Cmd +"\n" );
+		print `system $p4Cmd`;
 
 		return 1;
 		}
@@ -281,13 +325,13 @@ global proc p4() {
 	//returns the p4 stats for the file in question.  the two arrays get filled with
 	//the field names, and the corresponding data for those fields, and the data gets
 	//returned - for convenience
-	global proc string[] p4_fstat( string $file, string $dataNames[], string $data[], int $zooScrubPath ) {
+	global proc string[] p4_fstat( string $file, string $dataNames[], string $data[], int $resolvePath ) {
 		clear $dataNames;
 		clear $data;
 
 		string $nativeFile = $file;
-		if( $zooScrubPath ) {
-			$file = `zooScrubPath $file`;
+		if( $resolvePath ) {
+			$file = `zooResolvePath $file`;
 			$nativeFile = `zooReplaceChars $file "/" "\\"`;
 			}
 		string $p4Cmd = `system( "p4 fstat \""+ $nativeFile +"\"" )`;

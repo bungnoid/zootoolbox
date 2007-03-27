@@ -142,8 +142,7 @@ global proc zooObjMenuEditCmd( string $obj, int $cmdNum ){
 //------
 //returns the attribute name of the command string created
 //------
-global proc zooObjMenuSaveCmd( string $obj, string $cmdNum )
-{
+global proc zooObjMenuSaveCmd( string $obj, string $cmdNum ) {
 	// Check if the command field is enabled before saving what's in the text box - this way,
 	// the populated text if the "preview" box is checked
 	// Note that we don't check the state of the ACTUAL checkbox, because we wish to call this function from within the
@@ -151,18 +150,13 @@ global proc zooObjMenuSaveCmd( string $obj, string $cmdNum )
 	// we call zooObjMenuSaveCmd before changing the enabled state of zooOMCmdText, we avoid this problem...
 	string $cmdAttr = "zooCmd"+ $cmdNum;
 	string $cmdName = `textField -q -tx zooOMTextCmdName`;
-	string $cmdStr;
-	if(`scrollField -q -ed zooOMCmdText`)
-	{
-		$cmdStr = `scrollField -q -tx zooOMCmdText`;
-	}
-	else
-	{
-		 $cmdStr = zooGetObjMenuCmdStr($obj, $cmdNum);
-	}
+	string $cmdStr = "";
+
+	if(`scrollField -q -ed zooOMCmdText`) $cmdStr = `scrollField -q -tx zooOMCmdText`;
+	else $cmdStr = zooGetObjMenuCmdStr($obj, $cmdNum);
 
 	setAttr -type "string" ( $obj +"."+ $cmdAttr ) ( $cmdName +"^"+ $cmdStr );
-}
+	}
 
 
 //------
@@ -180,11 +174,9 @@ global proc zooObjMenuNewCmd( string $obj ){
 //------
 global proc string zooObjMenuInfo( string $function ) {
 	string $creationDate = "15 May 2004";
-	string $lastRevision = "22 August 2004";
-	string $currentVersion = "1.5.0";
+	string $currentVersion = "1.07.04";
 
 	if( $function == "created" ) $info = $creationDate;
-	if( $function == "modified" ) $info = $lastRevision;
 	if( $function == "version" ) $info = $currentVersion;
 	return $info;
 	}

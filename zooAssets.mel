@@ -1165,8 +1165,8 @@ global proc zooBuildAssetMenu( string $parent, string $slot ) {
 
 		if( $isEdit != -1 ) {
 			menuItem -en $isEdit -l "Submit" -c( "p4submitUI {\""+ $exportFile +"\"};" );
-			menuItem -l "Open for Edit" -cb $isEdit -c( "p4_edit \""+ $exportFile +"\";" );
-			menuItem -en $isEdit -l "Revert" -c( "p4_revert \""+ $exportFile +"\";" );
+			menuItem -l "Open for Edit" -cb $isEdit -c( "p4_edit {\""+ $exportFile +"\"};" );
+			menuItem -en $isEdit -l "Revert" -c( "p4_revert {\""+ $exportFile +"\"};" );
 			}
 		else menuItem -l "Add to Perforce" -c( "" );
 		menuItem -d 1;
