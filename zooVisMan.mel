@@ -1,0 +1,199 @@
+zooVisManUtils;
+
+
+global proc zooVisMan() {
+	string $windowName = "zooVisManWin";
+	zooVisInitialSetup;
+
+	if( `window -ex $windowName` ) deleteUI $windowName;
+	window -t "vis set manager" -wh 254 375 $windowName;
+		scriptJob -p $windowName -e "SceneOpened" "zooVisManPopuplateSets; zooVisMan_populateRigs; zooVisManSetActiveSets {}; zooVisManSetVisState 0;";
+		string $form = `formLayout -docTag 0 zooVisManListForm`;
+			string $state = `checkBox -v(zooVisManGetISOState()) -al "left" -l "iso ON" -cc "zooVisManSetVisState #1;" zooVisMan_UICheckBoxISOState`;
+			string $marks = `button -l "bookmarks"`;
+				popupMenu -p $marks -b 1 -aob 1 -pmc "zooVisManBuildBookmarksMenu zooVisManMarksMenu 0;" zooVisManMarksMenu;
+				popupMenu -p $marks -sh 1 -b 1 -aob 1 -pmc "zooVisManBuildBookmarksMenu zooVisManMarksMenuAdd 1;" zooVisManMarksMenuAdd;
+				textScrollList -ams true -dcc( "zooVisManToggleCollapseState;" ) -nr 18 -sc "zooVisManSetActiveSets(zooVisManCleanNameFromUIs(`textScrollList -q -si zooVisManList`));" zooVisManList;
+					popupMenu -p zooVisManList -b 3 -pmc( "zooVisManSetMenu zooVisManRMBMenu;" ) zooVisManRMBMenu;
+
+	formLayout -e
+		-af $state "top" 3
+		-af $state "left" 3
+		-an $state "right"
+		-an $state "bottom"
+
+		-af $marks "top" 0
+		-ac $marks "left" 5 $state
+		-ap $marks "right" 0 60
+		-an $marks "bottom"
+
+		-ac zooVisManList "top" 0 $marks
+		-af zooVisManList "left" 0
+		-ap zooVisManList "right" 0 100
+		-af zooVisManList "bottom" 0
+		$form;
+
+	//populate the UI
+	zooVisManPopuplateSets;
+	zooVisManSelectActiveISO;
+	showWindow $windowName;
+	}
+
+
+global proc zooVisManSetMenu( string $parent ) {
+	string $items[] = `textScrollList -q -si zooVisManList`;
+	int $enable = `size $items`;
+
+	for( $n=0; $n<$enable; $n++ ) $items[$n] = `zooVisManCleanNameFromUI $items[$n]`;
+	menu -e -dai $parent;
+	setParent -m $parent;
+
+	menuItem -en $enable -l "collapse toggle" -c "zooVisManToggleCollapseState";
+	menuItem -d 1;
+	menuItem -en $enable -l "+ selection to vis set" -c "zooVisManAddToSet";
+	menuItem -en $enable -l "- selection from vis set" -c "zooVisManRemFromSet";
+	menuItem -en $enable -bld 0  -l "select items in vis set" -c "zooVisManSelectFrom";
+	menuItem -d 1;
+	menuItem -l "new vis set" -c "zooVisManAddAsChild";
+	menuItem -en $enable -l "remove vis set" -c "zooVisManRemoveSets";
+	}
+
+
+global proc zooVisManPopuplateSets() {
+	string $sets[] = `zooVisManListAllSets`;
+	int $num = `size $sets`;
+
+	textScrollList -e -ra zooVisManList;
+	for( $n=0; $n<$num; $n++ ) {
+		string $name = "[-] ";
+		string $childSets[] = `zooVisManSetRelatives $sets[$n] 0 0`;
+		int $depth = size(`zooVisManSetRelatives $sets[$n] 1 1`);
+
+		if( !`size $childSets` ) $name = "    ";
+		if( `objExists ( $sets[$n] +".isoCollapse" )` ) {
+			//if this set is collapsed we need to remove all its children from the list and change the name prefix
+			$name = "[+]";
+			$sets = `zooSubtractArray_str $sets $childSets`;
+			}
+
+		for( $i=0; $i<$depth; $i++ ) $name += "    ";
+		$name += $sets[$n];
+		textScrollList -e -a $name zooVisManList;
+		}
+	}
+
+
+global proc zooVisManToggleCollapseState() {
+	string $setList[] = `textScrollList -q -si zooVisManList`;
+	string $sets[] = {};
+
+	//clean names
+	for( $n=0; $n<`size $setList`; $n++ ) $sets[$n] = `zooVisManCleanNameFromUI $setList[$n]`;
+	int $state = !`zooVisManQueryCollapseState $sets[0]`;
+
+	for( $s in $sets ) zooVisManSetCollapseState $s $state;
+	zooVisManPopuplateSets;
+	}
+
+
+global proc int zooVisManQueryCollapseState( string $set ) {
+	//assume the state is false - if the isoCollapse attribute exists, then the state is true
+	int $state = 0;
+	if( `objExists ( $set +".isoCollapse" )`) $state = 1;
+	return $state;
+	}
+
+
+//only collapse the set if it has child sets
+global proc zooVisManSetCollapseState( string $set, int $state ) {
+	string $childSets[] = `zooVisManSetRelatives $set 0 0`;
+	if( $state && `size $childSets` ) addAttr -ln isoCollapse -at bool $set;
+	else if( `objExists ( $set +".isoCollapse" )`) deleteAttr ( $set +".isoCollapse" );
+	}
+
+
+//this procedure is responsible for taking info from the UI and user, building the set, and dealing with the UI
+global proc zooVisManAddAsChild() {
+	// ----------
+	// get name from user
+	// ----------
+	string $parent = zooVisManCleanNameFromUI(zooGetElement_str(0,`textScrollList -q -si zooVisManList`));
+	string $ret = `promptDialog -p zooVisManWin -title "new isoSet" -message "set name" -button "OK" -button "Cancel" -defaultButton "OK" -cancelButton "Cancel" -dismissString "Cancel"`;
+	string $text = `promptDialog -query -text`;
+	if ($ret=="Cancel") return;
+	if (size($text)==0) return;
+
+	string $newSet = `zooVisManCreateSet $parent $text (ls("-sl"))`;
+
+	// clear selection
+	select -cl;
+
+	// refresh window
+	zooVisManPopuplateSets;
+	}
+
+
+//simply creates a new set and parents it accordingly
+global proc string zooVisManCreateSet( string $parent, string $name, string $objs[] ) {
+	string $master = `zooVisManGetMasterSet 1`;
+	if( !`objExists $parent` ) $parent = $master;
+
+	//clean up name given by user and create the set
+	$name = `zooReplaceChars $name "" "_"`;
+	if( `match "_iso$" $name` == "" ) $name += "_iso";
+	$name = `sets -em -n $name`;
+	sets -add $name $objs;
+
+	//parent under selected list item
+	sets -add $parent $name;
+	return $name;
+	}
+
+
+global proc zooVisManRemoveSets() {
+	string $sets[] = `textScrollList -q -si zooVisManList`;
+	for( $set in $sets ) zooVisManDeleteSet $set;
+	zooVisManPopuplateSets;
+	}
+
+
+global proc zooVisManAddToSet() {
+	// get selection
+	string $set[]=`textScrollList -q -si zooVisManList`;
+
+	// add to set
+	sets -add (zooVisManCleanNameFromUI($set[0])) `ls -sl`;
+
+	// refresh selection connection
+	zooVisManManageObjects;
+	}
+
+
+global proc zooVisManRemFromSet() {
+	string $set[]=`textScrollList -q -si zooVisManList`;
+
+	// subtract from set
+	sets -rm (zooVisManCleanNameFromUI($set[0])) `ls -sl`;
+
+	// refresh selection connection
+	zooVisManManageObjects;
+	}
+
+
+global proc zooVisManSelectFrom() {
+	string $set[] = `textScrollList -q -si zooVisManList`;
+	string $items[] = `sets -q -no $set`;
+
+	select -r $items;
+	}
+
+
+global proc zooVisManDeleteSet(string $set) {
+	if( !`objExists $set` ) return;
+	string $subSets[] = `zooVisManSetRelatives $set 0 1`;
+	if( `size $subSets` ) delete (zooVisManCleanNameFromUI($set)) $subSets;
+	else delete (zooVisManCleanNameFromUI($set));
+	}
+
+
+//zoo.end
