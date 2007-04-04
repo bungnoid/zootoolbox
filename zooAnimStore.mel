@@ -297,7 +297,10 @@ global proc zooAnimStoreWindowFunctions( string $function ) {
 
 			//select the previously selected store
 			if( $selStore != "" ) textScrollList -e -si $selStore $storeUI;
-			else if( `size $stores` ) textScrollList -e -si $stores[0] $storeUI;
+			else if( `size $stores` ) {
+				if( `optionVar -ex zooAnimStoreSelectedStore` ) textScrollList -e -si `optionVar -q zooAnimStoreSelectedStore` $storeUI;
+				else textScrollList -e -si $stores[0] $storeUI;
+				}
 			break;
 		case "-updateSpacing":
 			int $spacing = `optionVar -ex zooAnimStoreSpacing`? `optionVar -q zooAnimStoreSpacing`: 0;
@@ -309,6 +312,7 @@ global proc zooAnimStoreWindowFunctions( string $function ) {
 			break;
 		//deals with refreshing the clip list, both global and local
 		case "-updateClips":
+			if( $selStore != "" ) optionVar -sv zooAnimStoreSelectedStore $selStore;
 			zooAnimStoreWindowFunctions -updateClipsL;
 			zooAnimStoreWindowFunctions -updateClipsG;
 			break;
