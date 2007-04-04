@@ -265,7 +265,7 @@ global proc string[] zoolsqss() {
 //recursively queries set members.  see the zooSetRelatives comments for details
 //on the args taken
 global proc string[] zooQuerySet( string $set, int $parents, int $recursive ) {
-	string $sets[] = `zooSetRelatives $set $parents $recursive`;
+	string $sets[] = `zooSetRelatives $set 1 $parents $recursive`;
 	string $objs[] = {};
 
 	for( $set in $sets ) {
@@ -280,7 +280,7 @@ global proc string[] zooQuerySet( string $set, int $parents, int $recursive ) {
 //like listRelatives for sets.  the parents arg tells whether you want to
 //query child sets or parent sets.  the recursive arg simply tells the script
 //whether to perform a recursive listing of members
-global proc string[] zooSetRelatives( string $set, int $parents, int $recursive ) {
+global proc string[] zooSetRelatives( string $set, int $includeSelf, int $parents, int $recursive ) {
 	string $sets[] = {$set};
 	int $n = 0;
 
@@ -291,8 +291,10 @@ global proc string[] zooSetRelatives( string $set, int $parents, int $recursive 
 		$n++;
 		if( !$recursive ) break;
 		else if( !`size $nextSets` ) break;
-		else if( $n > 50 ) break;
+		else if( $n > 250 ) break;  //just in case
 		}
+
+	if( !$includeSelf ) $sets = `zooIndexCrop_str $sets "1:"`;
 
 	return $sets;
 	}

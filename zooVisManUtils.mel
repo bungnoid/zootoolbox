@@ -1,8 +1,6 @@
 zooArrays_str;
 zooFlags;
-zooGreaseMonkeyUtils;
-zooPresetManager;
-zooTriggeredUtils;
+zooRegister;
 zooUtils;
 
 
@@ -18,7 +16,7 @@ global proc zooVisManUtils() {
 
 
 global proc zooVisInitialSetup() {
-	if( !`selectionConnection -ex ISO` ) selectionConnection -lst ISO;
+	if( !`selectionConnection -ex zooVisManCurrent` ) selectionConnection -lst zooVisManCurrent;
 	zooVisManGetMasterSet 0;
 	}
 
@@ -28,23 +26,23 @@ global proc string[] zooVisManListAllSets() {
 	string $master = `zooVisManGetMasterSet 0`;
 
 	if( !`objExists $master` ) return {};
-	string $allSets[] = `zooVisManSetRelatives $master 0 1`;
+	string $allSets[] = `zooSetRelatives $master 0 0 1`;
 
 	return $allSets;
 	}
 
 
-//array is altered AND returned - simply so its syntatically the same as the zooVisManCleanNameFromUI procedure
-global proc string[] zooVisManCleanNameFromUIs( string $names[] ) {
-	for( $n=0; $n<`size $names`; $n++ ) $names[$n] = `zooVisManCleanNameFromUI $names[$n]`;
-	return $names;
-	}
+global proc string[] zooVisManListHeirarchically() {
+	string $master = `zooVisManGetMasterSet 0`;
 
+	if( !`objExists $master` ) return {};
+	string $children[] = `zooSetRelatives $master 0 0 0`;
+	for( $n=0; $n<`size $children`; $n++ ) {
+		string $curChildren[] = `zooSetRelatives $children[$n] 0 0 0`;
+		$children = `zooAddArrayAt_str $children $curChildren ($n+1)`;
+		}
 
-//strips all the crap off a UI based textScrollList
-global proc string zooVisManCleanNameFromUI( string $name ) {
-	$name = `zooReplaceChars $name "[-+]" ""`;
-	return `match "[^ ]+$" $name`;
+	return $children;
 	}
 
 
@@ -64,72 +62,7 @@ global proc string zooVisManCleanNameFromUI( string $name ) {
 			for( $obj in $objs ) selectionConnection -e -s $obj zooVisobjects;
 			}
 
-		selectionConnection -e -addTo zooVisobjects ISO;
-		}
-
-
-//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-//STATE MANAGEMENT
-//these state management procs are used to set and query the state of different
-//categories, and to query what members of a given category are active.  So to
-//query the list of ISO sets currently visible, one uses the zooVisManGetActiveSets
-//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-	global proc zooVisManSetActiveSets( string $sets[] ) {
-		if( !`selectionConnection -ex ActiveISOsets` ) selectionConnection ActiveISOsets;
-
-		int $state = `selectionConnection -q -lock ActiveISOsets`;
-		selectionConnection -e -lock 0 ActiveISOsets;
-		selectionConnection -e -clear ActiveISOsets;
-
-		for( $set in $sets ) if( `objExists $set` ) selectionConnection -e -s $set ActiveISOsets;
-		selectionConnection -e -lock $state ActiveISOsets;
-		zooVisManManageObjects;
-		}
-
-
-	global proc string[] zooVisManGetActiveSets() {
-		if( !`selectionConnection -ex ActiveISOsets` ) return {};
-		return `selectionConnection -q -obj ActiveISOsets`;
-		}
-
-
-	global proc string[] zooVisManGetSetsToDisplay() {
-		string $active[] = `zooVisManGetActiveSets`;
-		string $tree[] = {};
-		int $num = `size $active`;
-
-		for( $n=0; $n<$num; $n++ ) {
-			string $childSets[] = `zooSetRelatives $active[$n] 0 1`;
-			$tree = `zooAddArray_str $tree $childSets`;
-			}
-
-		$tree = `stringArrayRemoveDuplicates $tree`;
-
-		return $tree;
-		}
-
-
-	global proc zooVisManSetVisState( int $state ) {
-		string $visPanels[] = `getPanel -vis`;
-		string $modelPanels[] = {};
-		string $panel = `getPanel -wf`;
-		float $time = `timerX`;
-		int $showState = 0;
-
-		if( `getPanel -to $panel` == "modelPanel" ) $showState = `modelEditor -q -nurbsCurves $panel`;
-		for( $p in $visPanels ) if( `getPanel -to $p` == "modelPanel" ) $modelPanels[( `size $modelPanels` )] = $p;
-		if( !`selectionConnection -ex ISO` ) zooVisInitialSetup;
-		if( $state ) {
-			zooVisManManageObjects;
-			}
-		for( $panel in $modelPanels ) modelEditor -e -vs $state -mlc ISO $panel;
-
-		print( "time to ISO selected:  "+ `timerX -startTime $time` +" seconds\n" );
-		}
-
-
-	global proc int zooVisManGetISOState() {
-		return `modelEditor -q -vs (getPanel("-wf"))`;
+		selectionConnection -e -addTo zooVisobjects zooVisManCurrent;
 		}
 
 
@@ -181,7 +114,7 @@ global proc string zooVisManCleanNameFromUI( string $name ) {
 
 		if( $add ) $setsInMark = `zooAddArray_str (zooVisManGetActiveSets()) $setsInMark`;
 		zooVisManSetActiveSets $setsInMark;
-		zooVisManSelectActiveISO;
+		zooVisManSelectActiveSets;
 		zooVisManManageObjects;
 		}
 
@@ -200,48 +133,167 @@ global proc string zooVisManCleanNameFromUI( string $name ) {
 		}
 
 
-//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-//UI UPDATING - these are kinda UI functions, kinda utils functions.  They're bridging functions that are required
-//to sync the UI to the current state, so they're provided here in the utils script so the RMB menu script can access them
-//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-	global proc zooVisManSelectActiveISO() {
-		if( !`window -ex zooVisManWin` ) return;
-		textScrollList -e -da zooVisManList;
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+//STATE MANAGEMENT
+//these state management procs are used to set and query the state of different
+//categories, and to query what members of a given category are active.  So to
+//query the list of ISO sets currently visible, one uses the zooVisManGetActiveSets
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+	global proc zooVisManSetActiveSets( string $sets[] ) {
+		if( !`selectionConnection -ex zooVisManActiveISOsets` ) selectionConnection zooVisManActiveISOsets;
 
-		string $displayNames[] = `textScrollList -q -ai zooVisManList`;
-		string $activeISOs[] = `zooVisManGetActiveSets`;
-		string $toSelect[] = {};
+		int $state = `selectionConnection -q -lock zooVisManActiveISOsets`;
+		selectionConnection -e -lock 0 zooVisManActiveISOsets;
+		selectionConnection -e -clear zooVisManActiveISOsets;
 
-		for( $iso in $activeISOs ) for( $name in $displayNames ) if( `match ( $iso +"$" ) $name` != "" ) {
-			$toSelect[( `size $toSelect` )] = $name;
-			break;
-			}
-		for( $item in $toSelect ) textScrollList -e -si $item zooVisManList;
+		for( $set in $sets ) if( `objExists $set` ) selectionConnection -e -s $set zooVisManActiveISOsets;
+		selectionConnection -e -lock $state zooVisManActiveISOsets;
+		zooVisManManageObjects;
 		}
 
 
-	global proc string[] zooVisManSetRelatives( string $set, int $parents, int $recurse ) {
-		string $sets[] = `zooSetRelatives $set $parents $recurse`;
-		return `zooIndexCrop_str $sets "1:"`;
+	global proc string[] zooVisManGetActiveSets() {
+		if( !`selectionConnection -ex zooVisManActiveISOsets` ) return {};
+		return `selectionConnection -q -obj zooVisManActiveISOsets`;
 		}
 
 
-	global proc string zooVisManGetMasterSet( int $forceCreate ) {
-		//
-		string $reg = `zooGetRegister zoo 1`;
-		string $registered[] = {};
+	global proc string[] zooVisManGetSetsToDisplay() {
+		string $active[] = `zooVisManGetActiveSets`;
+		string $tree[] = {};
+		int $num = `size $active`;
 
-		zooListRegistered $reg zooVisMan {} $registered;
-		if( `objExists $registered[0]` ) return $registered[0];
-		else if( `objExists isoSets` ) return "isoSets";
-		else if( $forceCreate ) {
-			string $master = `sets -em -name "zooVisMan"`;
-			zooRegisterObj $reg zooVisMan $master 1 1;
-			return $master;
+		for( $n=0; $n<$num; $n++ ) {
+			string $childSets[] = `zooSetRelatives $active[$n] 1 0 1`;
+			$tree = `zooAddArray_str $tree $childSets`;
 			}
 
-		return "";
+		$tree = `stringArrayRemoveDuplicates $tree`;
+
+		return $tree;
 		}
+
+
+	global proc zooVisManSetVisState( int $state ) {
+		string $visPanels[] = `getPanel -vis`;
+		string $modelPanels[] = {};
+		string $panel = `getPanel -wf`;
+		float $time = `timerX`;
+		int $showState = 0;
+
+		if( `getPanel -to $panel` == "modelPanel" ) $showState = `modelEditor -q -nurbsCurves $panel`;
+		for( $p in $visPanels ) if( `getPanel -to $p` == "modelPanel" ) $modelPanels[( `size $modelPanels` )] = $p;
+		if( !`selectionConnection -ex zooVisManCurrent` ) zooVisInitialSetup;
+		if( $state ) zooVisManManageObjects;
+		for( $panel in $modelPanels ) modelEditor -e -vs $state -mlc zooVisManCurrent $panel;
+
+		print( "time to view selected:  "+ `timerX -startTime $time` +" seconds\n" );
+		}
+
+
+	global proc int zooVisManGetState() {
+		string $cur = `getPanel -wf`;
+		string $curType = `getPanel -to $cur`;
+		string $likelyPanel = $cur;
+
+		if( $curType == "modelPanel" ) $likelyPanel = $cur;
+		string $visPanels[] = `getPanel -vis`;
+		for( $p in $visPanels ) if( `getPanel -to $p` == "modelPanel" ) $likelyPanel = $p;
+
+		$curType = `getPanel -to $likelyPanel`;
+		if( $curType == "modelPanel" ) return `modelEditor -q -vs $likelyPanel`;
+
+		return 0;
+		}
+
+
+	global proc int zooVisManGetCollapseState( string $set ) {
+		//assume the state is false - if the isoCollapse attribute exists, then the state is true
+		int $state = 0;
+		if( `objExists ( $set +".isoCollapse" )`) $state = 1;
+		return $state;
+		}
+
+
+	//only collapse the set if it has child sets
+	global proc zooVisManSetCollapseState( string $set, int $state ) {
+		string $childSets[] = `zooSetRelatives $set 0 0 0`;
+		if( $state && `size $childSets` ) addAttr -ln isoCollapse -at bool $set;
+		else if( `objExists ( $set +".isoCollapse" )`) deleteAttr ( $set +".isoCollapse" );
+		}
+
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+//SET MANAGEMENT
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+	//simply creates a new set and parents it accordingly
+	global proc string zooVisManCreateSet( string $parent, string $name, string $objs[] ) {
+		string $master = `zooVisManGetMasterSet 1`;
+		if( !`objExists $parent` ) $parent = $master;
+
+		//clean up name given by user and create the set
+		$name = `zooReplaceChars $name "" "_"`;
+		if( `match "_iso$" $name` == "" ) $name += "_iso";
+		$name = `sets -em -n $name`;
+		sets -add $name $objs;
+
+		//parent under selected list item
+		sets -add $parent $name;
+		return $name;
+		}
+
+
+	global proc zooVisManSetParent( string $sets[], string $parent ) {
+		for( $set in $sets ) if( `objExists $set` ) {
+			string $curPar[] = `zooSetRelatives $set 0 1 0`;
+			if( `objExists $curPar[0]` ) sets -rm $curPar[0] $set;
+			sets -add $parent $set;
+			}
+		}
+
+
+	global proc zooVisManAddToSet( string $sets[] ) {
+		for( $set in $sets ) if( `objExists $set` ) sets -add (zooVisManCleanNameFromUI($set)) `ls -sl`;
+		zooVisManManageObjects;
+		}
+
+
+	global proc zooVisManRemFromSet( string $sets[] ) {
+		for( $set in $sets ) if( `objExists $set` ) sets -rm (zooVisManCleanNameFromUI($set)) `ls -sl`;
+		zooVisManManageObjects;
+		}
+
+
+	global proc zooVisManSelectFrom( string $sets[] ) {
+		string $items[] = `sets -q $sets`;
+		select -r $items;
+		}
+
+
+	global proc zooVisManDeleteSet( string $set ) {
+		if( !`objExists $set` ) return;
+
+		string $subSets[] = `zooSetRelatives $set 0 0 1`;
+		if( `size $subSets` ) delete $set $subSets;
+		else delete $set;
+		}
+
+
+global proc string zooVisManGetMasterSet( int $forceCreate ) {
+	string $reg = `zooGetRegister zoo 1`;
+	string $registered[] = {};
+
+	zooListRegistered $reg zooVisMan {} $registered;
+	if( `objExists $registered[0]` ) return $registered[0];
+	else if( `objExists isoSets` ) return "isoSets";
+	else if( $forceCreate ) {
+		string $master = `sets -em -name "zooVisMan"`;
+		zooRegisterObj $reg zooVisMan $master 1 1;
+		return $master;
+		}
+
+	return "";
+	}
 
 
 //zoo.end
