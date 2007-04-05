@@ -247,6 +247,7 @@ global proc string[] zooVisManListHeirarchically() {
 		for( $set in $sets ) if( `objExists $set` ) {
 			string $curPar[] = `zooSetRelatives $set 0 1 0`;
 			if( `objExists $curPar[0]` ) sets -rm $curPar[0] $set;
+			if( !`objExists $parent` ) $parent = `zooVisManGetMasterSet 1`;
 			sets -add $parent $set;
 			}
 		}

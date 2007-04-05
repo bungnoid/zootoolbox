@@ -45,7 +45,7 @@ global proc zooBuildTriggeredPresetMenu( string $parent ) {
 	$locale = "local";
 	$presets = `zooListPresets $locale zooTriggered "trigger"`;
 	for( $n=0; $n<`size $presets`; $n++ ) $presets[$n] = `match "^[^.]+" $presets[$n]`;
-	for( $p in $presets ) menuItem -l $p -c( "zooImportTriggers \""+ $p +"\" \"-locale local -clear 1 -guessTriggers 1 -guessConnects 1\" {};" );
+	for( $p in $presets ) menuItem -l $p -c( "zooImportTriggers \""+ $p +"\" \"-locale local -clear 1 -guessTriggers 1 -guessConnects 1\" {}; zooTriggeredWindowFunctions -updateObjects;" );
 
 	menuItem -d 1;
 	menuItem -l "manage presets" -c( "zooPresetManagerWin \""+ $locale +"\" zooTriggered trigger;" );
@@ -170,7 +170,6 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			scrollField -e -ed 1 -tx "" zooTriggeredTextCustom;
 			zooTriggeredWindowFunctions -updateObjects;
 			break;
-
 		case "-updateFrame":
 			if( $cmdViewMode ) formLayout -e -ap zooTriggeredTextCustom "right" 0 70 -ap zooTriggeredCheckPreview "right" 0 70 zooTrigEditCmdForm;
 			else formLayout -e -ap zooTriggeredTextCustom "right" 0 100 -ap zooTriggeredCheckPreview "right" 0 100 zooTrigEditCmdForm;
@@ -190,7 +189,6 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			if( $cmdViewMode ) $lbl = "zooObjMenu objects";
 			text -e -l $lbl zooTrigObjListLbl;
 			break;
-
 		case "-updateObjects":
 			//update the list of zooTriggered! objects
 			string $objList[] = {};
@@ -200,14 +198,12 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			textScrollList -e -ra zooTriggeredScrollObjects;
 			for( $a in $objList ) textScrollList -e -a $a zooTriggeredScrollObjects;
 			break;
-
 		case "-updateConnects":
 			//update target list
 			string $targets[] = `zooGetConnects $trigger`;
 			textScrollList -e -ra zooTriggeredScrollTargets;
 			for( $a in $targets ) textScrollList -e -a $a zooTriggeredScrollTargets;
 			break;
-
 		case "-updateCmd":
 			//updates the actual command string
 			string $cmdStr = "";
@@ -225,7 +221,6 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			if( $preview ) $cmdStr = `zooPopulateCmdStr $trigger $cmdStr`;
 			scrollField -e -ed(!$preview) -tx $cmdStr zooTriggeredTextCustom;
 			break;
-
 		case "-updateCmdList":
 			//updates the list of menu commands
 			if( !$cmdViewMode ) return;
@@ -243,14 +238,12 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			textField -e -en 0 -tx "" zooTriggeredTextCmdName;
 			scrollField -e -tx "" zooTriggeredTextCustom;
 			break;
-
 		case "-updateTrigger":
 			textScrollList -e -ra zooTriggeredScrollTargets;
 			zooTriggeredWindowFunctions -updateConnects;
 			zooTriggeredWindowFunctions -updateCmdList;
 			zooTriggeredWindowFunctions -updateCmd;
 			break;
-
 		case "-switchToTriggered":
 			optionVar -iv zooTrigViewMode 0;
 			menuItem -e -cb 1 zooTrigViewMode0;
@@ -258,7 +251,6 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			zooTriggeredWindowFunctions -updateFrame;
 			zooTriggeredWindowFunctions -clear;
 			break;
-
 		case "-switchToObjMenu":
 			optionVar -iv zooTrigViewMode 1;
 			menuItem -e -cb 0 zooTrigViewMode0;
@@ -266,13 +258,11 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			zooTriggeredWindowFunctions -updateFrame;
 			zooTriggeredWindowFunctions -clear;
 			break;
-
 		case "-loadSelected":
 			string $selObjs[] = `ls -sl`;
 			textScrollList -e -si $selObjs[0] zooTriggeredScrollObjects;
 			zooTriggeredWindowFunctions -updateTrigger;
 			break;
-
 		case "-highlightSelConnects":
 			string $selObjs[] = `ls -sl`;
 			string $connects[] = `zooGetConnects $trigger`;
@@ -281,23 +271,19 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			textScrollList -e -da zooTriggeredScrollTargets;
 			for( $obj in $selConnects ) textScrollList -e -si $obj zooTriggeredScrollTargets;
 			break;
-
 		case "-highlightUsedConnects":
 			string $usedObjs[] = `zooGetConnectsUsedInCmd $trigger (zooGetObjMenuCmdStr($trigger,$slot))`;
 
 			textScrollList -e -da zooTriggeredScrollTargets;
 			for( $obj in $usedObjs ) textScrollList -e -si $obj zooTriggeredScrollTargets;
 			break;
-
 		case "-selectTrigger":
 			select `textScrollList -q -si zooTriggeredScrollObjects`;
 			break;
-
 		case "-printSetAttrCmd":
 			string $connects[] = `textScrollList -q -si zooTriggeredScrollTargets`;
 			print `zooWriteSetAttrCmd $trigger $connects`;
 			break;
-
 		case "-applySetAttrCmdAll":
 			$all = 1;
 		case "-applySetAttrCmd":
@@ -313,14 +299,12 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 				}
 			zooTriggeredWindowFunctions -updateCmd;
 			break;
-
 		case "-addCmd":
 			string $sel[] = `ls -sl`;
 			if( $cmdViewMode ) for( $a in $sel ) zooObjMenuAddCmd $a;
 			else for( $a in $sel ) zooTrigSetCmd $a "//blank";
 			zooTriggeredWindowFunctions -updateObjects;
 			break;
-
 		case "-removeCmd":
 			string $triggers[] = `textScrollList -q -si zooTriggeredScrollObjects`;
 			if( $cmdViewMode ) for( $a in $triggers ) zooRemoveAllMenus $a;
@@ -328,7 +312,6 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			zooTriggeredWindowFunctions -updateObjects;
 			zooTriggeredWindowFunctions -updateCmd;
 			break;
-
 		case "-addConnect":
 			if( !`objExists $trigger` ) break;
 			string $sel[] = `ls -sl`;
@@ -336,7 +319,6 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			for( $a in $sel ) zooAddConnect $trigger $a;
 			zooTriggeredWindowFunctions -updateConnects;
 			break;
-
 		case "-addCustomConnect":
 			if( !`objExists $trigger` ) break;
 			string $ans = `promptDialog -t "add connect" -m "enter slot number:\n(if the slot is already taken, this will\nreplace the object connected on that slot)" -b "OK" -b "Cancel" -db "Cancel"`;
@@ -350,7 +332,6 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 				zooTriggeredWindowFunctions -updateConnects;
 				}
 			break;
-
 		case "-replaceConnect":
 			if( !`objExists $trigger` ) break;
 			string $sel[] = `ls -sl`;
@@ -360,14 +341,12 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			zooAddConnectTo $trigger $sel[0] $slot;
 			zooTriggeredWindowFunctions -updateConnects;
 			break;
-
 		case "-removeConnect":
 			if( !`objExists $trigger` ) break;
 			string $connects[] = `textScrollList -q -si zooTriggeredScrollTargets`;
 			for( $a in $connects ) zooRemoveConnect $trigger $a;
 			zooTriggeredWindowFunctions -updateConnects;
 			break;
-
 		case "-saveName":
 			string $cmdName = `textField -q -tx zooTriggeredTextCmdName`;
 			zooSetObjMenuCmdName $trigger $cmdName $slot;
@@ -375,25 +354,21 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			textScrollList -e -ap($slotIdx+1) $cmdName zooTriggeredScrollCmdNameList;
 			textScrollList -e -sii($slotIdx+1) zooTriggeredScrollCmdNameList;
 			break;
-
 		case "-saveCmd":
 			string $newCmd = `scrollField -q -tx zooTriggeredTextCustom`;
 			if( $cmdViewMode ) zooSetObjMenuCmdStr $trigger $newCmd $slot;
 			else zooTrigSetCmd $trigger $newCmd;
 			break;
-
 		case "-remAll":
 			string $selectedObj[] = `textScrollList -q -si zooTriggeredScrollObjects`;
 			zooRemoveTrigger $selectedObj[0];
 			zooTriggeredWindowFunctions -updateObjects;
 			break;
-
 		case "-remCmd":
 			string $selectedObj[] = `textScrollList -q -si zooTriggeredScrollObjects`;
 			deleteAttr -at "zooTrigCmd0" $selectedObj[0];
 			zooTriggeredWindowFunctions -updateObjects;
 			break;
-
 		case "-export":
 			string $ans = `promptDialog -t "export selected triggers" -m "preset name" -tx "trigger" -b "OK" -b "Cancel" -db "OK"`;
 			if( $ans != "OK" ) return;
@@ -403,7 +378,6 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			if( !`size $sel` ) return;
 			zooExportTriggers $sel $preset;
 			break;
-
 		case "-executeCmd":
 			if( $cmdViewMode ) if( $slot >= 0 ) {
 				string $cmd = `zooGetObjMenuCmdStr $trigger $slot`;
