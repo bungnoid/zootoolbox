@@ -176,11 +176,11 @@ global proc int[] zooGetConnectIdxsUsedInCmd( string $trigger, string $cmdStr ) 
 
 	$connectSlots = `zooAddArray_int { 0 } $connectSlots`;
 	while( `match "#+" $cmdStr` != "" ) $cmdStr = `substitute "#+" $cmdStr $trigger`;
-	while( `match "(%[0-9]+)+" $cmdStr` != "" ) {
-		string $custom = `match "(%[0-9]+)+" $cmdStr`;
+	while( `match "%[0-9]+" $cmdStr` != "" ) {
+		string $custom = `match "%[0-9]+" $cmdStr`;
 		int $targetNum = `substring $custom 2 (size($custom))`;
 
-		$cmdStr = `substitute "(%[0-9]+)+" $cmdStr "_"`;
+		$cmdStr = `substitute "%[0-9]+" $cmdStr "_"`;
 		$connectsUsed[( `size $connectsUsed` )] = $targetNum;
 		}
 

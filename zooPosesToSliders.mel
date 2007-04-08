@@ -217,28 +217,14 @@ global proc string[] zooGetSDKCurves( string $obj, string $attr ) {
 //returns all the connects used in a objMenu command string
 //------
 global proc string[] zooQueryPoseConnects( string $trigger, string $cmdStr ) {
-	string $objectList[] = `zooGetConnects $trigger`;
 	string $usedConnects[] = {};
-	int $connectSlots[] = `zooGetAllTriggerSlots $trigger`;
-
-	$objectList = `zooAddArray_str { $trigger } $objectList`;
-	$connectSlots = `zooAddArray_int { 0 } $connectSlots`;
 
 	while( `match "#+" $cmdStr` != "" ) {
 		$cmdStr = `substitute "#+" $cmdStr $trigger`;
 		$usedConnects[( `size $usedConnects` )] = $trigger;
 		}
-	while( `match "(%[0-9]+)+" $cmdStr` != "" ) {
-		string $custom = `match "(%[0-9]+)+" $cmdStr`;
-		int $targetNum = `substring $custom 2 (size($custom))`;
-		int $idx = `zooGetIdxOfElement_int $connectSlots $targetNum`;
 
-		if( $idx < 0 ) $cmdStr = `substitute "(%[0-9]+)+" $cmdStr "*invalidConnect*"`;
-		else {
-			$cmdStr = `substitute "(%[0-9]+)+" $cmdStr $objectList[$idx]`;
-			$usedConnects[( `size $usedConnects` )] = $objectList[$idx];
-			}
-		}
+	$usedConnects = stringArrayCatenate($usedConnects, zooGetConnectsUsedInCmd($trigger, $cmdStr));
 
 	$usedConnects = `stringArrayRemoveDuplicates $usedConnects`;
 	return $usedConnects;
