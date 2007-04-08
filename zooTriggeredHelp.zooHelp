@@ -71,7 +71,7 @@ setkeyframe `sets -q @`
 
 you can key an entire character easily.  Or even have simple geometry parented to your camera in the shape of the character, to provide an easy way to select different parts of the character.  There is an excellent example of this in action in the primoBoy trigger demo, which can be found here:
 
-http://www.macaronikazoo.com/mel/download/primoBoy_triggerDemo.zip
+http://www.macaronikazoo.com/download/primoBoy_triggerDemo.zip
 
 
 Symbols used by zooTriggered
