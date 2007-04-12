@@ -27,7 +27,6 @@
 
 
 zooFlags;  //source zooFlags
-zooKeyCommands "" "";
 zooTangentWksUtils;
 
 
@@ -36,13 +35,13 @@ global proc zooSetkey() {
 	string $panel = `getPanel -up`;
 
 	$zooIsClicked = 0;
-	if( `popupMenu -exists tempMM` ) deleteUI tempMM;
-	if( `control -ex $panel` ) popupMenu -ctl 0 -alt 0 -sh 0 -mm 1 -b 1 -aob 1 -p $panel -pmc ( "zooSetkeyCreateUI" ) tempMM;
+	if( `popupMenu -ex tempMM` ) deleteUI tempMM;
+	if( `control -ex $panel` ) popupMenu -ctl 0 -alt 0 -sh 0 -mm 1 -b 1 -aob 1 -p $panel -pmc ( "zooSetkeyCreateUI tempMM 0;" ) tempMM;
 	else performSetKeyframeArgList 1 {"0", "animationList"};
 	}
 
 
-global proc zooSetkeyCreateUI () {
+global proc zooSetkeyCreateUI( string $parent, int $keyCommands ) {
 	global int $zooIsClicked;
 	string $selObjs[] = `ls -sl`;
 	float $factor = `optionVar -ex zooCopycatFactor`? `optionVar -q zooCopycatFactor`: 0.1;
@@ -50,11 +49,13 @@ global proc zooSetkeyCreateUI () {
 	float $curSpeed = `zooPlaySpeed -1 $smooth`;
 	int $sel = `size $selObjs`;
 
-	zooKeyCommandsPopupMenu tempMM;
-	setParent -m tempMM;
-
-	menuItem -d 1;
-	setParent -m tempMM;
+	if( $keyCommands ) {
+		zooKeyCommands "" "";
+		zooKeyCommandsPopupMenu $parent;
+		menuItem -d 1;
+		}
+	else menu -e -dai $parent;
+	setParent -m $parent;
 
 	$zooIsClicked = 1;
 	menuItem -en $sel -l "push key forward" -c( "zooSetkeyPush fwd;" ) -rp E;

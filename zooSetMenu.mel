@@ -344,7 +344,9 @@ global proc zooSetMenuWindowFunctions( string $function, string $rowName, string
 global proc string zooGetObjSet( string $obj ) {
 	if( !`objExists $obj` ) return "";
 	string $objSets[] = `listConnections -s 0 -type objectSet $obj`;
-	return $objSets[0];
+	for( $s in $objSets ) if( `zooIsValidSelectionSet $s` ) return $s;
+
+	return "";
 	}
 
 
@@ -361,21 +363,37 @@ global proc string zooGetSetToSelect( string $mode ) {
 		case "select previous set":
 			return $zooSetMenuPreviousSet;
 			break;
-
 		default:
 			string $selObjs[] = `ls -sl`;
-			if( !`size $selObjs` ) return $zooSetMenuPreviousSet;
+			if( !`size $selObjs` ) {
+				if( `objExists $zooSetMenuPreviousSet` ) return $zooSetMenuPreviousSet;
+				return "";
+				}
 
-			string $currentSet[] = `listConnections -s 0 -type objectSet`;
-			return $currentSet[0];
-			break;
-
+			string $currentSets[] = `listConnections -s 0 -type objectSet`;
+			for( $s in $currentSets ) if( `zooIsValidSelectionSet $s` ) return $s;
+			return "";
 		case "select parent set":
-			string $currentSet[] = `listConnections -s 0 -type objectSet`;
-			if( `objExists $currentSet[0]` ) return `zooGetObjSet $currentSet[0]`;
-			return `zooGetObjSet $zooSetMenuPreviousSet`;
-			break;
+			string $currentSets[] = `listConnections -s 0 -type objectSet`;
+			string $set = "";
+
+			for( $s in $currentSets ) if( `zooIsValidSelectionSet $s` ) $set = $s;
+			if( !`objExists $set` ) if( `objExists $zooSetMenuPreviousSet` ) $set = $zooSetMenuPreviousSet;
+			if( !`objExists $set` ) return "";
+
+			string $parSet = `zooGetObjSet $set`;
+			if( `objExists $parSet` ) return $parSet;
+			return $set;
 		}
+	}
+
+
+//this proc allows us to do custom tests on the set before declaring it a valid
+//set to select
+global proc int zooIsValidSelectionSet( string $set ) {
+	string $setAnn = `sets -q -t $set`;
+	if( $setAnn == "gCharacterSet" ) return 1;
+	return 0;
 	}
 
 
