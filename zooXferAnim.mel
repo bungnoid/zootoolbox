@@ -595,7 +595,7 @@ global proc zooBuildXferMappingMenu( string $parent ) {
 		menuItem -l $name -c( "zooLoadXferMapping \""+ $name +"\" \""+ $locales[$n] +"\" \"\";" );
 		}
 	menuItem -d 1;
-	menuItem -l "save mapping" -c( "zooXferAnimWindowFunctions saveMapping;" );
+	menuItem -l "save mapping" -c( "zooXferAnimWindowFunctions saveMapping \"\";" );
 	menuItem -d 1;
 	menuItem -l "manage mappings" -c( "zooPresetManagerWin \"local\" zooXferAnim xfermap;" );
 	}

@@ -40,7 +40,6 @@ global proc zooImportPickwalk( string $locale, string $name ) {
 
 global proc zooExportPickwalk( string $locale, string $name ) {
 	string $sel[] = `ls -sl`;
-	string $namespace = `zooGetNamespace $sel[0]`;
 	string $dir = `zooGetPresetDirectory $locale zooPickwalk`;
 
 	if( !`size $sel` ) return;
@@ -49,8 +48,6 @@ global proc zooExportPickwalk( string $locale, string $name ) {
 	string $fileContents = "";
 	string $walks[] = `zooListAllPickwalking`;
 	for( $obj in $walks ) {
-		if( `zooGetNamespace $obj` != $namespace ) continue;
-
 		string $up = `zooGetPickwalkObj $obj up`;
 		string $left = `zooGetPickwalkObj $obj left`;
 		string $right = `zooGetPickwalkObj $obj right`;

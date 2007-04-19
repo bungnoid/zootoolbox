@@ -262,7 +262,7 @@ global proc zooPickwalkAuthorFunctions( string $function ) {
 		case "-export":
 			string $sel[] = `ls -sl`;
 			if( !`size $sel` ) { confirmDialog -m "you must select part of the character whose Pickwalking you want to export"; return; }
-			string $getName = `promptDialog -t "Pickwalk preset name" -m "Give the Preset a name" -b "OK" -b "Cancel"`;
+			string $getName = `promptDialog -t "Pickwalk preset name" -m "Give the Preset a name" -b "OK" -b "Cancel" -db "OK"`;
 
 			if( $getName != "OK" ) return;
 			string $name = `promptDialog -q -tx`;

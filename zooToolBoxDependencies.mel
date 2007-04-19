@@ -5,6 +5,8 @@ global proc string[] zooToolBoxDependencies( string $mode ) {
 	string $iconDependencies[] = {};
 	string $return[] = {};
 
+	$melDependencies[( `size $melDependencies` )] = "p4";
+	$melDependencies[( `size $melDependencies` )] = "p4menu";
 	$melDependencies[( `size $melDependencies` )] = "zooArrays_str";
 	$melDependencies[( `size $melDependencies` )] = "zooBlendToSdk";
 	$melDependencies[( `size $melDependencies` )] = "zooDates";

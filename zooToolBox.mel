@@ -5,7 +5,7 @@ zooUtils;
 
 global proc zooToolBox() {
 	string $windowName = "zooToolBoxWindow";
-	string $windowTitle = "The zoo Tool Box  v07.03";
+	string $windowTitle = "The zoo Tool Box  v07.04";
 	int $infoDate = 60224;
 	int $showTips = `zooTipState zooToolBox -1`;
 	int $latestTip = -1;
@@ -93,12 +93,12 @@ global proc string[] zooListTools( string $type ) {
 	string $animTools[] = { "zooAutoSave","zooAnimStore","zooShots","zooTriggered",
 		"zooGreaseMonkey","zooBoltOnIK","zooBodgeK","zooGraphFilter","zooHUDCtrl",
 		"zooKeyCommands","zooKeymaster","zooRemind","zooRenamer","zooTriggerator",
-		"zooXferAnim" };
+		"zooVisMan","zooXferAnim" };
 	string $riggingTools[] = { "zooAutoSave","zooTriggered","zooCST","zooBoltOnIK",
 		"zooBodgeK","zooHeavy","zooNameSpacey","zooRemind","zooRenamer",
 		"zooSurgeon","zooWeightSave","zooTriggerator","zooReblender" };
-	string $otherTools[] = { "zooAutoSave","zooChangeLog","zooAssets","zooNameSpacey",
-		"zooRemind","zooRenamer","zooToggleUI","zooPanelCycler" };
+	string $otherTools[] = { "p4menu","zooAutoSave","zooChangeLog","zooAssets",
+		"zooNameSpacey","zooRemind","zooRenamer","zooToggleUI","zooPanelCycler" };
 	string $hotkeys[] = { "zooTangentWks","zooCam","zooSetMenu","zooSetkey","zooAlign",
 		"toggle_shading","toggle_lights","toggle_texturing","zooHeavy","zooFitTimeline" };
 	string $unlisted[] = { "zooAlign","zooCurveLight","zooChangeRoo","zooChangeSpace",
@@ -235,6 +235,9 @@ global proc string zooToolAnnotation( string $tool ) {
 		case "zooTriggered":
 			$annotation = "zooTriggered is one of the most powerful rigging companions around.  It allows the rigger to attach name independent MEL commands to an object.  These commands can be run either on the selection of the object, or by right clicking over that object.\n\nIt allows context sensitive scripted commands to be added to a character rig, which allows the rigger to create more intuitive rigs.  Being able to add name independent MEL scripts to a rig can open up entire new worlds of possibilities, as does selection triggered MEL commands.";
 			break;
+		case "zooVisMan":
+			$annotation = "visMan is a tool for creating and using heirarchical visibility sets in your scene.  a visibility set holds a collection of items, be it components, objects or anything else that normally fits into a set.  the sets can be organised heirarchically, and easily collapsed, and selected in a UI to show only certain objects in your viewports.  its great for working with large sets, or breaking a character up into parts to focus on";
+			break;
 		case "zooWeightSave":
 			$annotation = "zooWeightSave is a special type of weight transfer script.  It stores mesh weights in the mesh itself, but independent of a skin cluster, and independent of vert numbering.  So when you need to change topology, you can first store the weights into the mesh using zooWeightSave, make your topology changes, then restore the weights after deleting history.";
 			break;
@@ -314,6 +317,8 @@ global proc string zooToolIcon( string $tool ) {
 			return "zooIcon";
 		case "zooHUDCtrl":
 			return "zooIcon";
+		case "zooVisMan":
+			return "zooIcon";
 		}
 	return "";
 	}
@@ -352,6 +357,8 @@ global proc string zooToolOverlay( string $tool ) {
 			return "HUD";
 		case "zooHeavy":
 			return "heavy";
+		case "zooVisMan":
+			return "VIS";
 		}
 	}
 
