@@ -1,3 +1,4 @@
+p4;
 zooArrays_str;
 
 
@@ -15,9 +16,14 @@ global proc zooPresetManager() {
 //------
 global proc string zooGetPresetDirectory( string $locale, string $script ) {
 	string $localDir = `internalVar -uad` +"presets/."+ $script +"/";
-	string $globalDir = "c:/temp/."+ $script +"/";
+	string $vProj = `substitute "game" (getenv("VPROJECT")) "content"`;
+	string $globalDir = $vProj +"/presets/."+ $script +"/";
 
-	if( $locale == "local" ) return $localDir;
+	if( $locale == "local" ) {
+		if( !`filetest -d $localDir` ) sysFile -makeDir $localDir;
+		return $localDir;
+		}
+	if( !`filetest -d $globalDir` ) sysFile -makeDir $globalDir;
 	return $globalDir;
 	}
 
@@ -37,7 +43,9 @@ global proc zooPresetManagerWin( string $locale, string $script, string $ext ) {
 	if( $locale != "local" ) $locale = "global";
 	if( $locale == "local" ) { $other = "global"; $otherLbl = "--> global"; }
 	if ( `window -exists $windowName` ) deleteUI $windowName;
-	window -title $windowTitle -resizeToFitChildren 0 -maximizeButton 0 -sizeable 1 $windowName;
+	window -t $windowTitle -mb 1 -resizeToFitChildren 0 -maximizeButton 0 -sizeable 1 $windowName;
+		menu -l "Perforce";
+			menuItem -l "Enable Perforce Integration" -cb( `optionVar -ex zooPresetManagerP4`? `optionVar -q zooPresetManagerP4`: 1) -c( "if( #1 ) optionVar -rm zooPresetManagerP4; else optionVar -iv zooPresetManagerP4 0;" );
 		string $form = `formLayout`;
 			string $presetLbl = `text -l( $locale +" presets" )`;
 			string $presetList = `textScrollList -ams 1 zooPresetsUIScrollPresets`;
@@ -49,7 +57,7 @@ global proc zooPresetManagerWin( string $locale, string $script, string $ext ) {
 	string $dir = `zooGetPresetDirectory $locale $script`;
 	popupMenu -b 3 -p $presetLbl;
 		menuItem -l( "change to "+ $otherLbl +" presets" ) -c( "zooPresetManagerWin \""+ $other +"\" \""+ $script +"\" \""+ $ext +"\";" );
-	popupMenu -b 3 -p $presetList -pmc( "zooBuildPresetPup zooPresetManagerWinPup \""+ $dir +"\";" ) zooPresetManagerWinPup;
+	popupMenu -b 3 -p $presetList -pmc( "zooBuildPresetPup zooPresetManagerWinPup \""+ $locale +"\" \""+ $dir +"\";" ) zooPresetManagerWinPup;
 	formLayout -e
 		-af $presetLbl "top" 3
 		-af $presetLbl "left" 0
@@ -87,17 +95,19 @@ global proc zooPresetManagerWin( string $locale, string $script, string $ext ) {
 	}
 
 
-global proc zooBuildPresetPup( string $parent, string $dir ) {
+global proc zooBuildPresetPup( string $parent, string $locale, string $dir ) {
 	setParent -m $parent;
 	menu -e -dai $parent;
 
 	string $selP = zooGetElement_str(0,`textScrollList -q -si zooPresetsUIScrollPresets`);
+	string $filepath = $dir + $selP;
+	int $p4Int = `optionVar -ex zooPresetManagerP4`? `optionVar -q zooPresetManagerP4`: 1;
 	int $en = 1;
 
 	if( $selP == "" ) $en = 0;
-	menuItem -l "explore to file" -c( "zooExploreTo \""+ $dir + $selP +"\";" );
+	menuItem -l "explore to file" -c( "zooExploreTo \""+ $filepath +"\";" );
 	menuItem -d 1;
-	string $temp = "\\\""+ $dir + $selP +"\\\"";
+	string $temp = "\\\""+ $filepath +"\\\"";
 	if( `about -nt` ) {
 		menuItem -l "open in notepad" -c( "system \"notepad "+ $temp+ "\";" );
 		menuItem -l "open in wordpad" -c( "system \"write "+ $temp+ "\";" );
@@ -105,6 +115,30 @@ global proc zooBuildPresetPup( string $parent, string $dir ) {
 	else {
 		menuItem -l "open in jedit" -c( "system \"jedit "+ $temp +"\";" );
 		menuItem -l "open in nedit" -c( "system \"nedit "+ $temp +"\";" );
+		}
+	if( $locale == "global" && $p4Int ) {
+		menuItem -d 1;
+		string $dataNames[] = {};
+		string $data[] = `p4_fstat $filepath $dataNames $data 0`;
+
+		if( `size $dataNames` < 3 ) menuItem -l "Add to Perforce" -c( "p4_add {\""+ $filepath +"\"};" );
+		else {
+			int $headIdx = `zooGetIdxOfElement_str $dataNames "headRev"`;
+			int $haveIdx = `zooGetIdxOfElement_str $dataNames "haveRev"`;
+			int $actIdx = `zooGetIdxOfElement_str $dataNames "action"`;
+
+			if( $headIdx != -1 ) if( $haveIdx != -1 ) {
+				int $head = $data[$headIdx];
+				int $have = $data[$haveIdx];
+				menuItem -en( $have!=$head ) -l( "Sync to Head ("+ $have +"/"+ $head +")" ) -c( "p4_sync {\""+ $filepath +"\"} 0;" );
+				}
+
+			int $isEditOrAdd = 0;
+			if( $actIdx != -1 ) $isEditOrAdd = $data[$actIdx] == "add" || $data[$actIdx] == "edit";
+			menuItem -cb $isEditOrAdd -l "Open for Edit" -c( "p4_edit {\""+ $filepath +"\"};" );
+			menuItem -en $isEditOrAdd -l "Submit" -c( "p4submitUI {\""+ $filepath +"\"};" );
+			menuItem -en $isEditOrAdd -l "Revert" -c( "p4_revert {\""+ $filepath +"\"};" );
+			}
 		}
 	}
 

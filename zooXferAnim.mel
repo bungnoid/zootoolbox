@@ -754,14 +754,14 @@ global proc zooXferAnimWriteFileWindowFunctions( string $function ) {
 			$cmd += " -world "+ `checkBox -q -v zooXferAnimCheckWorld`;
 			if( `checkBox -q -v zooXferAnimCheckExportAfter` ) $cmd += " -start "+ `intField -q -v zooXferAnimIntExportStart`;
 			if( `checkBox -q -v zooXferAnimCheckExportBefore` ) $cmd += " -end "+ `intField -q -v zooXferAnimIntExportEnd`;
-			$cmd += "\"";
+			$cmd += "\" {};";
 			eval $cmd;
 			break;
 		case "writePose":
 			string $cmd = "zooAnimFileWritePose \""+ `optionVar -q zooAnimFileExportFile` +"\" \"";
 			$cmd += " -strip "+ `checkBox -q -v zooXferAnimCheckStrip`;
 			$cmd += " -world "+ `checkBox -q -v zooXferAnimCheckWorld`;
-			$cmd += "\"";
+			$cmd += "\" {};";
 			eval $cmd;
 			break;
 		case "browse":

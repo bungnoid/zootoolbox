@@ -389,7 +389,7 @@ global proc p4() {
 			if( $data[$actIdx] == "edit" ) $isEdit = 1;
 			else if( $data[$actIdx] == "add" ) $isEdit = 1;
 			}
-		if( `size $data` <= 1 ) $isEdit = -1;  //indicates that the file isn't in perforce
+		if( `size $data` < 3 ) $isEdit = -1;  //indicates that the file isn't in perforce
 
 		return $isEdit;
 		}

@@ -5,7 +5,7 @@ zooPresetManager;
 
 global proc zooAnimStore() {
 	string $windowName = "zooAnimStoreWindow";
-	string $windowTitle = "zooAnimStore v1.07.04   ::macaroniKazoo::";
+	string $windowTitle = "zooAnimStore v1.07.05   ::macaroniKazoo::";
 	int $alphabetical = `optionVar -ex zooAnimStoreAlphabetical`? `optionVar -q zooAnimStoreAlphabetical`: 1;
 	int $spacing = `optionVar -ex zooAnimStoreSpacing`? `optionVar -q zooAnimStoreSpacing`: 0;
 
@@ -51,14 +51,15 @@ global proc zooAnimStore() {
 			string $frame = `frameLayout -height(optionVar("-q","zooAnimStoreShowOpts")? 22: 85) -l "options" -la bottom -cll 1 -cl(optionVar("-q","zooAnimStoreShowOpts")) -cc( "optionVar -iv zooAnimStoreShowOpts 1;" ) -ec( "optionVar -rm zooAnimStoreShowOpts;" ) -bs etchedOut`;
 				string $optsLayout = `formLayout`;
 					string $colA = `columnLayout`;
-						checkBox -v(optionVar("-ex","zooAnimStoreCurTime")?optionVar("-q","zooAnimStoreCurTime"):1) -l "current time only" -cc( "if( #1 ) optionVar -rm zooAnimStoreCurTime; else optionVar -iv zooAnimStoreCurTime 0;" ) zooStoreUICheckCur;
-						checkBox -v(optionVar("-ex","zooAnimStoreTimeOffset")?optionVar("-q","zooAnimStoreTimeOffset"):1) -l "current time offset" -cc( "if( #1 ) optionVar -rm zooAnimStoreTimeOffset; else optionVar -iv zooAnimStoreTimeOffset 0;" ) zooStoreUICheckOffset;
-						checkBox -v 0 -l "world space" zooStoreUICheckWS;
-						checkBox -v 0 -l "additive" zooStoreUICheckAdd;
+						checkBox -v(optionVar("-ex","zooAnimStoreCurTime")?optionVar("-q","zooAnimStoreCurTime"):1) -l "export keys in range only" -cc( "if( #1 ) optionVar -rm zooAnimStoreCurTime; else optionVar -iv zooAnimStoreCurTime 0;" ) zooStoreUICheckCur;
+						checkBox -v(optionVar("-ex","zooAnimStoreTimeOffset")?optionVar("-q","zooAnimStoreTimeOffset"):1) -l "import at current time" -cc( "if( #1 ) optionVar -rm zooAnimStoreTimeOffset; else optionVar -iv zooAnimStoreTimeOffset 0;" ) zooStoreUICheckOffset;
+						checkBox -v(optionVar("-q","zooAnimStoreWorld")) -l "world space" -cc( "if( #1 ) optionVar -iv zooAnimStoreWorld 1; else optionVar -rm zooAnimStoreWorld;" ) zooStoreUICheckWS;
+						checkBox -v(optionVar("-q","zooAnimStoreAdd")) -l "additive" -cc( "if( #1 ) optionVar -iv zooAnimStoreAdd 1; else optionVar -rm zooAnimStoreAdd;" ) zooStoreUICheckAdd;
 					setParent ..;
 					string $colB = `columnLayout`;
-						checkBox -v 0 -l "apply to parent qss (all)" -onc( "checkBox -e -v 1 -en 0 zooStoreUICheckRig;" ) -ofc( "checkBox -e -en 1 zooStoreUICheckRig;" ) zooStoreUICheckRigAll;
-						checkBox -v 1 -l "apply to current qss" zooStoreUICheckRig;
+						checkBox -v(optionVar("-q","zooAnimStoreApplyPar")) -l "apply to parent qss (all)" -onc( "checkBox -e -v 1 -en 0 zooStoreUICheckRig; optionVar -iv zooAnimStoreApplyPar 1;" ) -ofc( "checkBox -e -en 1 zooStoreUICheckRig; optionVar -rm zooAnimStoreApplyPar;" ) zooStoreUICheckRigAll;
+						checkBox -v(optionVar("-ex","zooAnimStoreApplyCur")?optionVar("-q","zooAnimStoreApplyCur"):1) -l "apply to current qss" -cc( "if( #1 ) optionVar -rm zooAnimStoreApplyCur; else optionVar -iv zooAnimStoreApplyCur 0;" ) zooStoreUICheckRig;
+						checkBox -v(optionVar("-q","zooAnimStoreClear")) -l "clear keys on import" -cc( "if( #1 ) optionVar -iv zooAnimStoreClear 1; else optionVar -rm zooAnimStoreClear;" ) zooStoreUICheckClearKeys;
 					setParent ..;
 					string $colC = `columnLayout -adj 1`;
 						text -l "incremental apply";//`checkBox -v 0 -l "incremental apply" zooStoreUICheckIncrementOn`;
@@ -471,15 +472,15 @@ global proc zooAnimStoreWindowFunctions_var( string $function, string $variable 
 			string $name = `promptDialog -q -text`;
 			string $objs[] = `ls -sl`;
 
-			$optionStr += " -world "+ $world;
 			$name = `zooReplaceChars $name "" "_"`;
-			if( `checkBox -q -v $checkCurUI` ) $optionStr = $optionStr +" -start "+ `playbackOptions -q -min` +" -end "+ `playbackOptions -q -max`;
-			else $optionStr = $optionStr +" -start "+ `playbackOptions -q -ast` +" -end "+ `playbackOptions -q -aet`;
+			if( $world ) $optionStr += " -world 1 ";
+			if( `checkBox -q -v $checkCurUI` ) $optionStr = $optionStr +"-offset * -start "+ `playbackOptions -q -min` +" -end "+ `playbackOptions -q -max`;
+			else $optionStr = $optionStr +"-abs 1 ";
 			if( `checkBox -q -v $checkRigUI` || $parentqss ) {
 				string $ctrls[] = `zooGetCtrlsFromQss $parentqss`;
 				if( `size $ctrls` ) select -r $ctrls;
 				}
-			zooWriteAnimClip $name $selStore $locale ( "-offset * "+ $optionStr );
+			zooWriteAnimClip $name $selStore $locale $optionStr;
 			zooAnimStoreWindowFunctions ( "-updateClips"+ ($locale=="local"?"L":"G"));
 			break;
 		//gathers info from user and deals with creating a new pose clip
@@ -517,18 +518,21 @@ global proc zooApplyClip( string $clip, string $store, string $locale, float $na
 	string $location = `zooGetPresetDirectory $locale zooAnimStore` + $store +"/";
 	string $objs[] = `ls -sl`;
 	string $opts = "";
+	float $increment = `floatSlider -q -v zooStoreUIFloatIncrement`;
 	int $parentqss = `checkBox -q -v zooStoreUICheckRigAll`;
 	int $world = `checkBox -q -v zooStoreUICheckWS`;
 	int $add = `checkBox -q -v zooStoreUICheckAdd`;
-	string $offset = `checkBox -q -v zooStoreUICheckOffset`? "*": "0";
-	float $increment = `floatSlider -q -v zooStoreUIFloatIncrement`;
+	int $curAsOffset = `checkBox -q -v zooStoreUICheckOffset`;
+	int $clearKeys = `checkBox -q -v zooStoreUICheckClearKeys`;
 
-	if( $incrementOn ) $opts = " -increment "+ $increment +" -incrementOn 1 ";
 	if( `checkBox -q -v zooStoreUICheckRig` || $parentqss ) {
 		string $fromQss[] = `zooGetCtrlsFromQss $parentqss`;
 		if( `size $fromQss` ) $objs = $fromQss;
 		}
-	zooXferBlindTransfer ( "-threshold "+ $nameThreshold +" -world "+ $world +" -mode 3 -additive "+ $add +" -offset "+ $offset +" -filename "+ $location + $clip +".znm"+ $opts ) {} $objs;
+	string $optionStr = "-filename "+ $location + $clip +".znm -mode 3 -threshold "+ $nameThreshold +" -world "+ $world +" -additive "+ $add +" -clear "+ $clearKeys;
+	if( $curAsOffset ) $optionStr += "-offset * ";
+	if( $incrementOn ) $optionStr += " -increment "+ $increment +" -incrementOn 1 ";
+	zooXferBlindTransfer $optionStr {} $objs;
 	}
 
 

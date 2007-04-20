@@ -39,7 +39,7 @@ global proc zooBuildTriggeredPresetMenu( string $parent ) {
 	string $presets[] = `zooListPresets $locale zooTriggered "trigger"`;
 
 	for( $n=0; $n<`size $presets`; $n++ ) $presets[$n] = `match "^[^.]+" $presets[$n]`;
-	for( $p in $presets ) menuItem -l $p -c( "zooImportTriggers \""+ $p +"\" \"-clear 1 -guessTriggers 1 -guessConnects 1\" {};" );
+	for( $p in $presets ) menuItem -l $p -c( "zooImportTriggers \""+ $p +"\" \"locale global -clear 1 -guessTriggers 1 -guessConnects 1\" {}; zooTriggeredWindowFunctions -updateObjects;" );
 
 	clear $presets;
 	$locale = "local";

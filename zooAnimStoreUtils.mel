@@ -21,7 +21,7 @@ global proc zooWriteAnimClip( string $name, string $store, string $locale, strin
 	string $location = `zooGetPresetDirectory $locale zooAnimStore` + $store +"/";
 	if( !`filetest -d $location` ) sysFile -makeDir $location;
 	$name += ".anim";
-	zooAnimFileWrite ( $location + $name +".znm" ) $optionStr;
+	zooAnimFileWrite ( $location + $name +".znm" ) $optionStr {};
 	string $icon = `zooWriteIcon $name $location ""`;
 	print( "writing anim clip to: "+ $location +"/\n" );
 	}
@@ -31,7 +31,7 @@ global proc zooWritePoseClip( string $name, string $store, string $locale, strin
 	string $location = `zooGetPresetDirectory $locale zooAnimStore` + $store +"/";
 	if( !`filetest -d $location` ) sysFile -makeDir $location;
 	$name += ".pose";
-	zooAnimFileWritePose ( $location + $name +".znm" ) $optionStr;
+	zooAnimFileWritePose ( $location + $name +".znm" ) $optionStr {};
 	string $icon = `zooWriteIcon $name $location  ""`;
 	print( "writing pose clip to: "+ $location +"/\n" );
 	}

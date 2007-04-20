@@ -168,8 +168,8 @@ global proc zooXferBatch( string $optionStr, string $srcList[], string $tgtList[
 		case "3":
 		case "file":
 			//import from file transfer mode
-			zooAnimFileLoadObjects $optionStr $srcList $tgtList;
-			//print( "zooAnimFileLoadObjects \""+ $optionStr +"\" { \""+ `zooArrayToStr_str $srcList "\", \""` +"\" } { \""+ `zooArrayToStr_str $tgtList "\", \""` +"\" };\n" );
+			$optionTemp = `zooGetFlagArguments $optionStr filename`; if( `size $optionTemp` ) $filename = `zooArrayToStr_str $optionTemp " "`;
+			zooAnimFileLoadObjects $filename $optionStr $srcList $tgtList;
 			break;
 		}
 	print( "zooXferBatch \""+ $optionStr +"\" {\""+ `zooArrayToStr_str $srcList "\",\""` +"\"} {\""+ `zooArrayToStr_str $tgtList "\",\""` +"\"};\n" );

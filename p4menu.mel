@@ -33,11 +33,9 @@ global proc p4buildMenu( string $parent, string $file ) {
 	int $headRev = `zooGetIdxOfElement_str $dataNames "headRev"`;
 	int $haveRev = `zooGetIdxOfElement_str $dataNames "haveRev"`;
 	int $isLatest = 0;
-	int $inPerforce = 1;
 
 	if( $headRev != -1 ) $isLatest = $data[$headRev] == $data[$haveRev]? 1: 0;
-	if( $headRev == -1 ) $inPerforce = 0;
-	if( !$inPerforce && !$isEdit ) menuItem -l "Add to Perforce" -c( "p4_add {\""+ $file +"\"};" );
+	if( $isEdit == -1 ) menuItem -l "Add to Perforce" -c( "p4_add {\""+ $file +"\"};" );
 	else {
 		int $have = 0;
 		int $head = 0;
@@ -59,7 +57,7 @@ global proc p4buildMenu( string $parent, string $file ) {
 				menuItem -l "Sync to Given Version...";
 			setParent -m ..;
 			}
-		menuItem -en(!$isEdit) -l "Open for Edit" -c( "p4_sync {\""+ $file +"\"} 0; p4_edit {\""+ $file +"\"};" );
+		menuItem -en( $isEdit==0 ) -l "Open for Edit" -c( "p4_sync {\""+ $file +"\"} 0; p4_edit {\""+ $file +"\"};" );
 		menuItem -d 1;
 		menuItem -en $isEdit -l "Submit File" -c( "p4submitUI {\""+ $file +"\"};" );
 		menuItem -d 1;
