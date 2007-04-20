@@ -515,7 +515,7 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 			string $filename = `control -q -docTag zooXferAnimForm`;
 			string $srcObjs[] = `textScrollList -q -ai zooXferAnimScrollSrcPaths`;
 			string $tgtObjs[] = `textScrollList -q -ai zooXferAnimScrollSrcsTgts`;
-			string $offset = "0";
+			string $offset = "";
 			int $dupeCurves = `radioCollection -q -sl zooXferAnimRadioMode` == "zooXferAnimRadioModeDupe";
 			int $instance = `checkBox -q -v zooXferAnimCheck1`;
 			int $addCurves = ( `radioCollection -q -sl zooXferAnimRadioMode` == "zooXferAnimRadioModeCopy" )?1:0;

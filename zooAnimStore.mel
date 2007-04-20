@@ -474,8 +474,7 @@ global proc zooAnimStoreWindowFunctions_var( string $function, string $variable 
 
 			$name = `zooReplaceChars $name "" "_"`;
 			if( $world ) $optionStr += " -world 1 ";
-			if( `checkBox -q -v $checkCurUI` ) $optionStr = $optionStr +"-offset * -start "+ `playbackOptions -q -min` +" -end "+ `playbackOptions -q -max`;
-			else $optionStr = $optionStr +"-abs 1 ";
+			if( `checkBox -q -v $checkCurUI` ) $optionStr = $optionStr +" -start "+ `playbackOptions -q -min` +" -end "+ `playbackOptions -q -max`;
 			if( `checkBox -q -v $checkRigUI` || $parentqss ) {
 				string $ctrls[] = `zooGetCtrlsFromQss $parentqss`;
 				if( `size $ctrls` ) select -r $ctrls;

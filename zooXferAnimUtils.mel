@@ -168,6 +168,7 @@ global proc zooXferBatch( string $optionStr, string $srcList[], string $tgtList[
 		case "3":
 		case "file":
 			//import from file transfer mode
+			string $filename = "";
 			$optionTemp = `zooGetFlagArguments $optionStr filename`; if( `size $optionTemp` ) $filename = `zooArrayToStr_str $optionTemp " "`;
 			zooAnimFileLoadObjects $filename $optionStr $srcList $tgtList;
 			break;
