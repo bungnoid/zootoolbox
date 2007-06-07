@@ -310,8 +310,10 @@ global proc zooTriggereatorBuildImportMenu( string $parent ) {
 	string $localeList[] = {};
 	string $presets[] = `zooListAllPresets zooTriggerator preset $localeList 1`;
 
-	for( $n=0; $n<`size $presets`; $n++ ) $presets[$n] = `match "^[^.]+" $presets[$n]`;
-	for( $p in $presets ) menuItem -l $p -c( "zooImportFolder "+ $p +" \"\";" );
+	for( $n=0; $n<`size $presets`; $n++ ) {
+		$presets[$n] = `match "^[^.]+" $presets[$n]`;
+		menuItem -l $presets[$n] -c( "zooImportFolder "+ $presets[$n] +" \"-locale "+ $localeList[$n] +"\";" );
+		}
 	if( `size $presets` ) menuItem -d 1;
 	menuItem -l "manage presets" -c( "zooPresetManagerWin \"local\" zooTriggerator preset;" );
 	}
@@ -420,6 +422,7 @@ global proc zooTriggeratorFunctions( string $function ) {
 			string $trigger = `zooBuildShape $shape ( "-colour "+ $colour )`;
 			string $eazel = `zooGetEazel 1`;
 
+			if( !`objExists $folder` ) $folder = $eazel;
 			parent -r $trigger $folder;
 			if( `match ( $eazel+"$" ) $folder` == "" ) setAttr ( $trigger +".t" ) .02 -0.02 0;
 			else {
@@ -553,7 +556,7 @@ global proc string zooGetTriggerFolder( string $trigger ) {
 
 global proc string zooTriggeratorInfo ( string $function ) {
 	string $creationDate = "09 August 2005";
-	string $version = "1.07.03";
+	string $version = "1.07.05";
 
 	if( $function == "created" ) return $creationDate;
 	if( $function == "version" ) return $version;

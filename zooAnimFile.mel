@@ -69,8 +69,7 @@ global proc zooAnimFileWrite( string $filename, string $optionStr, string $objs[
 	if( !`size $allKeys` ) { warning "there are no keyframes on any of the selected objects"; progressWindow -endProgress; return; }
 
 	float $start = $allKeys[0];
-	float $end = $allKeys[( `size $allKeys`-1 )];
-	float $offset = $start;
+	float $end = $allKeys[`size $allKeys`-1];
 
 	$optionTemp = `zooGetFlagArguments $optionStr start`; if( `size $optionTemp` ) $start = $optionTemp[0];
 	$optionTemp = `zooGetFlagArguments $optionStr end`; if( `size $optionTemp` ) $end = $optionTemp[0];
@@ -90,6 +89,7 @@ global proc zooAnimFileWrite( string $filename, string $optionStr, string $objs[
 	string $xformObjs[] = {};
 	string $srcs[] = {};  //this holds the original controls that are to be traced
 	string $tgts[] = {};  //this holds the locators that will be traced to the original controls
+	float $offset = $start;
 	int $useTransformed[] = {};  //this array holds which objects have been substituted with locators
 	int $numObjs = `size $objs`;
 
@@ -359,7 +359,7 @@ global proc zooAnimFileLoadObjects( string $filename, string $optionStr, string 
 	string $worldCache[] = {};
 	string $temp[] = {};
 	string $fileContents[] = {};
-	float $timeOffset = $exportStart[0];
+	float $timeOffset = float($exportStart[0])*-1;
 	float $incrementalApply = 1.0;
 	int $incrementOn = 0;
 	int $additive = 0;
@@ -369,7 +369,7 @@ global proc zooAnimFileLoadObjects( string $filename, string $optionStr, string 
 	int $world = 0;
 	int $n = 0;
 
-	$temp = `zooGetFlagArguments $optionStr offset`; if( `size $temp` ) { if( $temp[0] == "*" ) $timeOffset = `currentTime -q`; else $timeOffset = $temp[0]; }
+	$temp = `zooGetFlagArguments $optionStr offset`; if( `size $temp` ) { if( $temp[0] == "*" ) $timeOffset += `currentTime -q`; else $timeOffset = $temp[0]; }
 	$temp = `zooGetFlagArguments $optionStr incrementOn`; if( `size $temp` ) if( `size $temp` ) $incrementOn = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr increment`; if( `size $temp` ) if( `size $temp` ) $incrementalApply = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr additive`; if( `size $temp` ) $additive = $temp[0];
@@ -377,6 +377,9 @@ global proc zooAnimFileLoadObjects( string $filename, string $optionStr, string 
 	$temp = `zooGetFlagArguments $optionStr nocreate`; if( `size $temp` ) $nocreate = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr clear`; if( `size $temp` ) $clear = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr world`; if( `size $temp` ) $world = $temp[0];
+
+	//if incremental apply is on, and the increment value is zero, the import will have no effect, so bail
+	if( $incrementOn ) if( !$incrementalApply ) { warning "the incremental apply value is zero"; return; }
 
 	//prepare the object lists - ie strip namespaces if they exist, and determine the namespace for the target list
 	string $namespace = "";
