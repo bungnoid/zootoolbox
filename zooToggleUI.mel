@@ -1,7 +1,7 @@
 //
 // UI toggle
 //
-// Created by Hamish McKenzie www.macaronikazoo.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 15 December 2001
 //
 // Description:
@@ -13,7 +13,6 @@
 // Usage:
 //  zooToggleUI;
 //
-// Hamish McKenzie ©2007...
 
 
 global proc zooToggleUI() {
@@ -78,4 +77,3 @@ global proc int isToolboxVisible() {
 
 
 //zoo.end
-//macaroniKazoo ©2007

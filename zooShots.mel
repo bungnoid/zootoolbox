@@ -19,7 +19,6 @@
 // zooShotsUtils script.  If you want to use zooShots functionality externally, refer to
 // zooShotsUtils
 //
-// Hamish McKenzie ©2007...
 
 
 zooArrays_str;
@@ -872,4 +871,3 @@ global proc string zooShotsInfo ( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

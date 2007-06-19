@@ -22,7 +22,6 @@
 // NOTE: that if joint names change after storing, it can only be by
 // adding/removing a namespace, or an altered joint pathname (ie long name)
 //
-// Hamish McKenzie ©2007...
 
 
 zooArrays_float;
@@ -372,4 +371,3 @@ global proc string zooWeightSaveInfo( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

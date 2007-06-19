@@ -169,4 +169,3 @@ global proc int zooValidateFlagInfo( string $flagType, string $flagValue[] ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

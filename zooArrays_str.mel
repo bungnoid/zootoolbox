@@ -436,4 +436,3 @@ global proc string[] zooStrToWords( string $string ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

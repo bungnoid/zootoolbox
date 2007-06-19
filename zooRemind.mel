@@ -13,7 +13,6 @@
 //  otherwise, zooRemind can be called to just popup a window with any custom
 //  message you might need.  this can be useful for calling from other scripts
 //
-// Hamish McKenzie ©2007...
 
 
 //when called, it will simply popup a window with a custom message in it.
@@ -217,4 +216,3 @@ global proc string[] zooRemindDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

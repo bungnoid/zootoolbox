@@ -11,4 +11,3 @@ global proc zooSetLookat( string $camera ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

@@ -139,4 +139,3 @@ global proc float zooKeymasterDefaultSettings( string $setting ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

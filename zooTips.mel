@@ -86,4 +86,3 @@ global proc int zooTipState( string $script, int $state ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

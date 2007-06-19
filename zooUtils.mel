@@ -385,4 +385,3 @@ global proc string[] zooDistance( string $obj1, string $obj2 ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

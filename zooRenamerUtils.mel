@@ -13,7 +13,6 @@
 //  assign this function to a key press:
 //	zooRenamer
 //
-// Hamish McKenzie ©2007...
 
 
 zooArrays_int;
@@ -219,4 +218,3 @@ global proc string[] zooNameShapesProperly() {
 
 
 //zoo.end
-//macaroniKazoo ©2007

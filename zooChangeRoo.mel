@@ -15,7 +15,6 @@
 // will change all selected objects rotation order to zxy
 //
 //
-// Hamish McKenzie ©2007...
 
 
 zooArrays_float;
@@ -98,4 +97,3 @@ global proc string[] zooChangeRooDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

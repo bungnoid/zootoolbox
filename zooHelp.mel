@@ -52,4 +52,3 @@ global proc zooAddHelpTab( string $parent, string $tabName, string $helpStr ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

@@ -50,4 +50,3 @@ global proc string[] zooStickToCurveDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

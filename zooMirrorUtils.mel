@@ -6,7 +6,6 @@
 //this script contains a bunch of useful general purpose and zooCST specific
 //mirroring utilities.
 //
-// Hamish McKenzie ©2007...
 
 
 zooAlign "-load 1";
@@ -349,4 +348,3 @@ global proc matrix zooMirrorMultiplyMatrices( matrix $mat1, matrix $mat2 ){
 
 
 //zoo.end
-//macaroniKazoo ©2007

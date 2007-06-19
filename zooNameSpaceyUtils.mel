@@ -1,4 +1,3 @@
-// Hamish McKenzie ©2007...
 
 
 zooArrays_str;
@@ -129,4 +128,3 @@ global proc string[] zooGetRecursedNamespaces( string $space ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

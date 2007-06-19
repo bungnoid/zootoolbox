@@ -6,7 +6,7 @@
 // or open the edit cmd window, and access this help file through the
 // help window
 //
-// ©2007 macaroniKazoo.com
+// macaroniKazoo
 //------------
 
 
@@ -204,4 +204,3 @@ global proc string[] zooObjMenuDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

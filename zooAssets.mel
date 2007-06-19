@@ -12,7 +12,7 @@
 //done simply by writing or modifying alternative versions of the interface, while
 //maintaining a common collection of utilities via the zooAssetsUtils core.
 //
-// ©2007 macaronikazoo.com
+// macaronikazoo
 
 
 zooArrays_str;
@@ -1427,4 +1427,3 @@ global proc string zooAssetsInfo( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

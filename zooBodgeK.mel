@@ -13,7 +13,6 @@
 // of, play with whatever options you want to, and hit the go
 // button.
 //
-// Hamish McKenzie ©2007...
 
 
 zooArrays_str;
@@ -543,4 +542,3 @@ global proc string zooBodgeKInfo ( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

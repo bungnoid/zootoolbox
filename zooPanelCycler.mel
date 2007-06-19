@@ -1,7 +1,7 @@
 //
 // graph-dope toggle
 //
-// Created by Hamish McKenzie www.emissionpossible.com
+// Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 15 October 2001
 //
 // Description:
@@ -15,7 +15,6 @@
 //  Example:
 //	zooPanelCycler { "graph", "dope", "render" };  will toggle the graph and dope sheets.
 //
-// Hamish McKenzie ©2007...
 
 
 zooArrays_str;
@@ -105,4 +104,3 @@ global proc zooGetAllAlias( string $alias[], string $names[] ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

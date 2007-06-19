@@ -23,7 +23,6 @@
 // to reflect which key is used (ie if you're using alt-w then
 // change it to -alt 1).
 //
-// Hamish McKenzie ©2007...
 
 
 zooFlags;  //source zooFlags
@@ -185,4 +184,3 @@ global proc string[] zooSetkeyDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

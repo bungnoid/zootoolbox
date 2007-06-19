@@ -38,7 +38,7 @@ global proc zooSendMail( string $optionStr, string $body ) {
 	$temp = `zooGetFlagArguments $optionStr subject`; if( `size $temp` ) $subject = `zooArrayToStr_str $temp " "`;
 	$temp = `zooGetFlagArguments $optionStr to`; if( `size $temp` ) $to = $temp;
 	$temp = `zooGetFlagArguments $optionStr cc`; if( `size $temp` ) $cc = $temp;
-	$body += "\n\n\n\n[ sent via zooSendMail ]\nmacaroniKazoo ©2007";
+	$body += "\n\n\n\n[ sent via zooSendMail ]\nmacaroniKazoo";
 
 	for( $n=0; $n<`size $to`; $n++ ) if( $to[$n] == "#" ) $to[$n] = $user;
 	for( $n=0; $n<`size $cc`; $n++ ) if( $cc[$n] == "#" ) $cc[$n] = $user;
@@ -64,4 +64,3 @@ global proc zooSendMail( string $optionStr, string $body ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

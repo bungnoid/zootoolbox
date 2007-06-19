@@ -10,8 +10,7 @@
 // require a script to set the attribute properly - space switching is a good
 // candidate
 //
-// Hamish McKenzie ©2007...
-// macaroniKazoo Productions ©2007...
+// macaroniKazoo
 
 
 zooFlags;
@@ -234,4 +233,3 @@ it runs the command for each object.  So the # symbol gets replaced by the objec
 
 
 //zoo.end
-//macaroniKazoo ©2007

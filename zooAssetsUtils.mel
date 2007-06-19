@@ -5,7 +5,7 @@
 //script alone can be used to manage assets from a command-line.  For any UI
 //code please refer to the zooAssets.mel script.
 //
-// ©2007 macaronikazoo.com
+// macaronikazoo
 
 
 zooArrays_str;
@@ -805,4 +805,3 @@ global proc string zooGetExistingAssetNode() {
 
 
 //zoo.end
-//macaroniKazoo ©2007

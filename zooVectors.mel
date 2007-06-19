@@ -178,4 +178,3 @@ global proc float[] zooAxisAsVector( string $axis ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

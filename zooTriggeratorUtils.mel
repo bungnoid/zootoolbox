@@ -482,4 +482,3 @@ global proc string zooShapeFromData( float $xyPairs[], string $objShape[] ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

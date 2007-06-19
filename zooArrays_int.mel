@@ -285,4 +285,3 @@ global proc float zooAverageArray_int( int $array[] ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

@@ -536,4 +536,3 @@ global proc zooApplyClip( string $clip, string $store, string $locale, float $na
 
 
 //zoo.end
-//macaroniKazoo ©2007

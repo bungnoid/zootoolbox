@@ -13,7 +13,6 @@
 //  assign this function to a key press:
 //	zooRenamer
 //
-// Hamish McKenzie ©2007...
 
 
 zooRenamerUtils;
@@ -300,4 +299,3 @@ global proc string[] zooRenamerDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

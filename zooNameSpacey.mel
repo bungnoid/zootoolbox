@@ -7,7 +7,6 @@
 // Description:
 // helps management of name spaces within a scene
 //
-// Hamish McKenzie ©2007...
 
 
 zooNameSpaceyUtils;
@@ -146,4 +145,3 @@ global proc string zooNameSpaceyInfo ( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

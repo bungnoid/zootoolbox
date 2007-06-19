@@ -198,4 +198,3 @@ global proc string zooCreateRegister( string $id ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

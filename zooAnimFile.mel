@@ -14,8 +14,7 @@
 // To use as stand alone, use the zooAnimFileLoad proc to load the contents of a
 // .znm file on to a selection of objects.
 //
-// Hamish McKenzie ©2007...
-// macaroniKazoo Productions ©2007...
+// macaroniKazoo
 
 
 //load dependencies
@@ -733,4 +732,3 @@ global proc string zooAnimFileInfo ( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

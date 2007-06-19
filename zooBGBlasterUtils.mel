@@ -287,4 +287,3 @@ global proc string zooGetBlastShader( string $name, int $forceCreate ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

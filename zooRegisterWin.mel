@@ -139,4 +139,3 @@ global proc zooAddRegisterToUI( string $register ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

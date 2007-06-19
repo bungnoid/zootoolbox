@@ -45,7 +45,7 @@ Well, there actually are heaps of options for most primitives.  Its just a lot o
 
 As zooCST evolves, more and more features get added, and the one thing I don't want, is the UI to become some enormous bohemoth.  UI programming takes up a huge amount of code, so using the flag system, adding functionality is super easy, and takes only seconds to add to the UI.
 
-When you want to use a flag, as a reassurance there is a "check flags" button that will make sure the flags you've added are valid, before you create the primitive.  This is not always correct, but most of the time it speaks the truth.  If you're dead sure your flags are valid, and its still not working right, chances are I've bollocksed something up.  If so, i can be berrated at:  cst@mel.macaronikazoo.com
+When you want to use a flag, as a reassurance there is a "check flags" button that will make sure the flags you've added are valid, before you create the primitive.  This is not always correct, but most of the time it speaks the truth.  If you're dead sure your flags are valid, and its still not working right, chances are I've bollocksed something up.  If so, i can be berrated at:  zootoolbox@googlegroups.com
 
 
 ----Quick Notes About Arm Primitives----
@@ -63,7 +63,7 @@ You will need to adjust these two objects for each leg.
 
 
 ----Troubleshooting----
-While I can't guarantee detailed support, I will try my hardest to help anyone out who needs help getting zooCST to work.  If you have trouble with the script, and are getting strange errors, contact the author at: cst@macaronikazoo.com
+While I can't guarantee detailed support, I will try my hardest to help anyone out who needs help getting zooCST to work.  If you have trouble with the script, and are getting strange errors, contact the author at: zootoolbox@googlegroups.com
 
-Hamish McKenzie ©2005...
-macaroniKazoo Productions ©2005...
+Hamish McKenzie ï¿½2005...
+macaroniKazoo Productions ï¿½2005...

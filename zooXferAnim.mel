@@ -19,8 +19,7 @@
 // actual transfer of animation is contained in the zooXferAnimUtils script.  If you want to
 // use zooXferAnim commands in other scripts, refer to zooXferAnimUtils
 //
-// Hamish McKenzie ©2007...
-// macaroniKazoo Productions ©2007...
+// macaroniKazoo
 
 
 zooArrays_str;
@@ -814,4 +813,3 @@ global proc string zooXferAnimInfo( string $function ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

@@ -16,7 +16,6 @@
 //  assign this function to a key press:
 //	zooGraphFilter;
 //
-// Hamish McKenzie ©2007...
 
 
 zooUtils;
@@ -302,4 +301,3 @@ global proc string[] zooGraphFilterDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

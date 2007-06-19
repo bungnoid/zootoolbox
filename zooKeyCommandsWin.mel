@@ -14,7 +14,6 @@
 //  after sourcing the script, run this command:
 //	zooKeyCommandsWin;
 //
-// Hamish McKenzie ©2007...
 
 
 {
@@ -129,4 +128,3 @@ global proc zooKeyCommandsWinExecute() {
 
 
 //zoo.end
-//macaroniKazoo ©2007

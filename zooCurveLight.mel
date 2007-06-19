@@ -21,7 +21,6 @@
 //  just type the command:
 //	zooCurveLight;
 //
-// Hamish McKenzie ©2007...
 
 
 
@@ -213,4 +212,3 @@ global proc string[] zooCurveLightDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

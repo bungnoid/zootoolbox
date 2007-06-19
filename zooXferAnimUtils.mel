@@ -313,4 +313,3 @@ global proc zooXferTraceTime( string $src, string $tgt, float $time ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

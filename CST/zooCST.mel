@@ -1,14 +1,8 @@
-//
 // Character Setup Toolkit
 //
 // Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 08 March 2003
-//
-// Usage:
-//  simply run the command:
-//	zooCST;
-//
-// Hamish McKenzie ©2007
+// Distributed GPL v2 license
 
 
 global proc zooCST() {
@@ -827,4 +821,4 @@ global proc zooCSTPrimitiveListWindow() {
 
 
 //zoo.end
-//macaroniKazoo ©2007
+//macaroniKazoo Â©2007

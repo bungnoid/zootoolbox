@@ -1,26 +1,10 @@
-/*  This file downloaded from Highend3d.com
-''
-''  Highend3d.com File Information:
-''
-''    Script Name: zooInterestCalc v1.0
-''    Author: Hamish McKenzie
-''    Last Updated: September 4, 2003
-''    Update/Change this file at:
-''    http://www.highend3d.com/maya/mel/?section=project#2526
-''
-''  Please do not alter any information above this line
-''  it is generated dynamically by Highend3d.com and will
-''  be changed automatically on any updates.
-*/
-
 //
 // interest calculator
 //
 // Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 11 January 2003
 //
-// Hamish McKenzie ©2007...
-// macaroniKazoo Productions ©2007...
+// macaroniKazoo
 
 
 global proc zooInterestCalc () {

@@ -16,7 +16,6 @@
 //  to cut up your skinned meshes, select them:  zooSurgeon;
 //  to delete a cut up mesh:  zooSurgeonDelete;
 //
-// Hamish McKenzie ©2007...
 
 
 zooArrays_str;
@@ -323,4 +322,3 @@ global proc string[] zooCSTRebuildPrimProxy( string $primitive ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

@@ -9,7 +9,6 @@ Makes maya look like its doing something real important, while you pop out for a
 bite to eat, or whatever it is you do.  Kudos to Matt Wood for the idea-it just needed
 to be expanded on a little.  :)
 
-Hamish McKenzie ©2007...
 */
 
 
@@ -72,4 +71,3 @@ global proc string[] zooBreakTimeDependencies( string $mode ) {
 
 
 //zoo.end
-//macaroniKazoo ©2007

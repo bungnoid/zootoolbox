@@ -86,4 +86,3 @@ global proc string[] zooGetHighlightedChannels() {
 
 
 //zoo.end
-//macaroniKazoo ©2007
