@@ -21,6 +21,9 @@ global proc zooHeavy() {
 				menuItem -l "Select Joints in Stored Weights" -c( "{string $sel[] = `ls -sl -tr`; string $toSel[] = {}; for( $a in $sel ) { string $existing[] = {}; zooGetJointsFromStored $a {} $existing {} {}; $toSel = `zooAddArray_str $toSel $existing`; } if( size(`ls -hl`)) zooGetJointsFromStoredVerts `ls -sl` {} $toSel {} {}; select $toSel; }" );
 				menuItem -l "Select Joints Used by Skin" -c( "{string $sel[] = `ls -o -sl`; select -cl; for( $s in $sel ) select -add `skinCluster -q -inf (findRelatedSkinCluster($s))`;}" );
 				menuItem -l "Select Verts Affected by Joints" -ann "selects the verticies affected by the selected joints" -c( "zooSurgeonUtils; { string $verts[] = {}; for( $s in `ls -type transform -sl` ) { string $temp[] = {}; zooGetJointVerts $s 0.0000000000001 {} {} $temp {} {}; $verts = `zooAddArray_str $verts $temp`;} select $verts; }" );
+				menuItem -d 1;
+				menuItem -l "Turn LIW On" -c( "{string $joints[] = `ls -type joint`;for( $j in $joints ) if( `objExists ( $j +\".liw\" )`) setAttr ( $j +\".liw\" ) 1;};" );
+				menuItem -l "Turn LIW Off" -c( "{string $joints[] = `ls -type joint`;for( $j in $joints ) if( `objExists ( $j +\".liw\" )`) setAttr ( $j +\".liw\" ) 0;};" );
 			menu -label "Help";
 				menuItem -l "Help..." -c ( "zooHelp zooHeavy 1;" );
 				menuItem -l "Show Tips Window" -c ( "zooTipsWin zooHeavy -1;" );
@@ -118,3 +121,4 @@ global proc zooHeavyPopupVertTSL( string $parent ) {
 
 
 //zoo.end
+//macaroniKazoo ©2007

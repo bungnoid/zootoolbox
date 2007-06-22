@@ -177,4 +177,36 @@ global proc float[] zooAxisAsVector( string $axis ) {
 	}
 
 
+//multiplies a vector by a scalar
+global proc float[] zooVectorTimesScalar( float $vector[], float $scalar ) {
+	float $newVector[] = {};
+	int $num = `size $vector`;
+
+	for( $n=0; $n<$num; $n++ ) $newVector[$n] = $vector[$n]*$scalar;
+	return $newVector;
+	}
+
+
+//adds a scalar to all vector array elements
+global proc float[] zooVectorPlusScalar( float $vector[], float $scalar ) {
+	float $newVector[] = {};
+	int $num = `size $vector`;
+
+	for( $n=0; $n<$num; $n++ ) $vector[$n] = $newVector[$n]+$scalar;
+	return $newVector;
+	}
+
+
+//adds two vectors together - deals with vectors are of different sizes too
+global proc float[] zooVectorPlusVector( float $vector1[], float $vector2[] ) {
+	float $vector[] = {};
+	int $num1 = `size $vector1`;
+	int $num2 = `size $vector2`;
+	int $num = $num1>$num2? $num2: $num1;
+
+	for( $n=0; $n<$num; $n++ ) $vector[$n] = $vector1[$n]+$vector2[$n];
+	return $vector;
+	}
+
+
 //zoo.end

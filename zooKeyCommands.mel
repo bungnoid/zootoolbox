@@ -107,14 +107,17 @@ global proc zooKeyCommands( string $optionStr, string $cmd ) {
 	//run the command
 	//------
 		zooAllViews 0;
+		int $numKeys = `size $keys`;
 		if( $cmd != "" ) for( $t in $keys ) {
 			currentTime $t;
 			string $tmpACmd = $cmd;
 			//the @ symbol is used to refer to the current frame number - so sub the value into the command
 			while( `match "@+" $tmpACmd` != "" ) $tmpACmd = `substitute "@+" $tmpACmd ((string)$t)`;
 
-			//the ^ symbol is used to refer to the current key index
-			while( `match "^+" $tmpACmd` != "" ) $tmpACmd = `substitute "^+" $tmpACmd ((string)$n)`;
+			//the ^% symbol is used to refer to the current key index as a percentage of all keys, while the ^ refers to the actual key index
+			while( `match "(\\^%!)+" $tmpACmd` != "" ) $tmpACmd = `substitute "(\\^%!)+" $tmpACmd ((string)(1-($n/(float)$numKeys)))`;
+			while( `match "(\\^%)+" $tmpACmd` != "" ) $tmpACmd = `substitute "(\\^%)+" $tmpACmd ((string)($n/(float)$numKeys))`;
+			while( `match "\\^+" $tmpACmd` != "" ) $tmpACmd = `substitute "\\^+" $tmpACmd ((string)$n)`;
 			for( $obj in $objs ) if( size(`keyframe -t $t -q $obj`) || $bake ) {
 				string $tmpBCmd = $tmpACmd;
 				//the # symbol is used to refer to the trigger itself - so sub the name of the trigger into the command
