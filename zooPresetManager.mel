@@ -16,8 +16,7 @@ global proc zooPresetManager() {
 //------
 global proc string zooGetPresetDirectory( string $locale, string $script ) {
 	string $localDir = `internalVar -uad` +"presets/."+ $script +"/";
-	string $vProj = `substitute "game" (getenv("VPROJECT")) "content"`;
-	string $globalDir = $vProj +"/presets/."+ $script +"/";
+	string $globalDir = "c:/temp/."+ $script +"/";
 
 	if( $locale == "local" ) {
 		if( !`filetest -d $localDir` ) sysFile -makeDir $localDir;
