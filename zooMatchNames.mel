@@ -200,11 +200,12 @@ global proc int zooMatchHasParity( string $name ) {
 	string $parityTestsR[] = { "r","right", "rgt", "rt" };
 	string $toks[] = `zooStrToWords $name`;
 
+	$name = `zooArrayToStr_str $toks "_"`;
+
 	//comment this line out if you don't want camel case testing - if if there are
 	//no separators in the name, the script splits by camel case and adds
 	//separators to the toks which usually increases parity matching accuracy,
 	//but it doesn't work with ALL naming conventions
-	$name = `zooArrayToStr_str $toks "_"`;
 	$name = `tolower $name`;
 	for( $test in $parityTestsL ) {
 		if( `match ( "_"+ $test +"[0-9]*$" ) $name` != "" ) return 1;
@@ -222,6 +223,7 @@ global proc int zooMatchHasParity( string $name ) {
 //returns the name of the opposing controller
 global proc string zooGetOpposite( string $name ) {
 	int $parity = `zooMatchHasParity $name`;
+	string $tempName = $name;
 	string $parityStrsL[] = { "l","left", "lft", "lf" };
 	string $parityStrsR[] = { "r","right", "rgt", "rt" };
 	string $pStrs[] = $parityStrsL;
@@ -233,15 +235,19 @@ global proc string zooGetOpposite( string $name ) {
 		$oppStrs = $parityStrsL;
 		}
 
-	string $nameToks[] = `zooStrToWords $name`;
+	string $nameToks[] = `zooTokenize $tempName "_"`;
 	string $opp = "";
+	int $numPStrs = `size $pStrs`;
+
+	//if the array is only 1 big - then there are no _ separators in the name, so
+	//lets assume its a camelcase name, so split it into camel case words
+	if( `size $nameToks` == 1 ) $nameToks = `zooSplitCamelCase $name`;
+
 	string $parityMatch = "";
 	string $oppositeParity = "";
-	int $numToks = `size $nameToks`;
-	int $numPStrs = `size $pStrs`;
 	int $parityIdx = -1;
 
-	for( $n=0; $n<$numToks; $n++ ) {
+	for( $n=0; $n<`size $nameToks`; $n++ ) {
 		for( $i=0; $i<$numPStrs; $i++ ) {
 			//if the cases match - solution is easy, simply return the matches
 			if( $nameToks[$n] == $pStrs[$i] ) {
@@ -251,7 +257,8 @@ global proc string zooGetOpposite( string $name ) {
 				break;
 				}
 			//if the cases differ, then its a bit more complicated - we need to go through each letter in the parity string
-			//check its case, and make the same letter in the opposite parity string the same case
+			//check its case, and make the same letter in the opposite parity string the same case - easy to do, but looks
+			//complicated...
 			else if( tolower($nameToks[$n]) == $pStrs[$i] ) {
 				$parityIdx = $i;
 				$parityMatch = $nameToks[$n];

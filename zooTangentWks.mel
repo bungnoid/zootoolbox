@@ -43,18 +43,18 @@ global proc zooTangentWks () {
 	$zooIsClicked = 0;
 	if( `popupMenu -ex tempMM` ) deleteUI tempMM;
 	if( !`control -ex $panel` ) $panel = "viewPanes";
-	popupMenu -ctl 0 -alt 0 -sh 0 -mm 1 -b 1 -aob 1 -p $panel -pmc( "zooTangentWksCreateUI" ) tempMM;
+	popupMenu -ctl 0 -alt 0 -sh 0 -mm 1 -b 1 -aob 1 -p $panel -pmc( "zooTangentWksCreateUI tempMM;" ) tempMM;
 	}
 
 
-global proc zooTangentWksCreateUI () {
+global proc zooTangentWksCreateUI ( string $parent ) {
 	global int $zooIsClicked;
 	string $currentTangents[] = `keyTangent -q -global -itt -ott`;
 	float $factor = `optionVar -ex zooSensibleFactor`? `optionVar -q zooSensibleFactor`: 0.5;
 	int $sel = size( `ls -sl` );
 
-	setParent -m tempMM;
-	menu -e -dai tempMM;
+	setParent -m $parent;
+	menu -e -dai $parent;
 
 	$zooIsClicked = 1;
 	if( $sel ) {

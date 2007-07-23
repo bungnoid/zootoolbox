@@ -37,6 +37,14 @@ global proc p4buildMenu( string $parent, string $file ) {
 	if( $headRev != -1 ) $isLatest = $data[$headRev] == $data[$haveRev]? 1: 0;
 	if( $isEdit == -1 ) menuItem -l "Add to Perforce" -c( "p4_add {\""+ $file +"\"};" );
 	else {
+		int $openedIdx = `zooGetIdxOfElement_str $dataNames "otherOpen"`;
+		if( $openedIdx != -1 ) if( $data[$openedIdx] == "1" ) {
+			$openedIdx = `zooGetIdxOfElement_str $dataNames "otherOpen0"`;
+			if( $openedIdx != -1 ) {
+				menuItem -l( "ALSO OPENED BY "+ $data[$openedIdx] );
+				}
+			}
+
 		int $have = 0;
 		int $head = 0;
 
@@ -65,6 +73,16 @@ global proc p4buildMenu( string $parent, string $file ) {
 		}
 	menuItem -d 1;
 	menuItem -l "Explore to File" -c( "zooExploreTo \""+ $file +"\";" );
+	//menuItem -l "Open Perforce to File" -c( "openp4At \""+ $file +"\";" );
 	}
 
+
+global proc openp4At( string $filepath ) {
+	$filepath = `resolvePath $filepath`;
+	if( !`filetest -r $filepath` ) return;
+	$filepath = `zooReplaceInString $filepath "/" "\\"`;
+	string $cmd = "p4win -q -s \""+ $filepath +"\"";
+	print( $cmd +"\n" );
+	system $cmd;
+	}
 

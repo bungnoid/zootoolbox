@@ -116,6 +116,8 @@ global proc zooVisManSetMenu( string $parent ) {
 	menuItem -d 1;
 	menuItem -l "new vis set" -c "zooVisManUIFunctions -new";
 	menuItem -en $enable -l "remove vis set" -c "zooVisManUIFunctions -delete";
+	menuItem -d 1;
+	menuItem -l "merge all sets (nasty hack)" -c( "hackyMergeSets;" );
 	}
 
 
@@ -176,6 +178,29 @@ global proc string[] zooVisManCleanNameFromUIs( string $names[] ) {
 global proc string zooVisManCleanNameFromUI( string $name ) {
 	$name = `zooReplaceChars $name "[-+]" ""`;
 	return `match "[^ ]+$" $name`;
+	}
+
+
+global proc hackyMergeSets() {
+	string $master = `zooVisManGetMasterSet 1`;
+
+	//now get all other master sets
+	string $allSets[] = `ls -type objectSet`;
+	string $allMasters[] = {};
+
+	for( $s in $allSets ) if( `objExists ( $s +".zooVisManMaster" )`) $allMasters[`size $allMasters`] = $s;
+
+	//subtract the first master from the set
+	$allMasters = `zooSubtractArray_str $allMasters {$master}`;
+
+	//now merge all the sets from the other masters onto the first master
+	for( $set in $allMasters ) {
+		string $childSets[] = `sets -q $set`;
+		sets -add $master $childSets;
+		}
+
+	zooVisManUIFunctions -populate;
+	zooVisManSelectActiveSets;
 	}
 
 

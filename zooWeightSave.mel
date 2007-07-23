@@ -45,6 +45,7 @@ global proc zooWeightSave() {
 				menuItem -l "Select Joints in Stored Weights" -c( "{string $sel[] = `ls -sl -tr`; string $toSel[] = {}; for( $a in $sel ) { string $existing[] = {}; zooGetJointsFromStored $a {} $existing {} {}; $toSel = `zooAddArray_str $toSel $existing`; } if( size(`ls -hl`)) zooGetJointsFromStoredVerts `ls -sl` {} $toSel {} {}; select $toSel; }" );
 				menuItem -l "Select Joints Used by Skin" -c( "{string $sel[] = `ls -o -sl`; select -cl; for( $s in $sel ) select -add `skinCluster -q -inf (findRelatedSkinCluster($s))`;}" );
 				menuItem -l "Select Verts Affected by Joints" -ann "selects the verticies affected by the selected joints" -c( "zooSurgeonUtils; { string $verts[] = {}; for( $s in `ls -type transform -sl` ) { string $temp[] = {}; zooGetJointVerts $s 0.0000000000001 {} {} $temp {} {}; $verts = `zooAddArray_str $verts $temp`;} select $verts; }" );
+				menuItem -l "Select Faces Affected by Joints" -ann "selects the verticies affected by the selected joints" -c( "zooSurgeonUtils; select `zooGetJointFaces (ls(\"-sl\")) 0.2 {} {}`;" );
 				menuItem -d 1;
 				menuItem -l "Weights to Other" -ann "select the source joint, and then the target joint.  this will transfer all the weight from the source to the target joint" -c( "{string $sel[] = `ls -type transform -sl`; string $last = `zooGetElement_str -1 $sel`; if( `size $sel`>1 ) for( $n=0; $n<`size $sel`-1; $n++ ) zooWeightsToOther $sel[$n] (\"-other \"+ $last);}" );
 				menuItem -d 1;
@@ -221,6 +222,7 @@ global proc zooWeightRestoreVerts( string $verts[] ) {
 			if( !`size $j` ) continue;
 
 			clear $w;  //if this array isn't cleared here, then it SOMEHOW has data included in it - this seems like some sort of maya bug
+			$num = `size $j`;
 			for( $z=0; $z<$num; $z++ ) $w[$z] = (float)$temp[$z];
 			$w = `zooNormaliseArraySum $w 1.`;
 
@@ -349,12 +351,15 @@ global proc zooRemoveWeightSave( string $obj ) {
 global proc zooStripInvalidJoints( string $j[], string $w[] ) {
 	string $jT[] = {};
 	string $wT[] = {};
+	int $num = `size $j`;
+	int $i = 0;
 
-	for( $n=0; $n<`size $j`; $n++ ) {
+	for( $n=0; $n<$num; $n++ ) {
 		if( !`objExists $j[$n]` ) $j[$n] = `match "[^|:]+$" $j[$n]`;
 		if( !`objExists $j[$n]` ) continue;
-		$jT[( `size $jT` )] = $j[$n];
-		$wT[( `size $wT` )] = $w[$n];
+		$jT[$i] = $j[$n];
+		$wT[$i] = $w[$n];
+		$i++;
 		}
 
 	clear $j;

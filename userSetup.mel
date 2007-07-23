@@ -43,3 +43,5 @@ zooTrigUpdateUIState;
 
 //load auto save
 zooAutoSave;
+
+putenv VPROJECT "C:/valve/main/game/tf/";

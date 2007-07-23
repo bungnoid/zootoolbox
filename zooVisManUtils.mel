@@ -17,7 +17,6 @@ global proc zooVisManUtils() {
 
 global proc zooVisInitialSetup() {
 	if( !`selectionConnection -ex zooVisManCurrent` ) selectionConnection -lst zooVisManCurrent;
-	zooVisManGetMasterSet 0;
 	}
 
 
@@ -281,15 +280,16 @@ global proc string[] zooVisManListHeirarchically() {
 
 
 global proc string zooVisManGetMasterSet( int $forceCreate ) {
-	string $reg = `zooGetRegister zoo 1`;
-	string $registered[] = {};
+	string $allSets[] = `ls -type objectSet`;
+	string $masterSets[] = {};
+	string $masterAttrName = "zooVisManMaster";
 
-	zooListRegistered $reg zooVisMan {} $registered;
-	if( `objExists $registered[0]` ) return $registered[0];
-	else if( `objExists isoSets` ) return "isoSets";
+	for( $s in $allSets ) if( `objExists ( $s +"."+ $masterAttrName )`) $masterSets[`size $masterSets`] = $s;
+	if( `objExists $masterSets[0]` ) return $masterSets[0];
 	else if( $forceCreate ) {
 		string $master = `sets -em -name "zooVisMan"`;
-		zooRegisterObj $reg zooVisMan $master 1 1;
+		addAttr -ln $masterAttrName -at bool $master;
+		//zooRegisterObj $reg zooVisMan $master 1 1;
 		return $master;
 		}
 

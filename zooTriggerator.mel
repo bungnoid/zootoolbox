@@ -45,7 +45,7 @@ global proc zooTriggerator() {
 		string $masterForm = `formLayout`;
 			string $image = `image -width 340 -height 8 -backgroundColor ((float)96/255) ((float)100/255) ((float)146/255) -image(zooGetFileLocation(zooListEnv("XBMLANGPATH"),"zoo_sig","tga") +"zoo_sig.tga" )`;
 			string $tabForm = `formLayout`;
-				string $tabs = `tabLayout`;
+				string $tabs = `tabLayout zooTriggeratorTabs`;
 					string $createForm = `formLayout zooTriggeratorFormCreateTrigger`;
 						string $cFolderLbl = `text -l "Add to Folder (rmb):"`;
 						string $cFolder = `nameField -o(zooGetEazel(1)) zooTriggeratorTextFolder1`;
@@ -431,6 +431,10 @@ global proc zooTriggeratorFunctions( string $function ) {
 				}
 			for( $s in $sel ) zooAddConnect $trigger $s;
 			if( `size $sel` ) zooTrigSetCmd $trigger `zooPresetTriggerCmds -selectConnected`;
+
+			//finally add the right click commands to edit the trigger
+			zooObjMenuUtils;
+			zooObjMenuAddCmdAll $trigger "edit trigger" "zooTriggerator; tabLayout -e -sti 2 zooTriggeratorTabs; select #; zooTriggeratorFunctions -loadTrigger;";
 			break;
 		case "-createFolder":
 			string $parent = `nameField -q -o zooTriggeratorTextFolder1`;

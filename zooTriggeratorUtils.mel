@@ -7,6 +7,7 @@ zooRegister;
 zooStrUtils;
 zooTriggeredPresets;
 zooTriggeredUtils;
+zooUtils;
 
 
 global proc zooTriggeratorUtils() {
@@ -98,11 +99,18 @@ global proc zooExportFolder( string $folder, string $filename ){
 	}
 
 
-global proc zooImportFolder( string $preset, string $tgtNamespace ) {
+global proc zooImportFolder( string $preset, string $optionStr ) {
+	string $temp[] = {};
+	string $locale = "local";
+	string $tgtNamespace = "";
+
+	$temp = `zooGetFlagArguments $optionStr locale`; if( `size $temp` ) $locale = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr namespace`; if( `size $temp` ) $tgtNamespace = $temp[0];
+
 	string $sel[] = `ls -sl`;
 	if( $tgtNamespace == "" ) if( `size $sel` ) $tgtNamespace = `zooGetNamespace $sel[0]`;
 
-	string $presetFile = `zooGetPresetDirectory "local" zooTriggerator` + $preset +".preset";
+	string $presetFile = `zooGetPresetDirectory $locale zooTriggerator` + $preset +".preset";
 	string $fileContents[] = `zooReadFile $presetFile "-strip 1"`;
 	string $trigger = "";
 	string $trigCmd = "";
@@ -216,6 +224,10 @@ global proc string zooCreateTriggerFromData( string $tgtNamespace, string $n_dat
 	tokenize $s_data[0] "," $shapeData;
 	for( $n=0; $n<`size $shapeData`; $n++ ) $xyPairs[$n] = $shapeData[$n];
 	string $trigger = `zooShapeFromData $xyPairs {}`;
+
+	//add right click command to edit trigger
+	zooObjMenuUtils;
+	zooObjMenuAddCmdAll $trigger "edit trigger" "zooTriggerator; tabLayout -e -sti 2 zooTriggeratorTabs; select #; zooTriggeratorFunctions -loadTrigger;";
 
 	for( $n=0; $n<`size $connects`; $n++ ) zooAddConnectTo $trigger $connects[$n] $connectSlots[$n];
 	zooTrigSetCmd $trigger `zooStrNewlinesToRealNewlines $t_data`;

@@ -119,7 +119,10 @@ global proc string[] zooReadFile( string $file, string $optionStr ){
 	//if we need more options, this will need to use zooFlags
 	if( $optionStr == "-strip 1" ) $strip = 1;
 
-	if( !`filetest -r $file` ) return {};
+	if( !`filetest -r $file` ) {
+		warning "file doesn't exists";
+		return {};
+		}
 	string $fileContents[] = {};
 	string $word = "a";
 	int $fileId = `fopen $file "r"`;
@@ -282,6 +285,7 @@ global proc string[] zooQuerySet( string $set, int $parents, int $recursive ) {
 //whether to perform a recursive listing of members
 global proc string[] zooSetRelatives( string $set, int $includeSelf, int $parents, int $recursive ) {
 	string $sets[] = {$set};
+	int $maxRecursion = 250;
 	int $n = 0;
 
 	while( 1 ) {
@@ -291,7 +295,7 @@ global proc string[] zooSetRelatives( string $set, int $includeSelf, int $parent
 		$n++;
 		if( !$recursive ) break;
 		else if( !`size $nextSets` ) break;
-		else if( $n > 250 ) break;  //just in case
+		else if( $n > $maxRecursion ) break;  //just in case - yes this means you can't have nested sets more than $maxRecursion deep...  deal with it
 		}
 
 	if( !$includeSelf ) $sets = `zooIndexCrop_str $sets "1:"`;

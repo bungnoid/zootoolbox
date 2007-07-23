@@ -295,6 +295,49 @@ global proc int[] zooGetJointVerts( string $joint, float $tol, string $meshes[],
 	}
 
 
+global proc string[] zooGetJointFaces( string $objs[], float $tol, string $faces[], int $faceIdxs[] ) {
+	string $verts[] = {};
+
+	for( $s in $objs ) {
+		string $temp[] = {};
+		zooGetJointVerts $s $tol {} {} $temp {} {};
+		$verts = `zooAddArray_str $verts $temp`;
+		}
+
+	float $bbox[] = `exactWorldBoundingBox $verts`;
+	string $allFaces[] = `polyListComponentConversion -fv -tf $verts`;
+
+	$allFaces = `ls -fl $allFaces`;
+	int $num = `size $allFaces`;
+	for( $n=0; $n<$num; $n++ ) {
+		if( `zooIsFaceWithinBounds $allFaces[$n] $bbox` ) {
+			$faces[`size $faces`] = $allFaces[$n];
+			string $index = `match "[0-9]+\]$" $allFaces[$n]`;
+			$index = `match "^[0-9]+" $index`;
+			$faceIdxs[`size $faceIdxs`] = $index;
+			}
+		}
+
+	return $faces;
+	}
+
+
+global proc int zooIsFaceWithinBounds( string $face, float $bbox[] ) {
+	string $faceVerts[] = `polyListComponentConversion -ff -tv $face`;
+	int $num = `size $faceVerts`;
+
+	for( $n=0; $n<$num; $n++ ) {
+		float $vertPos[] = `xform -q -ws -t $faceVerts[$n]`;
+		for( $i=0; $i<3; $i++ ) {
+			if( $vertPos[$i] >= $bbox[$i] && $vertPos[$i] <= $bbox[$i+3] ) continue;
+			else return 0;
+			}
+		}
+
+	return 1;
+	}
+
+
 global proc zooSurgeonDelete() {
 	string $proxies[] = `zooSurgeonListProxies`;
 	if( `size $proxies` ) delete $proxies;

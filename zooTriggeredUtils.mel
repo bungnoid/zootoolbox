@@ -149,8 +149,8 @@ global proc string zooPopulateCmdStrRaw( string $trigger, string $cmdStr ) {
 		int $targetNum = `substring $custom 2 (size($custom))`;
 		int $idx = `zooGetIdxOfElement_int $connectSlots $targetNum`;
 
-		if( $idx < 0 ) $cmdStr = `substitute "%[0-9]+" $cmdStr "*invalidConnect*"`;
-		else $cmdStr = `substitute "%[0-9]+" $cmdStr $objectList[$idx]`;
+		if( $idx < 0 ) $cmdStr = `substitute $custom $cmdStr "*invalidConnect*"`;
+		else $cmdStr = `substitute $custom $cmdStr $objectList[$idx]`;
 		}
 
 	return $cmdStr;
@@ -333,7 +333,48 @@ global proc int zooAddConnectTo( string $trigger, string $connect, int $forceSlo
 	if( $forceSlot < 0 ) $slot = `zooGetNextTriggerSlot $trigger`;
 	if( !`objExists ( $trigger +"."+ $slotPrefix + $slot )` ) addAttr -ln( $slotPrefix + $slot ) -at message $trigger;
 	connectAttr -f ( $connect +".msg" ) ( $trigger +"."+ $slotPrefix + $slot );
+	zooCacheConnectName $trigger $slot;
 	return $slot;
+	}
+
+
+//------
+//goes through all connects and makes sure objects are actually connected
+//------
+global proc zooValidateConnects( string $trigger ) {
+	string $slotPrefix = "zooTrig";
+	int $slots[] = `zooGetAllTriggerSlots $trigger`;
+
+	for( $slot in $slots ) {
+		string $attr = $slotPrefix + $slot;
+		string $objPath = `connectionInfo -sfd ( $trigger +"."+ $attr )`;
+		if( !`objExists $objPath` ) {
+			string $connect = `zooGetConnectObject $trigger $slot`;
+			zooAddConnectTo $trigger $connect $slot;
+			}
+		}
+	}
+
+
+//------
+//so this just goes through all connects on an object and re-caches their names
+//------
+global proc zooCacheConnectNames( string $trigger ) {
+	int $slots[] = `zooGetAllTriggerSlots $trigger`;
+	for( $n in $slots ) zooCacheConnectName $trigger $n;
+	}
+
+
+//------
+//so a connect name cache stores the name of the connect
+//------
+global proc zooCacheConnectName( string $trigger, int $slot ) {
+	string $slotPrefix = "zooTrig";
+	string $cacheAttrName = $slotPrefix + $slot +"cache";
+	string $connectName = `zooGetConnectObject $trigger $slot`;
+
+	if( !`objExists ( $trigger +"."+ $cacheAttrName )`) addAttr -ln( $slotPrefix + $slot +"cache" ) -dt "string" $trigger;
+	setAttr ( $trigger +"."+ $cacheAttrName ) -type "string" $connectName;
 	}
 
 
@@ -344,8 +385,13 @@ global proc zooRemoveConnect( string $trigger, string $connect ) {
 	if( !`objExists $trigger` ) return;
 	if( !`objExists $connect` ) return;
 
+	string $slotPrefix = "zooTrig";
 	int $slots[] = `zooGetConnectSlots $trigger $connect`;
-	for( $a in $slots ) deleteAttr -at ( "zooTrig"+ $a ) $trigger;
+
+	for( $a in $slots ) {
+		deleteAttr -at ( $slotPrefix + $a ) $trigger;
+		if( `objExists ( $trigger +"."+ $slotPrefix + $a +"cache" )` ) deleteAttr -at ( $slotPrefix + $a +"cache" ) $trigger;
+		}
 	}
 
 
@@ -372,14 +418,26 @@ global proc string[] zooGetConnects( string $trigger ) {
 	if( !`objExists $trigger`) return {};
 	string $attrs[] = `listAttr -ud $trigger`;
 	string $objects[] = {};
-	string $validObjs[] = {};
 	string $slotPrefix = "zooTrig";
 	string $matchStr = "^"+ $slotPrefix +"[0-9]+$";
 
-	for( $attr in $attrs ) if( `match $matchStr $attr` != "" ) $objects[(int)( `match "[0-9]+$" $attr` )] = `connectionInfo -sfd ( $trigger +"."+ $attr )`;
-	for( $n=0; $n<`size $objects`; $n++ ) if( `objExists $objects[$n]` ) $validObjs[( `size $validObjs` )] = `match "^[^.]+" $objects[$n]`;
+	//so go through the attributes and make sure they're triggered attributes
+	for( $attr in $attrs ) if( `match $matchStr $attr` != "" ) {
+		//now that we've determined its a triggered attribute, trace the connect if it exists
+		int $connect = (int)(`match "[0-9]+$" $attr`)-1;  //because connect numbers always start at 1, we want to change the number to be 0 based - hence the -1
+		string $objPath = `connectionInfo -sfd ( $trigger +"."+ $attr )`;
+		string $cacheAttrName = $trigger +"."+ $slotPrefix + $connect +"cache";
 
-	return $validObjs;
+		if( `objExists $objPath` ) $objects[`size $objects`] = `match "^[^.]+" $objPath`;
+
+		//if there is no connect, then check to see if there is a name cache, and query it
+		else if( `objExists $cacheAttrName` ) {
+			string $cacheName = `getAttr $cacheAttrName`;
+			if( `objExists $cacheName` ) $objects[`size $objects`] = $cacheName;
+			}
+		}
+
+	return $objects;
 	}
 
 
@@ -387,14 +445,26 @@ global proc string[] zooGetConnects( string $trigger ) {
 //returns the name of the object connected to a given slot
 //------
 global proc string zooGetConnectObject( string $trigger, int $connect ) {
+	if( !`objExists $trigger` ) return "";
+	if( $connect == 0 ) return $trigger;
+
 	string $slotPrefix = "zooTrig";
 	string $connectAttr = $trigger+"."+$slotPrefix+$connect;
 
 	if( !`objExists $connectAttr` ) return "";
 	string $connectionInfo = `connectionInfo -sfd ( $trigger+"."+$slotPrefix+$connect )`;
 
-	$connectionInfo = `match "^[^.]+" $connectionInfo`;
-	return $connectionInfo;
+	//if an object is connected, return it - thats what we want
+	if( `objExists $connectionInfo` ) return `match "^[^.]+" $connectionInfo`;
+
+	//if no object is connected, read the name cache and see if an existing node exists, re connect it and return its name
+	if( `objExists ( $trigger +"."+ $slotPrefix + $connect +"cache" )` ) {
+		string $cacheName = `getAttr ( $trigger +"."+ $slotPrefix + $connect +"cache" )`;
+		if( `objExists $cacheName` ) return $cacheName;
+		}
+
+	//obviously no connect was found - return nothing
+	return "";
 	}
 
 
@@ -404,7 +474,11 @@ global proc string zooGetConnectObject( string $trigger, int $connect ) {
 global proc zooRemoveTriggerSlots( string $trigger, int $slot ) {
 	if( !`objExists $trigger` ) return;
 	if( !`objExists ( $trigger +".zooTrig"+ $slot )` ) return;
-	deleteAttr ( $trigger +".zooTrig"+ $slot );
+	string $slotPrefix = "zooTrig";
+
+	//delete the connect attribute, and also check to see if there is a name cache attribute as well - if so delete it too
+	deleteAttr ( $trigger +"."+ $slotPrefix + $slot );
+	if( `objExists ( $trigger +"."+ $slotPrefix + $slot +"cache" )` ) deleteAttr -at ( $slotPrefix + $slot +"cache" ) $trigger;
 	}
 
 
