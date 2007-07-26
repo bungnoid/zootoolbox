@@ -24,6 +24,9 @@ global proc zooTriggerator() {
 			menuItem -l "Export Folder Preset" -c( "zooTriggeratorFunctions -exportFolder" );
 			menuItem -d 1;
 			menuItem -l "Import" -sm 1 -pmc( "zooTriggereatorBuildImportMenu triggeratorImport;" ) triggeratorImport;
+			setParent -m ..;
+			menuItem -d 1;
+			menuItem -l "Manage Presets" -c( "zooPresetManagerWin \"local\" zooTriggerator preset;" );
 		menu -l "Camera";
 			menuItem -l "Use Camera..." -sm 1 -pmc "zooTrigListCameras zooTrigUIPopupCams" zooTrigUIPopupCams;
 			setParent -m ..;
@@ -315,7 +318,7 @@ global proc zooTriggereatorBuildImportMenu( string $parent ) {
 		menuItem -l $presets[$n] -c( "zooImportFolder "+ $presets[$n] +" \"-locale "+ $localeList[$n] +"\";" );
 		}
 	if( `size $presets` ) menuItem -d 1;
-	menuItem -l "manage presets" -c( "zooPresetManagerWin \"local\" zooTriggerator preset;" );
+	menuItem -l "Manage Presets" -c( "zooPresetManagerWin \"local\" zooTriggerator preset;" );
 	}
 
 

@@ -102,13 +102,17 @@ global proc zooExportFolder( string $folder, string $filename ){
 global proc zooImportFolder( string $preset, string $optionStr ) {
 	string $temp[] = {};
 	string $locale = "local";
-	string $tgtNamespace = "";
+	string $tgtNamespaces[] = {};
 
 	$temp = `zooGetFlagArguments $optionStr locale`; if( `size $temp` ) $locale = $temp[0];
-	$temp = `zooGetFlagArguments $optionStr namespace`; if( `size $temp` ) $tgtNamespace = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr namespaces`; if( `size $temp` ) $tgtNamespaces = $temp;
 
+	//if the list of namespaces passed to this function is empty, grab a list from the selection
 	string $sel[] = `ls -sl`;
-	if( $tgtNamespace == "" ) if( `size $sel` ) $tgtNamespace = `zooGetNamespace $sel[0]`;
+	if( !`size $tgtNamespaces` ) if( `size $sel` ) {
+		for( $s in $sel ) $tgtNamespaces[`size $tgtNamespaces`] = `zooGetNamespace $s`;
+		$tgtNamespaces = `stringArrayRemoveDuplicates $tgtNamespaces`;
+		}
 
 	string $presetFile = `zooGetPresetDirectory $locale zooTriggerator` + $preset +".preset";
 	string $fileContents[] = `zooReadFile $presetFile "-strip 1"`;
@@ -132,7 +136,7 @@ global proc zooImportFolder( string $preset, string $optionStr ) {
 
 		//if we've reached the end of the trigger definition, flush all registers
 		if( $fileContents[$n] == "<end>" ) {
-			string $new = `zooCreateTriggerFromData $tgtNamespace $trigger $trigCmd $connects $placement $shapes $objMenus`;
+			string $new = `zooCreateTriggerFromData $tgtNamespaces $trigger $trigCmd $connects $placement $shapes $objMenus`;
 
 			//make sure the trigger created by the zooCreateTriggerFromData command has the name it was given - otherwise other triggers may need to have their parents modified
 			if( $new != $trigger ) for( $i=$n; $i<$num; $i++ ) $fileContents[$i] = `substitute ( "^p="+ $trigger +"," ) $fileContents[$i] ( "p="+ $new +"," )`;
@@ -160,15 +164,24 @@ global proc zooImportFolder( string $preset, string $optionStr ) {
 //triggerators as connects - as they may not be build till later in the read.  not
 //entirely sure what the solution to this one is...  either a storage of failed
 //connects, or the entire file will need to be read
-global proc string zooCreateTriggerFromData( string $tgtNamespace, string $n_data, string $t_data, string $c_data, string $p_data, string $s_data[], string $m_data[] ) {
+global proc string zooCreateTriggerFromData( string $tgtNamespaces[], string $n_data, string $t_data, string $c_data, string $p_data, string $s_data[], string $m_data[] ) {
 	//make sure the namespace - if there is one - is a top level namespace - as we recurse all child namespaces anyway
-	if( $tgtNamespace != "" ) $tgtNamespace = `match "^[^:]+" $tgtNamespace`;
+	int $num = `size $tgtNamespaces`;
+	if( !`size $tgtNamespaces` ) $tgtNamespaces[0] = "";
+	for( $n=0; $n<$num; $n++ ) if( $tgtNamespaces[$n] != "" ) $tgtNamespaces[$n] = `match "^[^:]+" $tgtNamespaces[$n]`;
+	$tgtNamespaces = `stringArrayRemoveDuplicates $tgtNamespaces`;
+
+	//now get all recursed namespaces to look through
+	string $namespaces[] = {};
+	for( $space in $tgtNamespaces ) {
+		string $temp[] = `zooGetRecursedNamespaces $space`;
+		if( `size $temp` ) $namespaces = `zooAddArray_str $namespaces $temp`;
+		}
 
 	string $temp[] = `zooTokenize $p_data ","`;
 	string $eazel = `zooGetEazel 1`;
 	string $parent = $temp[0];
 	string $connects[] = `zooTokenize $c_data ";"`;
-	string $namespaces[] = `zooGetRecursedNamespaces $tgtNamespace`;
 	int $numConnects = `size $connects`;
 	int $connectSlots[] = {};
 	float $posX = 0;
