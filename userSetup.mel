@@ -11,25 +11,20 @@ alias d procDef;
 alias l listProcs;
 
 
-//re-create the scripts environment variable to include all sub-directories of the maya/scripts dir
+//re-create the scripts environment variable to include all sub-directories of all the paths listed in the existing search paths
 {
-	string $scriptsDir = `internalVar -userAppDir` + "scripts/";
-	string $subDirs[] = `zooGetRecursedSubDirs $scriptsDir`;
-	string $currentPath = `getenv MAYA_SCRIPT_PATH`;
-	string $newPathArray[] = {};
-	string $toks[] = {};
-	int $n = 0;
+	string $toAdd[] = {};  //add any additional paths you want added to your script search path here
+	string $paths[] = `zooListEnv MAYA_SCRIPT_PATH`;
+	string $allOriginalPaths[] = `zooAddArray_str $paths $toAdd`;
+	string $allPaths[] = {};
+	int $num = `size $allOriginalPaths`;
 
-	tokenize $currentPath ";" $toks;
-	for( $n; $n<`size $toks`; $n++ ) {
-		$newPathArray[( `size $newPathArray` )] = $toks[$n];
-		if( $toks[$n] == $scriptsDir ) break;
+	for( $n=0; $n<$num; $n++ ) {
+		string $subs[] = `zooGetRecursedSubDirs $allOriginalPaths[$n]`;
+		$allPaths = `zooAddArray_str $allPaths $subs`;
 		}
 
-	for( $path in $subDirs ) if( `match "^\\." $path` == "" ) $newPathArray[( `size $newPathArray` )] = $path;
-	for( $n; $n<`size $toks`; $n++ ) $newPathArray[( `size $newPathArray` )] = $toks[$n];
-
-	string $newPath = `zooArrayToStr_str $newPathArray ";"`;
+	string $newPath = `zooArrayToStr_str $allPaths ";"`;
 	putenv MAYA_SCRIPT_PATH $newPath;
 	eval( "rehash" );  //I've put this in an eval simply because its one of those weird mel directives - if the rehash doesn't work like this perhaps an evalDeferred at the end of the script might help
 	print "// ******************* added all subdirs to SCRIPT_PATH\n";
@@ -43,5 +38,3 @@ zooTrigUpdateUIState;
 
 //load auto save
 zooAutoSave;
-
-putenv VPROJECT "C:/valve/main/game/tf/";
