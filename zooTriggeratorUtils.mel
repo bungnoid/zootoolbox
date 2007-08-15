@@ -369,6 +369,44 @@ global proc int[] zooGetAdjecentVerts( string $shape, int $vert ) {
 
 
 //------
+//creates outlines for a trigger - an outline is literally just a duplicate of the
+//shape node, without a connection to a shading group - this forces the geo to show
+//up as an wireframe outline in a viewport
+//------
+global proc zooCreateOutlines( string $folderName, int $recursive ) {
+	string $folders[] = { $folderName };
+	float $scale = 1.02;
+	int $maxRecurse = 50;
+	int $n = 0;
+
+	if( $recursive ) while( true ) {
+		string $subFolders[] = `zooListFoldersUnder $folders[$n]`;
+		$folders = `zooAddArray_str $folders $subFolders`;
+		$n++;
+		if( !`size $subFolders` ) break;
+		if( $n > $maxRecurse ) {warning "breaking - too many";break;}
+		}
+	int $num = `size $folders`;
+
+	for( $n=0; $n<$num; $n++ ) {
+		string $triggers[] = `zooListTriggersUnder $folders[$n]`;
+		int $numTrigs = `size $triggers`;
+
+		for( $i=0; $i<$numTrigs; $i++ ) {
+			string $shapes[] = `listRelatives -pa -s $triggers[$i]`;
+			if( `size $shapes` > 1 ) continue;  //if there is more than one shape, chances are it already has an outline
+			string $dupe[] = `duplicate -rr -rc $triggers[$i]`;
+			string $shapes[] = `listRelatives -pa -s $dupe[0]`;
+			$shapes = `parent -add -s $shapes[0] $triggers[$i]`;
+			string $cons[] = `listConnections -s 0 -p 1 -c 1 -type shadingEngine $shapes[0]`;
+			for( $j=0; $j<`size $cons`; $j+=2 ) disconnectAttr $cons[$j] $cons[$j+1];
+			scale -cp $scale $scale $scale ( $shapes[0] +".vtx[*]" );
+			}
+		}
+	}
+
+
+//------
 //lists all the folders under a given folder/parent
 //------
 global proc string[] zooListFoldersUnder( string $parent ) {
@@ -415,7 +453,12 @@ global proc string zooCreateFolder() {
 	//now register the folder
 	string $folderManager = `zooGetRegister zoo 1`;
 	zooRegisterObj $folderManager triggerator $folder 1 1;
-	$folder = `rename $folder "zooFolder#"`;
+	$folder = `rename $folder "trigger_folder#"`;
+
+	//finally add a RMB item to create outlines for the folder
+	zooObjMenuUtils;
+	zooObjMenuAddCmdAll $folder "add outlines to immediate child triggers" "zooCreateOutlines # 0;";
+	zooObjMenuAddCmdAll $folder "add outlines to ALL child triggers" "zooCreateOutlines # 1;";
 
 	return $folder;
 	}

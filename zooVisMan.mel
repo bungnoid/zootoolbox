@@ -101,6 +101,7 @@ global proc zooVisManUIFunctions( string $function ) {
 
 global proc zooVisManSetMenu( string $parent ) {
 	string $items[] = `textScrollList -q -si zooVisManList`;
+	int $addEazel = `optionVar -ex zooVisManEazel`? `optionVar -q zooVisManEazel`: 1;
 	int $enable = `size $items`;
 
 	for( $n=0; $n<$enable; $n++ ) $items[$n] = `zooVisManCleanNameFromUI $items[$n]`;
@@ -109,15 +110,19 @@ global proc zooVisManSetMenu( string $parent ) {
 
 	menuItem -en $enable -l "collapse toggle" -c "zooVisManUIFunctions -collapse";
 	menuItem -d 1;
-	menuItem -en $enable -l "+ selection to vis set" -c "zooVisManAddToSet `zooVisSetsFromUI`;";
-	menuItem -en $enable -l "- selection from vis set" -c "zooVisManRemFromSet `zooVisSetsFromUI`;";
+	menuItem -en $enable -l "+ selection to vis set" -c "zooVisManAddToSet `zooVisSetsFromUI` `ls -sl`;";
+	menuItem -en $enable -l "- selection from vis set" -c "zooVisManRemFromSet `zooVisSetsFromUI` `ls -sl`;";
 	menuItem -en $enable -l "select items in vis set" -c "zooVisManSelectFrom `zooVisSetsFromUI`;";
 	menuItem -en $enable -l "parent to..." -c "zooVisManChooseParentWin `zooVisSetsFromUI`;";
 	menuItem -d 1;
 	menuItem -l "new vis set" -c "zooVisManUIFunctions -new";
 	menuItem -en $enable -l "remove vis set" -c "zooVisManUIFunctions -delete";
 	menuItem -d 1;
+	menuItem -l "always show eazel" -cb $addEazel -c( "optionVar -iv zooVisManEazel "+ (!$addEazel) +"; zooVisManManageObjects;" );
+	menuItem -d 1;
 	menuItem -l "merge all sets (nasty hack)" -c( "hackyMergeSets;" );
+	menuItem -l "add faces affected by joint" -c( "{zooSurgeonUtils; string $faces[] = {}; zooGetJointFaces `ls -sl` 0.2 $faces {}; zooVisManAddToSet `zooVisSetsFromUI` $faces;}" );
+	menuItem -l "add faces affected by joint heirarchy" -c( "{zooSurgeonUtils; string $faces[] = {}; zooGetJointFaces `ls -sl` 0.2 $faces {}; zooVisManAddToSet `zooVisSetsFromUI` $faces; zooGetJointFaces `listRelatives -f -ad -type transform (ls(\"-sl\"))` 0.2 $faces {}; zooVisManAddToSet `zooVisSetsFromUI` $faces;}" );
 	}
 
 

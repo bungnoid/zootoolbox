@@ -34,16 +34,30 @@ global proc zooChangeRoo( string $newRoo ) {
 	string $deps[] = `zooChangeRooDependencies -scripts`;
 	for( $script in $deps ) if( `exists $script` ) eval( "source " + $script );
 
-	for( $obj in $selObjs ) if( size(`keyframe -q -tc $obj`)) $animatedObjs[( `size $animatedObjs` )] = $obj;
-		else $staticObjs[( `size $staticObjs` )] = $obj;
+	for( $obj in $selObjs ) {
+		float $tempKeys[] = `keyframe -q ( $obj +".r" )`;
+		if( `size $tempKeys` ) {
+			$keyTimeList = `zooAddArray_float $keyTimeList $tempKeys`;
+			$animatedObjs[`size $animatedObjs`] = $obj;
+			}
+		else $staticObjs[`size $staticObjs`] = $obj;
+		}
 
-	$keyTimeList = `keyframe -q -tc $animatedObjs`;
 	$keyTimeList = `sort $keyTimeList`;
 	$keyTimeList = `zooRemoveDupeItems_float $keyTimeList`;
-	for( $n = 0; $n <= `size $keyTimeList`; $n++ ) {
+
+	//make sure if any rotation channel has a key, ALL rotation channels have keys
+	zooAllViews 0;
+	int $numKeys = `size $keyTimeList`;
+	for( $n=0; $n<$numKeys; $n++ ) {
+		currentTime $keyTimeList[$n];
+		setKeyframe -t $keyTimeList[$n] -at r $animatedObjs;
+		}
+
+	for( $n=0; $n<$numKeys; $n++ ) {
 		int $t = $keyTimeList[$n];
 		currentTime $t;
-		for( $i = 0; $i < `size $animatedObjs`; $i++ ) {
+		for( $i=0; $i<`size $animatedObjs`; $i++ ) {
 			string $obj = $animatedObjs[$i];
 			int $oldRooAttr = `getAttr ( $obj + ".rotateOrder" )`;
 			string $oldRoo = $rotateOrders[$oldRooAttr];
@@ -58,6 +72,7 @@ global proc zooChangeRoo( string $newRoo ) {
 			}
 		}
 
+	zooAllViews 1;
 	xform -p 1 -roo $newRoo $staticObjs;
 	xform -p 0 -roo $newRoo $animatedObjs;
 	for( $obj in $animatedObjs ) filterCurve ($obj +".rx") ($obj +".ry") ($obj +".rz");

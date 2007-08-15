@@ -23,7 +23,7 @@ global proc zooTriggerator() {
 		menu -l "Presets";
 			menuItem -l "Export Folder Preset" -c( "zooTriggeratorFunctions -exportFolder" );
 			menuItem -d 1;
-			menuItem -l "Import" -sm 1 -pmc( "zooTriggereatorBuildImportMenu triggeratorImport;" ) triggeratorImport;
+			menuItem -l "Import" -sm 1 -pmc( "zooTriggeratorBuildImportMenu triggeratorImport;" ) triggeratorImport;
 			setParent -m ..;
 			menuItem -d 1;
 			menuItem -l "Manage Presets" -c( "zooPresetManagerWin \"local\" zooTriggerator preset;" );
@@ -108,12 +108,12 @@ global proc zooTriggerator() {
 		menuItem -d 1;
 		menuItem -l "no colour" -c( "textField -e -tx \"\" zooTriggeratorTextColour;" );
 	setParent -m ..;
-	popupMenu -p $eTrigger -pmc( "zooTriggereatorBuildTriggersMenu zooTriggeratorPopupTriggers" ) zooTriggeratorPopupTriggers;
-	popupMenu -p $cShape -pmc( "zooTriggereatorBuildShapeMenu zooTriggeratorPopupShape" ) zooTriggeratorPopupShape;
-	popupMenu -p $folder2 -pmc( "zooTriggereatorTriggerFolderMenu zooTriggeratorPopupFolders" ) zooTriggeratorPopupFolders;
-	popupMenu -p $folder3 -pmc( "zooTriggereatorEditFolderListMenu zooTriggeratorPopupFolders2" ) zooTriggeratorPopupFolders2;
-	popupMenu -p $cFolder -pmc( "zooTriggereatorCreateTriggerFolderMenu zooTriggeratorPopupFolders3" ) zooTriggeratorPopupFolders3;
-	popupMenu -p $connects -pmc( "zooTriggereatorConnectsMenu zooTriggeratorPopupConnects" ) zooTriggeratorPopupConnects;
+	popupMenu -p $eTrigger -pmc( "zooTriggeratorBuildTriggersMenu zooTriggeratorPopupTriggers" ) zooTriggeratorPopupTriggers;
+	popupMenu -p $cShape -pmc( "zooTriggeratorBuildShapeMenu zooTriggeratorPopupShape" ) zooTriggeratorPopupShape;
+	popupMenu -p $folder2 -pmc( "zooTriggeratorTriggerFolderMenu zooTriggeratorPopupFolders" ) zooTriggeratorPopupFolders;
+	popupMenu -p $folder3 -pmc( "zooTriggeratorEditFolderListMenu zooTriggeratorPopupFolders2" ) zooTriggeratorPopupFolders2;
+	popupMenu -p $cFolder -pmc( "zooTriggeratorCreateTriggerFolderMenu zooTriggeratorPopupFolders3" ) zooTriggeratorPopupFolders3;
+	popupMenu -p $connects -pmc( "zooTriggeratorConnectsMenu zooTriggeratorPopupConnects" ) zooTriggeratorPopupConnects;
 
 	formLayout -e
 		-af $tabForm "top" 0
@@ -268,7 +268,7 @@ global proc string zooGetSelectedFolder() {
 	}
 
 
-global proc zooTriggereatorCreateTriggerFolderMenu( string $parent ) {
+global proc zooTriggeratorCreateTriggerFolderMenu( string $parent ) {
 	menu -e -dai $parent;
 	setParent -m $parent;
 
@@ -282,7 +282,7 @@ global proc zooTriggereatorCreateTriggerFolderMenu( string $parent ) {
 	}
 
 
-global proc zooTriggereatorBuildTriggersMenu( string $parent ) {
+global proc zooTriggeratorBuildTriggersMenu( string $parent ) {
 	menu -e -dai $parent;
 	setParent -m $parent;
 
@@ -291,7 +291,7 @@ global proc zooTriggereatorBuildTriggersMenu( string $parent ) {
 	}
 
 
-global proc zooTriggereatorBuildShapeMenu( string $parent ) {
+global proc zooTriggeratorBuildShapeMenu( string $parent ) {
 	menu -e -dai $parent;
 	setParent -m $parent;
 
@@ -306,7 +306,7 @@ global proc zooTriggereatorBuildShapeMenu( string $parent ) {
 	}
 
 
-global proc zooTriggereatorBuildImportMenu( string $parent ) {
+global proc zooTriggeratorBuildImportMenu( string $parent ) {
 	menu -e -dai $parent;
 	setParent -m $parent;
 
@@ -322,7 +322,7 @@ global proc zooTriggereatorBuildImportMenu( string $parent ) {
 	}
 
 
-global proc zooTriggereatorTriggerFolderMenu( string $parent ) {
+global proc zooTriggeratorTriggerFolderMenu( string $parent ) {
 	menu -e -dai $parent;
 	setParent -m $parent;
 
@@ -338,7 +338,7 @@ global proc zooTriggereatorTriggerFolderMenu( string $parent ) {
 	}
 
 
-global proc zooTriggereatorEditFolderListMenu( string $parent ) {
+global proc zooTriggeratorEditFolderListMenu( string $parent ) {
 	menu -e -dai $parent;
 	setParent -m $parent;
 
@@ -350,7 +350,7 @@ global proc zooTriggereatorEditFolderListMenu( string $parent ) {
 	}
 
 
-global proc zooTriggereatorBuildEditFolderParentMenu( string $parent ) {
+global proc zooTriggeratorBuildEditFolderParentMenu( string $parent ) {
 	menu -e -dai $parent;
 	setParent -m $parent;
 
@@ -366,14 +366,16 @@ global proc zooTriggereatorBuildEditFolderParentMenu( string $parent ) {
 	}
 
 
-global proc zooTriggereatorConnectsMenu( string $parent ) {
+global proc zooTriggeratorConnectsMenu( string $parent ) {
 	menu -e -dai $parent;
 	setParent -m $parent;
 
 	string $trigger = `nameField -q -o zooTriggeratorTextTrigger`;
 
 	menuItem -l "add selected objects" -c( "zooTriggeratorFunctions -addConnects;" );
+	menuItem -d 1;
 	menuItem -l "select highlighted objects" -c( "select -cl; select `textScrollList -q -si zooTriggeratorScrollConnects`;" );
+	menuItem -l "highlight selected objects" -c( "{textScrollList -e -da zooTriggeratorScrollConnects; string $sel[] = `ls -sl`; for( $s in $sel ) textScrollList -e -si $s zooTriggeratorScrollConnects;}" );
 	menuItem -d 1;
 	menuItem -l "remove highlighted items" -c( "zooTriggeratorFunctions -removeConnects;" );
 	}
@@ -427,7 +429,7 @@ global proc zooTriggeratorFunctions( string $function ) {
 
 			if( !`objExists $folder` ) $folder = $eazel;
 			parent -r $trigger $folder;
-			if( `match ( $eazel+"$" ) $folder` == "" ) setAttr ( $trigger +".t" ) .02 -0.02 0;
+			if( `match ( $eazel+"$" ) $folder` == "" ) setAttr ( $trigger +".t" ) 2 -2 0;
 			else {
 				setAttr ( $trigger +".t" ) 0 0 -1;
 				setAttr ( $trigger +".s" ) 0.01 0.01 0.01;
@@ -475,7 +477,7 @@ global proc zooTriggeratorFunctions( string $function ) {
 			deleteUI $UIFolder2;
 			$UIFolder2 = `nameField -p $parent $UIFolder2`;
 			formLayout -e -ac $UIFolder2 "top" 0 zooTriggeratorTextTrigger -ac $UIFolder2 "left" 5 zooTrigEdTriggerLbl -ac $UIFolder2 "right" 0 zooTrigEdTriggerLoadBut -an $UIFolder2 "bottom" $parent;
-			popupMenu -p $UIFolder2 -pmc( "zooTriggereatorTriggerFolderMenu zooTriggeratorPopupFolders" ) zooTriggeratorPopupFolders;
+			popupMenu -p $UIFolder2 -pmc( "zooTriggeratorTriggerFolderMenu zooTriggeratorPopupFolders" ) zooTriggeratorPopupFolders;
 			break;
 		case "-loadFolder":
 			string $a = `zooGetSelectedFolder`;
@@ -501,7 +503,7 @@ global proc zooTriggeratorFunctions( string $function ) {
 			deleteUI $UIFoldParent;
 			$UIFoldParent = `nameField -p $parent $UIFoldParent`;
 			formLayout -e -ac $UIFoldParent "top" 0 zooTriggeratorTextFolder3 -ac $UIFoldParent "left" 5 zooTrigEdFolderLbl -ac $UIFoldParent "right" 0 zooTrigEdFolderLoadBut -an $UIFoldParent "bottom" $parent;
-			popupMenu -p $UIFoldParent -pmc( "zooTriggereatorBuildEditFolderParentMenu zooTriggeratorPopupFolders3" ) zooTriggeratorPopupFolders3;
+			popupMenu -p $UIFoldParent -pmc( "zooTriggeratorBuildEditFolderParentMenu zooTriggeratorPopupFolders3" ) zooTriggeratorPopupFolders3;
 			break;
 		case "-addConnects":
 			string $trigger = `nameField -q -o $UITrigger`;

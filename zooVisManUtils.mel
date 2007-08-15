@@ -1,6 +1,7 @@
 zooArrays_str;
 zooFlags;
 zooRegister;
+zooStrUtils;
 zooUtils;
 
 
@@ -61,6 +62,16 @@ global proc string[] zooVisManListHeirarchically() {
 			for( $obj in $objs ) selectionConnection -e -s $obj zooVisobjects;
 			}
 
+		//do we want the eazel in the vis?
+		int $addEazel = `optionVar -ex zooVisManEazel`? `optionVar -q zooVisManEazel`: 1;
+		if( $addEazel ) {
+			//load the eazel deps
+			zooGreaseMonkeyUtils;
+			string $eazel = `zooGetEazel 0`;
+			if( `objExists $eazel` ) selectionConnection -e -s $eazel zooVisobjects;
+			}
+
+		//finally add the sel con to the main sel con
 		selectionConnection -e -addTo zooVisobjects zooVisManCurrent;
 		}
 
@@ -90,10 +101,12 @@ global proc string[] zooVisManListHeirarchically() {
 	global proc string[] zooVisManListBookmarks() {
 		string $master = `zooVisManGetMasterSet 1`;
 		string $marks[] = {};
+		string $realMarks[] = {};
 
 		zooListRegistered $master bookmarks {} $marks;
+		for( $m in $marks ) if( `objExists $m` ) $realMarks[`size $realMarks`] = $m;
 
-		return $marks;
+		return $realMarks;
 		}
 
 
@@ -124,11 +137,14 @@ global proc string[] zooVisManListHeirarchically() {
 
 		string $marks[] = `zooVisManListBookmarks`;
 		for( $mark in $marks ) {
-			menuItem -l $mark -c( "zooVisManActivateBookmark "+ $mark +" "+ $add );
+			menuItem -l $mark -c( "zooVisManActivateBookmark "+ $mark +" "+ $add +";" );
 			menuItem -ob 1 -c( "delete "+ $mark );
 			}
 		if( `size $marks` ) menuItem -d 1;
-		menuItem -l "add bookmark" -c zooVisManCreateBookmark;
+		menuItem -l "add bookmark" -c "zooVisManCreateBookmark;";
+		menuItem -d 1;
+		menuItem -l "turn ON" -c "zooVisManSetVisState 1;";
+		menuItem -l "turn OFF" -c "zooVisManSetVisState 0;";
 		}
 
 
@@ -252,14 +268,14 @@ global proc string[] zooVisManListHeirarchically() {
 		}
 
 
-	global proc zooVisManAddToSet( string $sets[] ) {
-		for( $set in $sets ) if( `objExists $set` ) sets -add (zooVisManCleanNameFromUI($set)) `ls -sl`;
+	global proc zooVisManAddToSet( string $sets[], string $objs[] ) {
+		for( $set in $sets ) if( `objExists $set` ) sets -add (zooVisManCleanNameFromUI($set)) $objs;
 		zooVisManManageObjects;
 		}
 
 
-	global proc zooVisManRemFromSet( string $sets[] ) {
-		for( $set in $sets ) if( `objExists $set` ) sets -rm (zooVisManCleanNameFromUI($set)) `ls -sl`;
+	global proc zooVisManRemFromSet( string $sets[], string $objs[] ) {
+		for( $set in $sets ) if( `objExists $set` ) sets -rm (zooVisManCleanNameFromUI($set)) $objs;
 		zooVisManManageObjects;
 		}
 

@@ -66,6 +66,7 @@ global proc zooSetkeyCreateUI( string $parent, int $keyCommands ) {
 	menuItem -en $sel -l "copycat value toward next" -c( "zooCopycat right "+ $factor +";" ) -rp SE;
 	menuItem -en $sel -l "copycat value toward prev" -c( "zooCopycat left "+ $factor +";" ) -rp SW;
 
+	menuItem -en $sel -l "copycat adjacent" -c( "zooCopycat left "+ $factor +"; zooCopycat right "+ $factor +";" ) -rp N;
 	menuItem -en $sel -l "euler filter" -c( "{string $cmd=\"filterCurve \"; for($a in `ls -sl`) if(`objExists ($a+\".r\")`) $cmd=$cmd+$a+\".rx \"+$a+\".ry \"+$a+\".rz \"; eval $cmd;}" ) -rp "S";
 
 	menuItem -en $sel -l "copycat (breakdown) factor" -sm 1;
