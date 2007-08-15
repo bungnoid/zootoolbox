@@ -1,0 +1,21 @@
+global proc string[] zooVisManDependencies( string $mode ) {
+	string $melDependencies[] = {};
+	string $helpDependencies[] = {};
+	string $iconDependencies[] = {};
+	string $return[] = {};
+
+	$melDependencies[`size $melDependencies`] = "zooVisManUtils";
+	$melDependencies[`size $melDependencies`] = "zooArrays_str";
+	$melDependencies[`size $melDependencies`] = "zooFlags";
+	$melDependencies[`size $melDependencies`] = "zooGreaseMonkeyUtils";
+	$melDependencies[`size $melDependencies`] = "zooRegister";
+	$melDependencies[`size $melDependencies`] = "zooStrUtils";
+	$melDependencies[`size $melDependencies`] = "zooSurgeonUtils";
+	$melDependencies[`size $melDependencies`] = "zooUtils";
+
+	if( $mode == "-deps" ) return $melDependencies;
+	if( $mode == "-docs" ) return $helpDependencies;
+	if( $mode == "-icons" ) return $iconDependencies;
+	if( $mode == "-scripts" ) return $melDependencies;
+	return $return;
+	}
