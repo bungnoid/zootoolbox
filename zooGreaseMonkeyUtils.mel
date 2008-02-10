@@ -478,7 +478,7 @@ global proc string zooGetEazel( int $force ) {
 //------
 global proc string zooGetGreaseMonkey( int $force ) {
 	string $times[] = `ls -type time`;
-	for( $t in $times ) if( `objExists ( $t +".zooGreaseMonkey" )`) return $t;
+	for( $t in $times ) if( !`referenceQuery -inr $t` ) if( `objExists ( $t +".zooGreaseMonkey" )`) return $t;
 	if( $force ) return `zooTrainGreaseMonkey`;
 	return "";
 	}

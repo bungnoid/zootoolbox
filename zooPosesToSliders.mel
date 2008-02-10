@@ -5,7 +5,7 @@ zooStrUtils;
 //builds SDK sliders for all objMenu poses stored on a trigger object
 //takes the following flags
 // -trigger [obj]			the trigger that contains the poses - defaults to the first selected object if not specified
-// -control [obj]			the object to build the sliders on to - defaults to the trigger
+// -control [obj]			the object to build the sliders on to - defaults to the object connected to the controlObject attribute if it exists, and the trigger if the attribute doesn't exist
 // -linear [int]			if linear is true (defaults to false) the sdk key tangents are set to linear
 // -optimize [int]		defaults to true which auto-optimises out static channels on the sdk curves generated.  if you are having odd problems, try turning this off - otherwise leave it on for very significant performance improvements
 // -preserve [int]		defaults to false - when true will preserve any existing sdk curves on the target objects, otherwise they get blown away first
@@ -13,18 +13,28 @@ zooStrUtils;
 //------
 global proc zooPosesToSliders( string $optionStr ) {
 	string $trigger = zooGetElement_str(0,`ls -sl`);
-	string $control = $trigger;
+	string $control = "*";  //* will use either the object connected to the attribute controlObject on the trigger object if it exists, OR it will use the trigger itself otherwise
 	string $temp[] = {};
 	int $linear = 0;
 	int $optimize = 1;
 	int $preserve = 0;
 
-	$temp = `zooGetFlagArguments $optionStr trigger`; if( `objExists $temp[0]` ) { $trigger = $temp[0]; $control = $trigger; }
+	$temp = `zooGetFlagArguments $optionStr trigger`; if( `objExists $temp[0]` ) $trigger = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr control`; if( `objExists $temp[0]` ) $control = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr linear`; if( `size $temp` ) $linear = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr optimize`; if( `size $temp` ) $optimize = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr preserve`; if( `size $temp` ) $preserve = $temp[0];
 	if( !`objExists $trigger` ) return;
+
+	//deal with control symbols
+	if( $control == "#" ) $control = $trigger;
+	if( $control == "*" ) {
+		if( `objExists ( $trigger +".controlObject" )`) {
+			string $cons[] = `listConnections -d 0 ( $trigger +".controlObject" )`;
+			if( `size $cons` ) $control = $cons[0];
+			}
+		else $control = $trigger;
+		}
 	if( !`objExists $control` ) return;
 
 	string $allTgts[] = {};

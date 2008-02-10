@@ -130,7 +130,7 @@ global proc string[] zooCSTBuildMPath( string $prefix, string $objs[], string $o
 		string $tempConstraint[] = eval( "orientConstraint "+ (zooArrayToStr_str($midObjs," ")) +" "+ $deformJoints[1] +";" );
 		for( $n=0; $n<`size $midObjs`; $n++ ) orientConstraint -e -w $distancesToObjs[$n] $midObjs[$n] $tempConstraint[0];
 		delete $tempConstraint[0];
-		makeIdentity -a 1 -r 1 $deformJoints[1];
+		makeIdentity -a 1 -r 1 $deformJoints;
 
 
 	//------
@@ -268,8 +268,8 @@ global proc string[] zooCSTBuildMPath( string $prefix, string $objs[], string $o
 	//------
 	//rename the curves
 	//------
-		$baseCurve = `rename $baseCurve ( $prefix +"_pointCurve" )`;
-		$curve = `rename $curve ( $prefix +"_mPath" )`;
+		$baseCurve = `rename $baseCurve ( "pointCurve" )`;
+		$curve = `rename $curve ( "mPath" )`;
 
 
 	//------

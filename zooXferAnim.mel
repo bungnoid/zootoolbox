@@ -61,10 +61,11 @@ global proc zooXferAnim() {
 			menuItem -l "Save/Load Mappings" -sm 1 -pmc( "zooBuildXferMappingMenu zooXferAnimMenuMappingPresets;" ) zooXferAnimMenuMappingPresets;
 			setParent -m ..;
 			menuItem -d 1;
-			menuItem -l "Strip Prefixes" -cb( `optionVar -ex zooXferAnimStrip`? `optionVar -q zooXferAnimStrip`: 1 ) -c( "optionVar -iv zooXferAnimStrip #1;" ) xferMenuStrip;
-			menuItem -l( "Matching Threshold: "+ $threshold ) -c( "zooXferAnimWindowFunctions threshold \"*\";" ) xferMenuThreshold;
+			menuItem -l "Strip Prefixes" -cb( `optionVar -ex zooXferAnimStrip`? `optionVar -q zooXferAnimStrip`: 1 ) -c( "optionVar -iv zooXferAnimStrip #1; zooXferAnimWindowFunctions matchSrcTgt n; zooXferAnimWindowFunctions update n;" ) xferMenuStrip;
+			menuItem -l "Ignore Parity (sidedness)" -cb( `optionVar -q zooXferAnimParityIgnore` ) -c( "optionVar -iv zooXferAnimParityIgnore #1; zooXferAnimWindowFunctions matchSrcTgt n; zooXferAnimWindowFunctions update n;" ) xferMenuIgnore;
+			menuItem -l( "Matching Threshold: "+ $threshold ) -c( "zooXferAnimWindowFunctions threshold \"*\"; zooXferAnimWindowFunctions matchSrcTgt n; zooXferAnimWindowFunctions update n;" ) xferMenuThreshold;
 			menuItem -d 1;
-			menuItem -l "Sort Alphabetically" -cb( $alphabetical ) -c( "optionVar -iv zooXferAnimAlphabetically #1;" ) zooXferAnimMenuAlphabetically;
+			menuItem -l "Sort Alphabetically" -cb( $alphabetical ) -c( "optionVar -iv zooXferAnimAlphabetically #1; zooXferAnimWindowFunctions update n;" ) zooXferAnimMenuAlphabetically;
 		menu -l "Load Items" zooXferAnimMenuQss;
 			menuItem -l "Load Source" -c( "zooXferAnimWindowFunctions loadSrc n;" ) zooXferAnimMenuSrc;
 			menuItem -l "Load Target" -c( "zooXferAnimWindowFunctions loadTgt n;" ) zooXferAnimMenuTgt;
@@ -108,7 +109,7 @@ global proc zooXferAnim() {
 						columnLayout -adjustableColumn 1;
 							checkBox -l "instance animation" zooXferAnimCheck1;
 							checkBox -l "match rotate order" -v 1 zooXferAnimCheck2;
-							checkBox -l "" -vis 0 -v 1 zooXferAnimCheck3;
+							checkBox -l "" -vis 0 -v 0 zooXferAnimCheck3;
 							checkBox -l "" -vis 0 -v 1 zooXferAnimCheck4;
 						setParent ..;
 					setParent ..;
@@ -223,8 +224,15 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 				else checkBox -e -v 0 -en 0 zooXferAnimCheck1;
 				}
 
-			if( `radioCollection -q -sl zooXferAnimRadioMode` == "zooXferAnimRadioModeTrace" ) checkBox -e -en 1 zooXferAnimCheckKeysOnly;
-			else checkBox -e -en 0 -v 0 zooXferAnimCheckKeysOnly;
+			if( `radioCollection -q -sl zooXferAnimRadioMode` == "zooXferAnimRadioModeTrace" ) {
+				checkBox -e -en 1 zooXferAnimCheckKeysOnly;
+				checkBox -e -v 0 zooXferAnimCheck2;  //match rotate order should generally be off for tracing - we're assuming if the rot orders are different the user has a good reason for that, and otherwise they don't care
+				checkBox -e -vis 1 -l "process post-trace cmds" zooXferAnimCheck3;  //turn on the trace specific checkbox for processing post-trace commands
+				}
+			else {
+				checkBox -e -en 0 -v 0 zooXferAnimCheckKeysOnly;
+				checkBox -e -vis 0 zooXferAnimCheck3;
+				}
 
 			if( `checkBox -q -v zooXferAnimCheckKeysOnly` ) checkBox -e -en 1 zooXferAnimCheckWithin;
 			else checkBox -e -en 0 -v 0 zooXferAnimCheckWithin;
@@ -288,10 +296,10 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 			radioButton -e -en 1 -vis 1 -l "copy/paste keys" zooXferAnimRadioModeCopy;
 			radioButton -e -en 1 -vis 1 -l "trace objects" zooXferAnimRadioModeTrace;
 
-			checkBox -e -l "instance animation" -vis 1 zooXferAnimCheck1;
-			checkBox -e -l "match rotate order" -vis 1 -v 1 zooXferAnimCheck2;
-			checkBox -e -l "" -vis 0 -v 1 zooXferAnimCheck3;
-			checkBox -e -l "" -vis 0 -v 1 zooXferAnimCheck4;
+			//checkBox -e -l "instance animation" -vis 1 zooXferAnimCheck1;
+			//checkBox -e -l "match rotate order" -vis 1 -v 1 zooXferAnimCheck2;
+			//checkBox -e -l "" -vis 0 zooXferAnimCheck3;
+			//checkBox -e -l "" -vis 0 zooXferAnimCheck4;
 
 			if( $isTgtLoaded ) zooXferAnimWindowFunctions matchSrcTgt n;
 			if( $variable01!=0 ) zooXferAnimWindowFunctions storeConfig n;
@@ -419,7 +427,8 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 			string $srcs[] = `textScrollList -q -ai zooXferAnimScrollSrcPaths`;
 			string $tgts[] = `textScrollList -q -ai zooXferAnimScrollTgts`;
 			int $strip = `optionVar -ex zooXferAnimStrip`? `optionVar -q zooXferAnimStrip`: 1;
-			string $matches[] = `zooMatchNames $srcs $tgts ( "-strip "+ $strip +" -threshold "+ $threshold +" -unique 1 -parity 1" )`;
+			int $ignoreParity = `optionVar -q zooXferAnimParityIgnore`;
+			string $matches[] = `zooMatchNames $srcs $tgts ( "-strip "+ $strip +" -threshold "+ $threshold +" -unique 1 -parity "+ (!$ignoreParity) )`;
 
 			textScrollList -e -ra zooXferAnimScrollSrcsTgts;
 			for( $n=0; $n<`size $srcs`; $n++ ) {
@@ -523,7 +532,7 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 			int $matchRo = `checkBox -q -v zooXferAnimCheck2`;
 			int $startTime = `intField -q -v zooXferAnimIntTraceStart`;
 			int $endTime = `intField -q -v zooXferAnimIntTraceEnd`;
-			int $world = `checkBox -q -v zooXferAnimCheck3`;
+			int $world = `checkBox -q -v zooXferAnimCheck3`;  //this is also "process trace cmds"
 			int $nocreate = `checkBox -q -v zooXferAnimCheck4`;
 
 			if( `checkBox -q -v zooXferAnimCheckWithin` ) $traceKeys = 2;
@@ -539,7 +548,7 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 
 			if( $filename != "" ) zooXferBatch ( "-mode 3 -offset "+ $offset +" -additive "+ $instance +" -filename "+ $filename +" -world "+ $world +" -nocreate "+ $nocreate ) $srcObjs $tgtObjs;
 			else if( $dupeCurves ) zooXferBatch ( "-mode 0 -instance "+ $instance +" -matchRo "+ $matchRo ) $srcObjs $tgtObjs;
-			else if( $isTraced ) zooXferBatch ( "-mode 2 -keys "+ $traceKeys +" -matchRo "+ $matchRo +" -range "+ $startTime +" "+ $endTime ) $srcObjs $tgtObjs;
+			else if( $isTraced ) zooXferBatch ( "-mode 2 -keys "+ $traceKeys +" -postCmds "+ $world +" -matchRo "+ $matchRo +" -range "+ $startTime +" "+ $endTime ) $srcObjs $tgtObjs;
 			else if( $addCurves ) zooXferBatch ( "-mode 1 -range "+ $startTime +" "+ $endTime +" -matchRo "+ $matchRo ) $srcObjs $tgtObjs;
 			break;
 
@@ -551,9 +560,9 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 				$new = `match "^[0-9.]+$" $new`;
 				if( $new == "" ) return;
 				optionVar -fv zooXferAnimThreshold ((float)$new);
-				menuItem -e -l ( "Matching Threshold: "+ $variable01 ) xferMenuThreshold
-				zooXferAnimWindowFunctions matchSrcTgt n;
-				zooXferAnimWindowFunctions srcChange n;
+				menuItem -e -l ( "Matching Threshold: "+ $variable01 ) xferMenuThreshold;
+				zooXferAnimWindowFunctions matchSrcTgt "";
+				zooXferAnimWindowFunctions srcChange "";
 				}
 			else {
 				$variable01 = `match "^[0-9.]+$" $variable01`;
@@ -804,7 +813,7 @@ global proc zooXferAnimBuildQssMenu( string $subCmd, string $parent ) {
 
 global proc string zooXferAnimInfo( string $function ) {
 	string $creationDate = "10 May 2003";
-	string $currentVersion = "4.07.04";
+	string $currentVersion = "4.08.01";
 
 	if( $function == "created" ) return $creationDate;
 	if( $function == "version" ) return $currentVersion;

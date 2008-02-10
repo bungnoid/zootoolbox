@@ -46,7 +46,6 @@ global proc string[] zooCSTBuildPrimIKFKSpine( string $prefix, string $root, str
 		string $masterqss = $worldParts[2];
 		string $qss = $worldParts[3];
 		string $controls[] = {};
-		if( !`objExists $hips` || $hips == $root ) $buildhips = 0;
 
 
 	//------
@@ -81,16 +80,17 @@ global proc string[] zooCSTBuildPrimIKFKSpine( string $prefix, string $root, str
 	//------
 	//build the controls
 	//------
-		string $chestSpace = `zooBuildControl ( $prefix + "_chest_space" ) ( "-type null -place "+ $subPrim[2] )`;
-		string $chestControl = `zooBuildControl ( $prefix + "_chest_ctrl" ) ( "-type "+ $type +" -place "+ $subPrim[2] +" -scale "+ $scale +" -colour "+ $colour )`;
-		string $midSpace = `zooBuildControl ( $prefix + "_spine_mid_space" ) ( "-type null -place "+ $subPrim[1] )`;
-		string $midControl = `zooBuildControl ( $prefix + "_spine_mid_ctrl" ) ( "-type "+ $type +" -place "+ $subPrim[1] +" -scale "+ $scale +" -colour "+ $colour )`;
-		string $baseControl = `zooBuildControl ( $prefix + "_base_ctrl" ) ( "-type "+ $type +" -place "+ $subPrim[0] +" -scale "+ $scale +" -colour "+ $colour )`;
+		$scale *= 1.25;  //increase the size of the spine controls - the global size is usually too small for the spine controls
+		string $axis = zooVectorAsAxis(`zooAxisInDirection $subPrim[2] {0.,0.,-1.}`);print( $axis +"\n" );
+
+		string $chestControl = `zooBuildControl ( $prefix + "_chestControl" ) ( "-type "+ $type +" -place "+ $subPrim[2] +" -align %p -orient 1 -axis "+ $axis +" -scale "+ (1.5*$scale) +" -colour "+ $colour )`;
+		string $chestSpace = zooGetElement_str(0,`listRelatives -p $chestControl`);// ( $prefix + "_chestSpace" ) ( "-type null -place "+ $subPrim[2] )`;
+		string $midControl = `zooBuildControl ( $prefix + "_spine_midControl" ) ( "-type "+ $type +" -place "+ $subPrim[1] +" -align %p -orient 1 -axis "+ $axis +" -scale "+ (1.5*$scale) +" -colour "+ $colour )`;
+		string $midSpace = zooGetElement_str(0,`listRelatives -p $midControl`);//`zooBuildControl ( $prefix + "_spine_midSpace" ) ( "-type null -place "+ $subPrim[1] )`;
+		string $baseControl = `zooBuildControl ( $prefix + "_baseControl" ) ( "-type "+ $type +" -place "+ $subPrim[0] +" -align %p -axis "+ $axis +" -scale "+ (1.5*$scale) +" -colour "+ $colour )`;
 
 		parent $baseControl $rootGimbal;
-		parent $midControl $midSpace;
 		parent $midSpace $rootGimbal;
-		parent $chestControl $chestSpace;
 		parent $chestSpace $midControl;
 		parentConstraint -mo $baseControl $subPrim[0];
 		parentConstraint -mo $midControl $subPrim[1];
@@ -100,10 +100,10 @@ global proc string[] zooCSTBuildPrimIKFKSpine( string $prefix, string $root, str
 		addAttr -at "float" -ln affect -min 0 -max 5 -dv 1 $midControl;
 		addAttr -at "float" -ln affect -min 0 -max 5 -dv 1 $chestControl;
 
-		setAttr -k 1 ( $rootControl +".affect" );
-		setAttr -k 1 ( $midControl +".affect" );
-		setAttr -k 1 ( $chestControl +".affect" );
-		setAttr ( $baseControl +".v" ) 0;
+		//setAttr -k 1 ( $rootControl +".affect" );
+		//setAttr -k 1 ( $midControl +".affect" );
+		//setAttr -k 1 ( $chestControl +".affect" );
+		//setAttr ( $baseControl +".v" ) 0;
 		connectAttr -f ( $rootControl +".affect" ) ( $subPrim[0] +".scaleX" );
 		connectAttr -f ( $rootControl +".affect" ) ( $subPrim[0] +".scaleY" );
 		connectAttr -f ( $rootControl +".affect" ) ( $subPrim[0] +".scaleZ" );
@@ -135,8 +135,8 @@ global proc string[] zooCSTBuildPrimIKFKSpine( string $prefix, string $root, str
 	//------
 	//build space switching expressions
 	//------
-		string $chestParents[] = { $midControl, $rootGimbal, $worldControl };
-		string $midParents[] = { $rootGimbal, $worldControl };
+		string $chestParents[] = { $midControl, $baseControl, $worldControl };
+		string $midParents[] = { $baseControl, $worldControl };
 		string $spaceNodes[] = {};
 
 		if( `size $parents` ) $chestParents = `zooAddArray_str $chestParents $parents`;

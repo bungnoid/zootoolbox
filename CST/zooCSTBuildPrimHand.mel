@@ -21,7 +21,14 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 		string $axes[] = { "#","#","#","#","#" };
 		string $control = "";
 		string $colour = "orange 0.65";
+
+		//default slider ranges, and rotation ranges if sliders are enabled
+		float $maxSlider = 90;
+		float $minSlider = -90;
+		float $maxFingerRot = 90;
+		float $minFingerRot = -90;
 		float $scale = 1;
+		float $taper = 1.0;
 		int $pickwalking = 1;
 		int $num = 0;
 		int $invert = 1;
@@ -39,6 +46,7 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 		$optionTemp = `zooGetFlagArguments $optionStr colour`; if( `size $optionTemp` ) $colour = `zooArrayToStr_str $optionTemp " "`;
 		$optionTemp = `zooGetFlagArguments $optionStr wrist`; if( `size $optionTemp` && `objExists $optionTemp[0]` ) $wrist = $optionTemp[0];
 		$optionTemp = `zooGetFlagArguments $optionStr control`; if( `size $optionTemp` && `objExists $optionTemp[0]` ) $control = $optionTemp[0];
+		$optionTemp = `zooGetFlagArguments $optionStr taper`; if( `size $optionTemp` ) $taper = $optionTemp[0];
 		$scale *= 0.5;  //manually modify the user scale, as fingers are generally small
 
 
@@ -50,7 +58,7 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 		string $worldParts[] = `zooCSTBuildWorld $prefix $optionStr`;
 		string $handControl = zooGetElement_str(0,`zooGetBrandedWithList { "name", "arm" } { $prefix, $suffix }`);
 		string $wristControl = zooGetElement_str(0,`zooGetBrandedWithList { "name", "fk_wrist" } { $prefix, $suffix }`);
-		string $handqss = `sets -empty -text "gCharacterSet" -n ( $prefix + "_hand_ctrls"+ $suffix )`;
+		string $handqss = `sets -empty -text "gCharacterSet" -n ( $prefix + "_handControls"+ $suffix )`;
 		string $prim = "";
 		string $wristFromPrim = "";
 
@@ -90,15 +98,15 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 	//------
 	//build the main hand group, and the slider control for the fingers
 	//------
-		string $handGrp = `zooBuildControl ( $prefix +"_hand_space"+ $suffix ) ( "-type null -place "+ $wrist )`;
-		string $handSliders = `zooBuildControl ( $prefix +"_hand_sliders"+ $suffix ) ( "-type pointer -place "+ $wrist +" -axis _z -surface 0 -offset -4fwd -scale "+ (0.5*$scale) +" -colour "+ $colour )`;
-		string $poseCurve = `zooBuildControl ( $prefix +"_hand_poses"+ $suffix ) ( "-type starCircle -place "+ $wrist +" -surface 0 -scale "+ $scale +" -colour "+ $colour )`;
+		string $handGrp = `zooBuildControl ( "handSpace"+ $suffix ) ( "-type null -place "+ $wrist )`;
+		string $handSliders = `zooBuildControl ( "hand_sliders"+ $suffix ) ( "-type pointer -place "+ $wrist +" -axis _z -surface 0 -offset -4fwd -scale "+ (0.65*$scale) +" -colour "+ $colour )`;
+		string $poseCurve = `zooBuildControl ( "hand_poses"+ $suffix ) ( "-type starCircle -place "+ $wrist +" -surface 0 -scale "+ $scale +" -colour "+ $colour )`;
 
 		move -r ($averageWristToBaseVector[0]*$scale*2) ($averageWristToBaseVector[1]*$scale*2) ($averageWristToBaseVector[2]*$scale*2) $handSliders;
 		parentConstraint $wrist $handGrp;
 		parent $handSliders $handGrp;
 		parent $poseCurve $handSliders;
-		parent $handGrp $partsControl;
+		parent $handGrp $worldControl;
 		delete `parentConstraint $handSliders $poseCurve`;
 		zooBrandObject name $prefix $handGrp;
 		zooBrandObject hand $suffix $handGrp;
@@ -107,12 +115,15 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 		zooAttrState "-attrs t r s -k 0 -l 1" $poseCurve;
 		zooAttrState "-attrs v -k 0" $handSliders;
 		zooAttrState "-attrs v -k 0" $poseCurve;
+		addAttr -at message -ln controlObject $poseCurve;  //build the attribute so posesToSliders knows where to write the pose sliders to when poses are rebuilt
+		connectAttr -f ( $handSliders +".message" ) ( $poseCurve +".controlObject" );
 
 	//now start building the controls
 		string $allCtrls[] = { $handSliders, $poseCurve };
 		string $allSpaces[] = {};
 		string $allConstraints[] = {};
 		string $baseControls[] = {};
+		string $baseSpaces[] = {};
 		string $slider_curl[] = {};
 		string $slider_bend[] = {};
 		string $slider_twist[] = {};
@@ -141,21 +152,25 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 
 			for( $i=0; $i<$num; $i++ ) {
 				string $ctrlAxis = `zooCSTJointDirection $joints[$i]`;
-				$spaces[$i] = `zooBuildControl ( $prefix +"_"+ $name +"_space_"+ $i + $suffix ) ( "-type null -orient 1 -scale "+ $scale +" -place "+ $joints[$i] +" -align %p -colour "+ $colour )`;
-				$ctrls[$i] = `zooBuildControl ( $prefix +"_"+ $name +"_ctrl_"+ $i + $suffix )  ( "-type sphere -typecurve ring -axis "+ $ctrlAxis +" -place "+ $joints[$i] +" -scale "+ $scale +" -colour "+ $colour )`;
+				float $ctrlScale = $scale*pow($taper,$i);
+
+				$spaces[$i] = `zooBuildControl ( ""+ $name +"Space_"+ $i + $suffix ) ( "-type null -orient 1 -scale "+ $scale +" -place "+ $joints[$i] +" -align %p -colour "+ $colour )`;
+				$ctrls[$i] = `zooBuildControl ( ""+ $name +"Control_"+ $i + $suffix )  ( "-type sphere -typecurve ring -axis "+ $ctrlAxis +" -place "+ $joints[$i] +" -scale "+ $ctrlScale +" -colour "+ $colour )`;
 				parent $ctrls[$i] $spaces[$i];
 				setAttr ( $ctrls[$i] +".r" ) 0 0 0;
 				if( $i ) parent `listRelatives -pa -p $spaces[$i]` $ctrls[( $i-1 )];
 				$constraints = zooAddArray_str( `parentConstraint $ctrls[$i] $joints[$i]`, $constraints );
 				zooAttrState "-attrs t s -k 0 -l 1" $ctrls[$i];
 				zooAttrState "-attrs v -k 0" $ctrls[$i];
+				zooAttrState "-attrs t s v -l 1 -k 0" $spaces[$i];
+				zooAddConnect $poseCurve $spaces[$i];
 				}
 			$allCtrls = `zooAddArray_str $allCtrls $ctrls`;
 			$allSpaces = `zooAddArray_str $allSpaces $spaces`;
 			$allConstraints = `zooAddArray_str $allConstraints $constraints`;
-			$baseControls[( `size $baseControls` )] = $ctrls[0];
+			$baseControls[`size $baseControls`] = $ctrls[0];
+			$baseSpaces[`size $baseSpaces`] = $spaces[0];
 			parent `listRelatives -pa -p $spaces[0]` $handGrp;
-			zooAddConnect $poseCurve $spaces[0];
 
 			if( $sliders ) {
 				//build the curl sliders
@@ -171,41 +186,41 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 				if( $axes[$n] == "" ) $axes[$n] = $rotateAxis;
 				$direction *= $invert;
 
-				addAttr -ln $driverAttr -k 1 -at double -min -10 -max 10 -dv 0 $handSliders;
+				addAttr -ln $driverAttr -k 1 -at double -min $minSlider -max $maxSlider -dv 0 $handSliders;
 				setAttr -k 1 ( $handSliders +"."+ $driverAttr ) 0;
 				for( $i=0; $i<$num; $i++ ) setDrivenKeyframe -at( "r"+ $axes[$n] ) -cd( $handSliders +"."+ $driverAttr ) $spaces[$i];
 
-				setAttr ( $handSliders +"."+ $driverAttr ) 10;
+				setAttr ( $handSliders +"."+ $driverAttr ) $maxSlider;
 				for( $i=0; $i<$num; $i++ ) {
-					rotate -r -os ( $axes[$n]=="x"? 120*$direction: 0 ) ( $axes[$n]=="y"? 120*$direction: 0 ) ( $axes[$n]=="z"? 120*$direction: 0 ) $spaces[$i];
+					rotate -r -os ( $axes[$n]=="x"? $maxFingerRot*$direction: 0 ) ( $axes[$n]=="y"? $maxFingerRot*$direction: 0 ) ( $axes[$n]=="z"? $maxFingerRot*$direction: 0 ) $spaces[$i];
 					setDrivenKeyframe -at( "r"+ $axes[$n] ) -cd( $handSliders +"."+ $driverAttr ) $spaces[$i];
 					}
 
-				setAttr ( $handSliders +"."+ $driverAttr ) -10;
+				setAttr ( $handSliders +"."+ $driverAttr ) $minSlider;
 				for( $i=0; $i<$num; $i++ ) {
-					rotate -r -os ( $axes[$n]=="x"? -120*$direction: 0 ) ( $axes[$n]=="y"? -120*$direction: 0 ) ( $axes[$n]=="z"? -120*$direction: 0 ) $spaces[$i];
+					rotate -r -os ( $axes[$n]=="x"? $minFingerRot*$direction: 0 ) ( $axes[$n]=="y"? $minFingerRot*$direction: 0 ) ( $axes[$n]=="z"? $minFingerRot*$direction: 0 ) $spaces[$i];
 					setDrivenKeyframe -at( "r"+ $axes[$n] ) -cd( $handSliders +"."+ $driverAttr ) $spaces[$i];
 					}
 
 				setAttr ( $handSliders +"."+ $driverAttr ) 0;
-				$slider_curl[( `size $slider_curl` )] = $driverAttr;
+				$slider_curl[`size $slider_curl`] = $driverAttr;
 
 				//build the bend sliders
 				$driverAttr = $name +"Bend";
-				addAttr -ln $driverAttr -k 1 -at double -min -10 -max 10 -dv 0 $handSliders;
+				addAttr -ln $driverAttr -k 1 -at double -min $minSlider -max $maxSlider -dv 0 $handSliders;
 				setAttr -k 1 ( $handSliders +"."+ $driverAttr ) 0;
 				setDrivenKeyframe -at( "r"+ $axes[$n] ) -cd( $handSliders +"."+ $driverAttr ) $spaces[0];
 
-				setAttr ( $handSliders +"."+ $driverAttr ) 10;
-				rotate -r -os ( $axes[$n]=="x"? 120*$direction: 0 ) ( $axes[$n]=="y"? 120*$direction: 0 ) ( $axes[$n]=="z"? 120*$direction: 0 ) $spaces[0];
+				setAttr ( $handSliders +"."+ $driverAttr ) $maxSlider;
+				rotate -r -os ( $axes[$n]=="x"? $maxFingerRot*$direction: 0 ) ( $axes[$n]=="y"? $maxFingerRot*$direction: 0 ) ( $axes[$n]=="z"? $maxFingerRot*$direction: 0 ) $spaces[0];
 				setDrivenKeyframe -at( "r"+ $axes[$n] ) -cd( $handSliders +"."+ $driverAttr ) $spaces[0];
 
-				setAttr ( $handSliders +"."+ $driverAttr ) -10;
-				rotate -r -os ( $axes[$n]=="x"? -120*$direction: 0 ) ( $axes[$n]=="y"? -120*$direction: 0 ) ( $axes[$n]=="z"? -120*$direction: 0 ) $spaces[0];
+				setAttr ( $handSliders +"."+ $driverAttr ) $minSlider;
+				rotate -r -os ( $axes[$n]=="x"? $minFingerRot*$direction: 0 ) ( $axes[$n]=="y"? $minFingerRot*$direction: 0 ) ( $axes[$n]=="z"? $minFingerRot*$direction: 0 ) $spaces[0];
 				setDrivenKeyframe -at( "r"+ $axes[$n] ) -cd( $handSliders +"."+ $driverAttr ) $spaces[0];
 
 				setAttr ( $handSliders +"."+ $driverAttr ) 0;
-				$slider_bend[( `size $slider_bend` )] = $driverAttr;
+				$slider_bend[`size $slider_bend`] = $driverAttr;
 				}
 
 
@@ -215,20 +230,38 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 			if( $pickwalking ) {
 				zooPickwalk "-load";
 				for( $i=0; $i<`size $ctrls`-1; $i++ ) zooSetPickwalkObj $ctrls[$i] $ctrls[( $i+1 )] "-dir down -reciprocal 1";
-				zooSetPickwalkObj $ctrls[0] $control "-dir up -reciprocal 0";
+				zooSetPickwalkObj $ctrls[0] $handSliders "-dir up -reciprocal 0";
 				}
-
-
-		//------
-		//add the controls to the quick selection set
-		//------
-		//for( $obj in $ctrls ) sets -add $qss $obj;
 		}
+
+	//------
+	//create all of the setPose trigger attributes now that all connects have been added
+	//------
+		zooObjMenuAddCmdAll $poseCurve base ( `zooWriteSetAttrCmd $poseCurve (zooGetConnects($poseCurve))` );
+		for( $n=0; $n<`size $bases`; $n++ ) {
+			string $name = $names[$n] +"Curl";
+			setAttr ( $handSliders +"."+ $name ) $maxSlider;
+			zooObjMenuAddCmdAll $poseCurve ( $name +"_"+ $maxSlider ) ( `zooWriteSetAttrCmd $poseCurve (zooGetConnects($poseCurve))` );
+			setAttr ( $handSliders +"."+ $name ) $minSlider;
+			zooObjMenuAddCmdAll $poseCurve ( $name +"_"+ $minSlider ) ( `zooWriteSetAttrCmd $poseCurve (zooGetConnects($poseCurve))` );
+			setAttr ( $handSliders +"."+ $name ) 0;
+			}
+		for( $n=0; $n<`size $bases`; $n++ ) {
+			string $name = $names[$n] +"Bend";
+			setAttr ( $handSliders +"."+ $name ) $maxSlider;
+			zooObjMenuAddCmdAll $poseCurve ( $name +"_"+ $maxSlider ) ( `zooWriteSetAttrCmd $poseCurve $baseSpaces` );
+			setAttr ( $handSliders +"."+ $name ) $minSlider;
+			zooObjMenuAddCmdAll $poseCurve ( $name +"_"+ $minSlider ) ( `zooWriteSetAttrCmd $poseCurve $baseSpaces` );
+			setAttr ( $handSliders +"."+ $name ) 0;
+			}
+		zooObjMenuAddCmdAll $poseCurve ( "spread_"+ $maxSlider ) ( `zooWriteSetAttrCmd $poseCurve (zooGetConnects($poseCurve))` );
+		zooObjMenuAddCmdAll $poseCurve ( "spread_"+ $minSlider ) ( `zooWriteSetAttrCmd $poseCurve (zooGetConnects($poseCurve))` );
+
 
 	if( $pickwalking ) {
 		//not sure why, but when pickwalking is enabled, weird shit happens to the curl/bend attributes...  no idea why
-		//zooSetPickwalkObj $control $handSliders "-dir down -reciprocal 1";
-		//zooSetPickwalkObj $control $handSliders "-dir down -reciprocal 0";
+		//zooSetPickwalkObj $handSliders $control "-dir up -reciprocal 1";
+		//zooSetPickwalkObj $handSliders $control "-dir down -reciprocal 0";
 		zooSetPickwalkObj $wristControl $handSliders "-dir down -reciprocal 0";
 		}
 
@@ -237,20 +270,12 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 		$attrOrder = `zooAddArray_str $attrOrder $slider_twist`;
 		zooReorderAttrs $handSliders $attrOrder;
 
-	//lock space attributes
-		for( $s in $allSpaces ) zooAttrState "-attrs t s v -l 1 -k 0" $s;
-		zooObjMenuAddCmdAll $poseCurve base ( `zooWriteSetAttrCmd $poseCurve (zooGetConnects($poseCurve))` );
-
 	//------
 	//add a zooObjMenu command to toggle finger control vis, and select them
 	//------
-		int $cmd1Num = `zooObjMenuAddCmd $handSliders`;
-		int $cmd2Num = `zooObjMenuAddCmd $handSliders`;
-		int $cmd3Num = `zooObjMenuAddCmd $handSliders`;
-		int $cmd4Num = `zooObjMenuAddCmd $handSliders`;
 		int $connects[] = {};
 
-		for( $b in $baseControls ) $connects[( `size $connects` )] = `zooAddConnect $handSliders $b`;
+		for( $b in $baseControls ) $connects[`size $connects`] = `zooAddConnect $handSliders $b`;
 		string $toggleCmd = "int $vis = !`getAttr %"+ $connects[0] +".v`;\n";
 		string $offset1Cmd = "";
 		string $offset2Cmd = "";
@@ -258,14 +283,11 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 		for( $n in $connects ) $toggleCmd += "setAttr %"+ $n +".v $vis;\n";
 		for( $n=0; $n<`size $slider_bend`-1; $n++ ) $offset1Cmd += "setAttr -c #."+ $slider_bend[$n] +" ( `getAttr #."+ $slider_bend[$n] +"`+ "+ (0.1*($n+1)) +" );\n";  //-1 on the range because we assume the thumb is the last digit
 		for( $n=0; $n<`size $slider_bend`-1; $n++ ) $offset2Cmd += "setAttr -c #."+ $slider_bend[$n] +" ( `getAttr #."+ $slider_bend[$n] +"`+ "+ (0.35*($n+1)) +" );\n";
-		zooSetObjMenuCmdName $handSliders "hide/show fingers" $cmd1Num;
-		zooSetObjMenuCmdName $handSliders "select all fingers" $cmd2Num;
-		zooSetObjMenuCmdName $handSliders "add small offset to fingers" $cmd3Num;
-		zooSetObjMenuCmdName $handSliders "add bigger offset to fingers" $cmd4Num;
-		zooSetObjMenuCmdStr $handSliders $toggleCmd $cmd1Num;
-		zooSetObjMenuCmdStr $handSliders ( "select -r # %"+ `zooArrayToStr_int $connects " %"` +";" ) $cmd2Num;
-		zooSetObjMenuCmdStr $handSliders $offset1Cmd $cmd3Num;
-		zooSetObjMenuCmdStr $handSliders $offset2Cmd $cmd4Num;
+		int $qssIdx = `zooAddConnect $handSliders $handqss`;
+		zooObjMenuAddCmdAll $handSliders "hide/show fingers" $toggleCmd;
+		zooObjMenuAddCmdAll $handSliders "select all fingers" ( "select %"+ $qssIdx +";" );
+		zooObjMenuAddCmdAll $handSliders "add small offset to fingers" $offset1Cmd;
+		zooObjMenuAddCmdAll $handSliders "add bigger offset to fingers" $offset2Cmd;
 		for( $c in $allCtrls ) sets -add $handqss $c;
 
 

@@ -57,7 +57,7 @@ global proc float[] zooFindPolePosition( string $optionStr ){
 	$dist *= $lengthFactor;  //the length factor is simply the rough length of the leg.  doing this aims to fit the distance the pole appropriately
 	float $mag = sqrt( $sub[0]*$sub[0] + $sub[1]*$sub[1] + $sub[2]*$sub[2] );
 
-	if( $mag < 0.00001 ) return $pos1;  //if the magnitude is really small, this means the knee angle is really small.  In this case, simply return the position of the knee
+	if( $mag < 0.001 ) return $pos1;  //if the magnitude is really small, this means the knee angle is really small.  In this case, simply return the position of the knee
 	else $multiplier = $dist/$mag;
 	$int[0] = $midway[0] + $sub[0]*$multiplier;
 	$int[1] = $midway[1] + $sub[1]*$multiplier;

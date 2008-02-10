@@ -43,8 +43,8 @@ global proc string[] zooCSTBuildWorld( string $prefix, string $optionStr ) {
 		$masterqss = `sets -empty -text "gCharacterSet" -n ( $prefix +"_all_ctrls" )`;
 
 		sets -add $masterqss $qss;
-		$world = `rename $world ( $prefix +"_world" )`;
-		$parts = `rename $parts ( $prefix +"_parts_grp" )`;
+		$world = `rename $world "main"`;
+		$parts = `rename $parts "parts_grp"`;
 
 		addAttr -ln setupWithVersion -dt "string" $world;
 		addAttr -ln rigAuthor -dt "string" $world;
@@ -67,7 +67,7 @@ global proc string[] zooCSTBuildWorld( string $prefix, string $optionStr ) {
 		sets -add $masterqss $world;
 
 		//turn unwanted transforms off, so that they are locked, and no longer keyable
-		zooAttrState "-attrs v -k 0 -l 1" $world;
+		zooAttrState "-attrs s v -k 0 -l 1" $world;
 		zooAttrState "-attrs t r s v -k 0" $parts;
 
 		//now brand all objects

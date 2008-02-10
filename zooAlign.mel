@@ -3,6 +3,9 @@ zooVectors;
 zooFlags;
 
 
+global string $g_roos[] = {"xyz","yzx","zxy","xzy","yxz","zyx"};
+
+
 //------
 //this general purpose proc aligns two objects - it uses parent constraint (on an intermediate object) so its rotation order independent
 //------
@@ -16,13 +19,23 @@ global proc zooAlign( string $optionStr ) {
 	string $tgts[] = `zooIndexCrop_str $selObjs "1:"`;
 	int $pivot = 0;
 	int $key = 0;
+	int $runPostXfer = 0;
 
 	$temp = `zooGetFlagArguments $optionStr load`; if( `size $temp` ) if( $temp[0] == "1" ) return;
 	$temp = `zooGetFlagArguments $optionStr src`; if( `objExists $temp[0]` ) $src = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr tgt`; if( `size $temp` ) $tgts = $temp;
 	$temp = `zooGetFlagArguments $optionStr pivot`; if( `size $temp` ) $pivot = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr key`; if( `size $temp` ) $key = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr runPostXfer`; if( `size $temp` ) $runPostXfer = $temp[0];
+
 	for( $tgt in $tgts ) zooAlignFast $src $tgt $key $pivot;
+	if( $runPostXfer ) {
+		string $cmd = `zooGetPostTraceCmd $tgt`;
+		if( $cmd != "" ) {
+			$cmd = `zooPopulateCmdStr $tgt $cmd`;
+			catch(eval($cmd));
+			}
+		}
 	}
 
 
@@ -36,41 +49,46 @@ global proc zooAlignFast( string $src, string $tgt, int $key, int $pivotOnly ){
 	if( !`objExists $src` || !`objExists $tgt` ) return;
 	if( !`objExists ( $src +".t" )` || !`objExists ( $tgt +".t" )` ) return;
 
-	//get a list of the selected object, and duplicate the target object - we duplicate the target so we're
-	//free to do whatever we want to it, without disturbing any animation or connections on the actual target
-	string $selObjs[] = `ls -sl`;
-	string $dupe = zooGetElement_str(0,`duplicate -rc $tgt`);
+	//
+	float $pos[] = `xform -q -ws -rp $src`;
+	float $rot[] = `xform -q -ws -ro $src`;
 
 	//create a list of all the axes to look at - we will check all these axes to make sure they're not locked
 	//creating a constraint on a locked axis will give us an error
-	string $axes[] = { "tx","ty","tz","rx","ry","rz" };
-	int $lok[] = {};
+	string $axes[] = { "x","y","z" };
+	string $posCmd = "move -a -ws -rpr ";
+	string $rotCmd = "rotate -a -ws ";
+	string $posAxes = "";
+	string $rotAxes = "";
 
-	//go through the list of axes above, and build an array that tells us which axes aren't settable
-	for( $a in $axes ) $lok[( `size $lok` )] = `getAttr -se ($tgt +"."+ $a)`;
+	for( $n=0; $n<3; $n++ ) {
+		if( `getAttr -se ( $tgt +".t"+ $axes[$n] )`) $posAxes += "-"+ $axes[$n] +" "+ $pos[$n] +" ";
+		if( `getAttr -se ( $tgt +".r"+ $axes[$n] )`) $rotAxes += "-"+ $axes[$n] +" "+ $rot[$n] +" ";
+		}
 
-	//parent constrain the target object to the source object, making sure to skip over the axes that are locked
 	if( $pivotOnly ) {
-		float $pos[] = `xform -q -ws -rp $src`;
-		xform -a -ws -piv $pos[0] $pos[1] $pos[2] $tgt;
+		if( strip($posAxes) != "" ) eval( $posCmd + $posAxes + $tgt +".rp "+ $tgt +".sp" );
 		}
-	else eval( "parentConstraint "+ ($lok[0]?"":"-st x ") + ($lok[1]?"":"-st y ") + ($lok[2]?"":"-st z ") + ($lok[3]?"":"-sr x ") + ($lok[4]?"":"-sr y ") + ($lok[5]?"":"-sr z ") + $src +" "+ $dupe );
+	else {
+		//so if the rotation orders are different, we need to deal with that because the xform cmd doesn't
+		int $srcRo = `getAttr ( $src +".ro" )`;
+		int $tgtRo = `getAttr ( $tgt +".ro" )`;
+		if( $srcRo != $tgtRo ) setAttr ( $tgt +".ro" ) $srcRo;
 
-	//now go over each axis, and if its not locked set the REAL target object to the transform values of the duplicate
-	//target object.  this will make the real target aligned to the source object, all without having to add an
-	//actual constraint to the target object itself
-	for( $n=0; $n<`size $axes`; $n++ ) if( $lok[$n] ) {
-		setAttr ($tgt +"."+ $axes[$n]) `getAttr ($dupe +"."+ $axes[$n])`;
-		if( $key ) setKeyframe -at $axes[$n] $tgt;
+		//
+		if( strip($posAxes) != "" ) eval( $posCmd + $posAxes + $tgt );
+		if( strip($rotAxes) != "" ) eval( $rotCmd + $rotAxes + $tgt );
+
+		//now restore the original rotation order
+		global string $g_roos[];
+		xform -p 1 -roo $g_roos[$tgtRo];
 		}
 
-	//now we delete the duplicate target object, and select the objects that were selected before the script was run
-	delete $dupe;
-	select $selObjs;
+	if( $key ) setKeyframe -at t -at r $tgt;
 	}
 
 
-//does a simple align
+//does a simple align which basically means it doesn't take into account locked attributes or differing rotation orders
 global proc zooAlignSimple( string $src, string $tgt ){
 	//these two lines check to make sure the objects to be aligned are both transform (or joint) nodes, otherwise, it quits
 	if( !`objExists $src` || !`objExists $tgt` ) return;
@@ -184,13 +202,40 @@ global proc zooAlignIK( string $optionStr ) {
 	string $effector = `ikHandle -q -ee $ikHandle`;
 	string $effectorCtrl[] = `listConnections -d 0 ( $effector +".tx" )`;
 
+	zooAlign ( "-src "+ $effectorCtrl[0] +" -tgt "+ $control );
 	if( `objExists $pole` ) {
-		float $pos[] = `zooFindPolePosition ( "-start "+ $joints[0] +" -mid "+ $joints[1] +" -end "+ $effector +" -dist 1" )`;
-		move -ws -rpr $pos[0] $pos[1] $pos[2] $pole;
+		float $pos[] = `zooFindPolePosition ( "-start "+ $joints[0] +" -mid "+ $joints[1] +" -end "+ $effectorCtrl[0] )`;
+		move -a -ws -rpr $pos[0] $pos[1] $pos[2] $pole;
 		}
 
-	zooAlign ( "-src "+ $effectorCtrl[0] +" -tgt "+ $control );
 	if( `size $offCmd` ) eval $offCmd;
+	}
+
+
+//transfers the pose on a child to its parent
+global proc zooChildToParent( string $child ) {
+	string $sel[] = `ls -sl`;
+	string $parent = zooGetElement_str(0,`listRelatives -f -p $child`);
+	string $loc = zooGetElement_str(0,`spaceLocator`);
+
+	zooAlign ( "-src "+ $child +" -tgt "+ $loc );
+	zooResetAttrs $child;
+	zooAlign ( "-src "+ $loc +" -tgt "+ $parent );
+	delete $loc;
+	select $sel;
+	}
+
+
+global proc string zooGetPostTraceCmd( string $obj ) {
+	if( `objExists ( $obj +".xferPostTraceCmd" )`) return `getAttr ( $obj +".xferPostTraceCmd" )`;
+	return "";
+	}
+
+
+global proc zooSetPostTraceCmd( string $obj, string $cmd ) {
+	if( $cmd == "" ) return;
+	if( !`objExists ( $obj +".xferPostTraceCmd" )`) addAttr -dt "string" -ln xferPostTraceCmd $obj;
+	setAttr -type "string" ( $obj +".xferPostTraceCmd" ) $cmd;
 	}
 
 

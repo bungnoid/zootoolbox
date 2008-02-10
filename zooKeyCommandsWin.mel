@@ -106,11 +106,7 @@ popupMenu -p $endNum;
 	menuItem -l "< - previous key" -c( "textField -e -tx \"<\" "+ $endNum );
 	menuItem -l "> - next key" -c( "textField -e -tx \">\" "+ $endNum );
 
-popupMenu -p $cmdStr;
-	menuItem -l "setKeyframe (all attributes)" -c( "scrollField -e -tx \"setKeyframe\" "+ $cmdStr );
-	menuItem -l "setKeyframe (transforms only)" -c( "scrollField -e -tx \"setKeyframe -at t -at r -at s\" "+ $cmdStr );
-	menuItem -l "zooChangeSpace" -c( "scrollField -e -tx \"zooChangeSpace \\\"-attr parent 0\\\" #\" "+ $cmdStr );
-	menuItem -l "change rotate order" -c( "scrollField -e -tx \"xform -p 1 -roo zxy #;\\nsetKeyframe;\\nsetAttr #.rotateOrder 0;\\n//NOTE: you still need to manually change the\\n//rotation order attribute after this script\\n//finishes\\n//\\n//This script just makes sure all previously\\n//set keys are oriented correctly for the\\n//new rotation order\" "+ $cmdStr );
+popupMenu -p $cmdStr -pmc( "zooBuildKeyCommandsPresetsPopup zooKeyCommandsPopPresets;" ) zooKeyCommandsPopPresets;
 
 showWindow $windowName;
 }
@@ -124,6 +120,34 @@ global proc zooKeyCommandsWinExecute() {
 
 	print( "executing command:  "+ $cmd +"\n" );
 	zooKeyCommands ( "-frames "+ $start +" "+ $end +" -bake "+ $bake ) $cmd;
+	}
+
+
+global proc zooBuildKeyCommandsPresetsPopup( string $parent ) {
+	setParent -m $parent;
+	menu -e -dai $parent;
+
+	menuItem -l "setKeyframe (all attributes)" -c( "zooSetKeyCommandsWindowCmd \"setKeyframel\";" );
+	menuItem -l "setKeyframe (transforms only)" -c( "zooSetKeyCommandsWindowCmd \"setKeyframe -at t -at r -at s;\"" );
+	menuItem -l "zooChangeSpace" -c( "zooSetKeyCommandsWindowCmd \"zooChangeSpace \\\"-attr parent 0\\\" #;\"" );
+	menuItem -l "change rotate order" -c( "zooSetKeyCommandsWindowCmd \"xform -p 1 -roo zxy #;\\nsetKeyframe;\\nsetAttr #.rotateOrder 0;\\n//NOTE: you still need to manually change the\\n//rotation order attribute after this script\\n//finishes\\n//\\n//This script just makes sure all previously\\n//set keys are oriented correctly for the\\n//new rotation order\"" );
+	menuItem -d 1;
+
+	//now look for any and all objMenu commands on the selected objects
+	string $ls[] = `ls -sl`;
+	zooObjMenuUtils;
+	for( $s in $ls ) {
+		int $cmds[] = `zooObjMenuListCmds $s`;
+		for( $n in $cmds ) {
+			string $name = `zooGetObjMenuCmdName $s $n`;
+			menuItem -l $name -c( "zooSetKeyCommandsWindowCmd `zooGetObjMenuCmdStr "+ $s +" "+ $n +"`;" );
+			}
+		}
+	}
+
+
+global proc zooSetKeyCommandsWindowCmd( string $cmd ) {
+	scrollField -e -tx $cmd zooKeyCommandsTextCmd;
 	}
 
 

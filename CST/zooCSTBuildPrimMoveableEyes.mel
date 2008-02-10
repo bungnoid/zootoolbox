@@ -47,17 +47,17 @@ global proc string[] zooCSTBuildPrimMoveableEyes( string $prefix, string $eyeL, 
 
 	//
 	// ------------- CREATE ALL CONTROLS -------------
-		string $headSpace = `zooBuildControl ( $prefix +"_false_head_space" ) ( "-type null -place "+ $headControl )`;
-		string $eyeControl = `zooBuildControl ( $prefix +"_eye_aim_ctrl" ) ( "-type target -axis z -place "+ $eyeL +" -scale "+$controllerScale+" -offset 5fwd"+" -colour "+ $colour )`;
-		string $eyeLAimSpace = `zooBuildControl ( $prefix +"_eye_aim_space_L" ) ( "-type null -place "+ $eyeL )`;
-		string $eyeRAimSpace = `zooBuildControl ( $prefix +"_eye_aim_space_R" ) ( "-type null -place "+ $eyeR )`;
-		string $eyeLPosControl = `zooBuildControl ( $prefix +"_eye_pos_ctrl_L" ) ( "-type sphere -place "+ $eyeL +" -scale "+ $controllerScale +" -offset 5fwd"+" -colour "+ $colour )`;
-		string $eyeRPosControl = `zooBuildControl ( $prefix +"_eye_pos_ctrl_R" ) ( "-type sphere -place "+ $eyeR +" -scale "+ $controllerScale +" -offset 5fwd"+" -colour "+ $colour )`;
-		string $eyeLRotControl = `zooBuildControl ( $prefix +"_eye_rot_ctrl_L" ) ( "-type sphere -place "+ $eyeL +" -scale "+ $controllerScale +" -colour "+ $colour )`;
-		string $eyeRRotControl = `zooBuildControl ( $prefix +"_eye_rot_ctrl_R" ) ( "-type sphere -place "+ $eyeR +" -scale "+ $controllerScale +" -colour "+ $colour )`;
-		string $eyeLRotControlSpace = `zooBuildControl ( $prefix +"_eye_rot_space_L" ) ( "-type null -place "+ $eyeL )`;
-		string $eyeRRotControlSpace = `zooBuildControl ( $prefix +"_eye_rot_space_R" ) ( "-type null -place "+ $eyeR )`;
-		string $eyeControlSpace = `zooBuildControl ( $prefix +"_eye_space" ) ( "-type null -place "+ $eyeL )`;
+		string $headSpace = `zooBuildControl ( "false_headSpace" ) ( "-type null -place "+ $headControl )`;
+		string $eyeControl = `zooBuildControl ( "eye_aimControl" ) ( "-type target -axis z -place "+ $eyeL +" -scale "+$controllerScale+" -offset 5fwd"+" -colour "+ $colour )`;
+		string $eyeLAimSpace = `zooBuildControl ( "eye_aimSpace_L" ) ( "-type null -place "+ $eyeL )`;
+		string $eyeRAimSpace = `zooBuildControl ( "eye_aimSpace_R" ) ( "-type null -place "+ $eyeR )`;
+		string $eyeLPosControl = `zooBuildControl ( "eye_posControl_L" ) ( "-type sphere -place "+ $eyeL +" -scale "+ $controllerScale +" -offset 5fwd"+" -colour "+ $colour )`;
+		string $eyeRPosControl = `zooBuildControl ( "eye_posControl_R" ) ( "-type sphere -place "+ $eyeR +" -scale "+ $controllerScale +" -offset 5fwd"+" -colour "+ $colour )`;
+		string $eyeLRotControl = `zooBuildControl ( "eye_rotControl_L" ) ( "-type sphere -place "+ $eyeL +" -scale "+ $controllerScale +" -colour "+ $colour )`;
+		string $eyeRRotControl = `zooBuildControl ( "eye_rotControl_R" ) ( "-type sphere -place "+ $eyeR +" -scale "+ $controllerScale +" -colour "+ $colour )`;
+		string $eyeLRotControlSpace = `zooBuildControl ( "eye_rotSpace_L" ) ( "-type null -place "+ $eyeL )`;
+		string $eyeRRotControlSpace = `zooBuildControl ( "eye_rotSpace_R" ) ( "-type null -place "+ $eyeR )`;
+		string $eyeControlSpace = `zooBuildControl ( "eyeSpace" ) ( "-type null -place "+ $eyeL )`;
 
 		select -r $eyeControl;
 		move -a -ws -rpr -x 0;

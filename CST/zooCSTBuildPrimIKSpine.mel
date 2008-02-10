@@ -81,11 +81,11 @@ global proc string[] zooCSTBuildPrimIKSpine( string $prefix, string $root, strin
 	//------
 	//build the controls
 	//------
-		string $chestSpace = `zooBuildControl ( $prefix + "_chest_space" ) ( "-type null -place "+ $subPrim[2] )`;
-		string $chestControl = `zooBuildControl ( $prefix + "_chest_ctrl" ) ( "-type "+ $type +" -place "+ $subPrim[2] +" -scale "+ $scale +" -colour "+ $colour )`;
-		string $midSpace = `zooBuildControl ( $prefix + "_spine_mid_space" ) ( "-type null -place "+ $subPrim[1] )`;
-		string $midControl = `zooBuildControl ( $prefix + "_spine_mid_ctrl" ) ( "-type "+ $type +" -place "+ $subPrim[1] +" -scale "+ $scale +" -colour "+ $colour )`;
-		string $baseControl = `zooBuildControl ( $prefix + "_base_ctrl" ) ( "-type "+ $type +" -place "+ $subPrim[0] +" -scale "+ $scale +" -colour "+ $colour )`;
+		string $chestSpace = `zooBuildControl ( "chestSpace" ) ( "-type null -place "+ $subPrim[2] )`;
+		string $chestControl = `zooBuildControl ( "chestControl" ) ( "-type "+ $type +" -place "+ $subPrim[2] +" -scale "+ $scale +" -colour "+ $colour )`;
+		string $midSpace = `zooBuildControl ( "spine_midSpace" ) ( "-type null -place "+ $subPrim[1] )`;
+		string $midControl = `zooBuildControl ( "spine_midControl" ) ( "-type "+ $type +" -place "+ $subPrim[1] +" -scale "+ $scale +" -colour "+ $colour )`;
+		string $baseControl = `zooBuildControl ( "baseControl" ) ( "-type "+ $type +" -place "+ $subPrim[0] +" -scale "+ $scale +" -colour "+ $colour )`;
 
 		parent $baseControl $rootControl;
 		parent $chestControl $chestSpace;

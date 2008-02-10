@@ -21,7 +21,7 @@ global proc zooTriggerSelection() {
 	int $highlight = `optionVar -q zooTrigHighlighting`;
 
 	for( $a in $sel ) if( `match "[.\[]+" $a` == "" ) zooTriggerObject $a;  //the if statement makes sure the current object isn't an attribute, or a component
-	if( $highlight ) {
+	if( $highlight ) if( `match "[.\[]+" $a` == "" ) {
 		zooHighlightTriggers;
 		if( `exists zooHighlightSelecto` ) zooHighlightSelecto;
 		}
@@ -240,8 +240,16 @@ global proc string zooWriteSetAttrCmd( string $trigger, string $objs[] ) {
 		string $attrs[] = `listAttr -k -s -v -m $obj`;
 		string $objStr = $obj;
 		int $slots[] = `zooGetConnectSlots $trigger $obj`;
-		if( `size $slots` ) $objStr = "%"+ $slots[0];
-		for( $a in $attrs ) $cmd += "setAttr "+ $objStr +"."+ $a +" "+ `getAttr ( $obj +"."+ $a )` +";\n";
+		if( `size $slots` ) $objStr = "%"+ $slots[0];  //rounding???
+		for( $a in $attrs ) {
+			string $attrType = `getAttr -type ( $obj +"."+ $a )`;
+			if( `match "double" $attrType` != "" ) {
+				float $attrVal = `getAttr ( $obj +"."+ $a )`;
+				$attrVal = `zooRoundFloatTo $attrVal 5`;
+				$cmd += "setAttr "+ $objStr +"."+ $a +" "+ $attrVal +";\n";
+				}
+			else $cmd += "setAttr "+ $objStr +"."+ $a +" "+ `getAttr ( $obj +"."+ $a )` +";\n";
+			}
 		}
 
 	return $cmd;

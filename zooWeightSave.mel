@@ -309,16 +309,19 @@ global proc int zooWriteWeightTemplate() {
 	int $id = 0;
 
 	//find the zooWeightSave time node
-	for( $t in $templates ) $takenIds[( `size $takenIds` )] = `getAttr ( $t +".typeId" )`;
+	for( $t in $templates ) $takenIds[`size $takenIds`] = `getAttr ( $t +".typeId" )`;
 	$takenIds = `sort $takenIds`;
-	if( `size $takenIds` ) $id = $takenIds[( `size $takenIds` )] + 1;
+	if( `size $takenIds` ) $id = $takenIds[`size $takenIds`] + 1;
 
 	//if the zooWeightSave time node exists, see if its connected to a blind data template
 	string $registeredTemplates[] = {};
-	zooListRegistered $reg weightSave {} $registeredTemplates;
+	string $existingTemplates[] = {};
 
-	if( `size $registeredTemplates` ) {
-		$template = $registeredTemplates[0];
+	zooListRegistered $reg weightSave {} $registeredTemplates;
+	for( $t in $registeredTemplates ) if( `objExists $t` ) $existingTemplates[`size $existingTemplates`] = $t;
+
+	if( `size $existingTemplates` ) {
+		$template = $existingTemplates[0];
 		$id = `getAttr ( $template +".typeId" )`;
 		}
 	else {

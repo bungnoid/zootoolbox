@@ -169,6 +169,11 @@ global proc string zooShotsConstrainMaster() {
 	string $fDistanceExpression = $masterCamShape +".focusDistance=";
 	string $fStopExpression = $masterCamShape +".fStop=";
 	string $shutterExpression = $masterCamShape +".shutterAngle=";
+	string $appHExpression = $masterCamShape +".horizontalFilmAperture=";
+	string $appVExpression = $masterCamShape +".verticalFilmAperture=";
+	string $lensExpression = $masterCamShape +".lensSqueezeRatio=";
+	string $fitExpression = $masterCamShape +".filmFit=";
+	string $scanExpression = $masterCamShape +".overscan=";
 	string $clipNExpression = $masterCamShape +".nearClipPlane=";
 	string $clipFExpression = $masterCamShape +".farClipPlane=";
 	int $starts[] = {};
@@ -223,6 +228,12 @@ global proc string zooShotsConstrainMaster() {
 			$shutterExpression = $shutterExpression +"("+ $camShape[0] +".shutterAngle*"+ $constraint[0] +"."+ $attr +")+";
 			$clipNExpression = $clipNExpression +"("+ $camShape[0] +".nearClipPlane*"+ $constraint[0] +"."+ $attr +")+";
 			$clipFExpression = $clipFExpression +"("+ $camShape[0] +".farClipPlane*"+ $constraint[0] +"."+ $attr +")+";
+
+			$appHExpression = $appHExpression +"("+ $camShape[0] +".horizontalFilmAperture*"+ $constraint[0] +"."+ $attr +")+";
+			$appVExpression = $appVExpression +"("+ $camShape[0] +".verticalFilmAperture*"+ $constraint[0] +"."+ $attr +")+";
+			$lensExpression = $lensExpression +"("+ $camShape[0] +".lensSqueezeRatio*"+ $constraint[0] +"."+ $attr +")+";
+			$fitExpression = $fitExpression +"("+ $camShape[0] +".filmFit*"+ $constraint[0] +"."+ $attr +")+";
+			$scanExpression = $scanExpression +"("+ $camShape[0] +".overscan*"+ $constraint[0] +"."+ $attr +")+";
 			}
 
 	//remove the final + sign, and build the expression
@@ -232,13 +243,25 @@ global proc string zooShotsConstrainMaster() {
 	$shutterExpression = `substitute "[+]$" $shutterExpression ";\r\n"`;
 	$clipNExpression = `substitute "[+]$" $clipNExpression ";\r\n"`;
 	$clipFExpression = `substitute "[+]$" $clipFExpression ";\r\n"`;
+	$appHExpression = `substitute "[+]$" $appHExpression ";\r\n"`;
+	$appVExpression = `substitute "[+]$" $appVExpression ";\r\n"`;
+	$lensExpression = `substitute "[+]$" $lensExpression ";\r\n"`;
+	$fitExpression = `substitute "[+]$" $fitExpression ";\r\n"`;
+	$scanExpression = `substitute "[+]$" $scanExpression ";\r\n"`;
 
 	//figure out which expressions we actually want on the master camera
 	string $expressionStr = "";
 	if( `optionVar -ex zooShots_focal`? `optionVar -q zooShots_focal`: 1 ) $expressionStr += $fLengthExpression;
 	if( `optionVar -ex zooShots_fdist`? `optionVar -q zooShots_fdist`: 1 ) $expressionStr += $fDistanceExpression;
 	if( `optionVar -ex zooShots_fstop`? `optionVar -q zooShots_fstop`: 1 ) $expressionStr += $fStopExpression;
-	if( `optionVar -ex zooShots_shutr`? `optionVar -q zooShots_shutr`: 1 ) $expressionStr += $shutterExpression;
+	if( `optionVar -ex zooShots_shutr`? `optionVar -q zooShots_shutr`: 1 ) {
+		$expressionStr += $shutterExpression;
+		$expressionStr += $appHExpression;
+		$expressionStr += $appVExpression;
+		$expressionStr += $lensExpression;
+		$expressionStr += $fitExpression;
+		$expressionStr += $scanExpression;
+		}
 	if( `optionVar -ex zooShots_clipn`? `optionVar -q zooShots_clipn`: 1 ) $expressionStr += $clipNExpression;
 	if( `optionVar -ex zooShots_clipf`? `optionVar -q zooShots_clipf`: 1 ) $expressionStr += $clipFExpression;
 	if( $expressionStr != "" ) expression -s $expressionStr;

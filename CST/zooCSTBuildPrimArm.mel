@@ -102,13 +102,12 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 
 		if( !`objExists $clavicle` ) $buildclav = 0;
 		if( $buildclav ) {
-			$clavControl = `zooBuildControl ( $prefix +"_clavicle_ctrl"+ $suffix ) ( "-type sphere -orient 1 -place "+ $bicep +" -align "+ $clavicle +" -placepivot %a -scale "+ ($scale*1.25) +" -colour "+ $colour )`;
+			$clavControl = `zooBuildControl ( "clavicleControl"+ $suffix ) ( "-type sphere -orient 1 -place "+ $bicep +" -align "+ $clavicle +" -placepivot %a -scale "+ ($scale*1.25) +" -colour "+ $colour )`;
 			$clavControlOrient = zooGetElement_str(0,`listRelatives -p $clavControl`);
 
 			parent $clavControlOrient $worldControl;
 			if( `objExists $rootControl` ) parent $clavControlOrient $rootControl;
 			if( `objExists $chestControl` ) parent $clavControlOrient $chestControl;
-			//zooAddArray_str(`pointConstraint $clavicle $clavControlOrient`,$constraints);
 			zooAddArray_str(`parentConstraint $clavControl $clavicle`,$constraints);
 			zooAttrState "-attrs t r s v -k 0 -l 1" $clavControlOrient;
 			zooAttrState "-attrs t s -k 0 -l 1" $clavControl;
@@ -130,12 +129,19 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 			if( `size $parents` ) $armControlParents = `zooAddArray_str $armControlParents $parents`;
 			$spaceNodes1 = `zooBuildSpaceSwitch $armControl $ikArmSpace $armControlParents { "world", "root", "chest", "clavicle", "head" } "-mo"`;
 			$spaceNodes2 = `zooBuildSpaceSwitch $driverBicep $fkArmSpace { $clavControl, $chestControl, $rootControl, $worldControl } { "clavicle", "chest", "root", "world" } "-mo"`;
+
+			//and for elbows
+			string $rootPos = `group -em`;
+			$rootPos = `rename $rootPos ( "elbow_pos"+ $id )`;
+			delete `parentConstraint $elbowControl $rootPos`;
+			parent $rootPos $worldControl;
+			pointConstraint -mo $rootControl $rootPos;
+			$spaceNodes1 = `zooBuildSpaceSwitch $elbowControl $elbowControlSpace { $chestControl, $rootControl, $rootPos } { "chest", "root", "root pos only" } "-mo"`;
 			}
 
 		delete -icn ( $fkArmSpace +".tx" );
 		delete -icn ( $fkArmSpace +".ty" );
 		delete -icn ( $fkArmSpace +".tz" );
-		//pointConstraint $fkArmSpace $bicep;
 
 
 	//------
@@ -163,8 +169,10 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 		int $elbowNum = `zooAddConnect $armControl $elbowControl`;  //add the elbow control as a connect
 		int $clavNum = `zooAddConnect $armControl $clavControl`;  //add the clavicle as a connect
 
-		zooObjMenuAddCmdAll $armControl "switch to FK" "zooAlign \"\";\nzooAlignFK \"-ikHandle #\";";
-		zooObjMenuAddCmdAll $armControl "switch to IK" ( "zooAlign \"\";\nzooAlignIK \"-ikHandle # -pole %"+ $elbowNum +"\";" );
+		int $ikIdx = `zooObjMenuAddCmdAll $armControl "switch to FK" "zooAlign \"\";\nzooAlignFK \"-ikHandle #\";"`;
+		zooObjMenuAddCmdAll $armControl "switch to FK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $ikIdx +"))))\";" );
+		int $fkIdx = `zooObjMenuAddCmdAll $armControl "switch to IK" ( "zooAlign \"\";\nzooAlignIK \"-ikHandle # -pole %"+ $elbowNum +"\";" )`;
+		zooObjMenuAddCmdAll $armControl "switch to IK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $fkIdx +"))))\";" );
 		zooObjMenuAddCmdAll $armControl "select all arm controls" ( "select `ikHandle -q -jl #`;\nstring $effector = `ikHandle -q -ee #`;\nselect -add `listConnections -d 0 ( $effector +\".tx\" )`;\nselect -add %"+ $clavNum +" %"+ $elbowNum +" #;" );
 		zooObjMenuAddCmdAll $armControl "draw line of action" "zooBrandTools;\nzooCSTPrimitives;\nzooLineOfAction;\nstring $prim = `zooGetPrimFromRegistered #`;\nstring $inputs[] = `zooCSTListRegistered input $prim`;\nzooLineOfAction_multi $inputs \"\";";
 
@@ -243,8 +251,6 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 	//------
 	//cleanup - put all control objects where they should be in the outliner
 	//------
-		zooAttrState "-attrs t r s v -k 0 -l 1" $elbowControlSpace;
-		zooAttrState "-attrs t r s v -k 0 -l 1" $armAlign;
 		if( `objExists $rootControl` ) {
 			parent $elbowControlSpace $rootControl;
 			parent $ikArmSpace $rootControl;
@@ -253,6 +259,8 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 			parent $elbowControlSpace $chestControl;
 			parent $ikArmSpace $chestControl;
 			}
+		zooAttrState "-attrs t r s v -k 0 -l 1" $elbowControlSpace;
+		zooAttrState "-attrs t r s v -k 0 -l 1" $armAlign;
 
 		zooCSTUtilsRigVis -h;
 		for( $n=0; $n<`size $controllers`; $n++ ) $controllers[$n] = `zooRenamerFunctions replace "[0-9]+$" "" $controllers[$n]`;

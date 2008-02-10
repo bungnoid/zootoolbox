@@ -23,15 +23,19 @@ global proc string[] zooBuildSpaceSwitch( string $src, string $space, string $tg
 
 global proc string zooAddSpaceSwitch( string $src, string $space, string $tgt, string $name, string $optionStr ) {
 	string $temp[] = {};
+	string $cmd = "parentConstraint";
 	string $mo = "-mo";
 	string $skipTranslates[] = {};
 	string $skipRotates[] = {};
 	string $parentAttrNode = $src;
+	int $pointConstraint = 0;
 
 	$temp = `zooGetFlagArguments $optionStr mo`; if( $temp[0] != "" ) if( $temp[0] == "0" ) $mo = "";
 	$temp = `zooGetFlagArguments $optionStr st`; if( `size $temp` ) $skipTranslates = $temp;
 	$temp = `zooGetFlagArguments $optionStr sr`; if( `size $temp` ) $skipRotates = $temp;
 	$temp = `zooGetFlagArguments $optionStr parentAttrNode`; if( $temp[0] != "" ) if( `objExists $temp[0]` ) $parentAttrNode = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr pointConstraint`; if( $temp[0] != "" ) $pointConstraint = $temp[0];
+	if( $pointConstraint ) $cmd = "pointConstraint";
 
 	//verify that all space objects exist - if not this proc will automatically exclude them from the space switch
 	string $clnSrcName = `match "[^|:]+$" $src`;
@@ -43,6 +47,7 @@ global proc string zooAddSpaceSwitch( string $src, string $space, string $tgt, s
 	zooAttrState "-attrs t r -k 1 -l 0" $space;
 
 	//get the names for the parents from the parent enum attribute
+	string $cmdOptionStr = $mo;
 	if( `objExists ( $parentAttrNode +".parent" )`) {
 		string $attrStr = "";
 		string $names[] = {};
@@ -51,17 +56,22 @@ global proc string zooAddSpaceSwitch( string $src, string $space, string $tgt, s
 		$attrStr = `zooArrayToStr_str $names ":"`;
 		$attrStr += ":"+ $name +":";
 		addAttr -e -enumName $attrStr ( $parentAttrNode +".parent" );
+
+		//if we're building a pointConstraint instead of a parent constraint AND we already
+		//have spaces on the object, we need to turn the -mo flag off regardless of what the
+		//user set it to, as the pointConstraint maintain offset has different behaviour to
+		//the parent constraint
+		if( $pointConstraint ) $cmdOptionStr = "";
 		}
 	else addAttr -k 1 -ln parent -at "enum" -en $name $parentAttrNode;
 
 	//now build the constraint
 	string $constraint = "";
-	string $cmdOptionStr = $mo;
 
 	for( $axis in $skipTranslates ) $cmdOptionStr += " -st "+ $axis;
 	for( $axis in $skipRotates ) $cmdOptionStr += " -sr "+ $axis;
-	print ( "parentConstraint "+ $cmdOptionStr +" "+ $tgt +" "+ $space +";\n" );
-	$constraint = zooGetElement_str(0,eval( "parentConstraint "+ $cmdOptionStr +" "+ $tgt +" "+ $space ));
+	print ( $cmd +" "+ $cmdOptionStr +" "+ $tgt +" "+ $space +";\n" );
+	$constraint = zooGetElement_str(0,eval( $cmd +" "+ $cmdOptionStr +" "+ $tgt +" "+ $space ));
 
 	string $constraintAttrs[] = `listAttr -ud $constraint`;
 	int $lastTarget = `size $constraintAttrs`-1;
@@ -107,6 +117,7 @@ global proc zooRemoveSpace( string $src, string $tgt ) {
 	if( `size $tgts` == 1 ) $delete = 1;
 
 	string $constraint = `zooFindConstraint $src`;
+	string $constraintType = `nodeType $constraint`;
 	string $parentAttrOn = `zooFindSpaceAttrNode $src`;
 	string $space = `zooFindSpace $src`;
 	int $cmds[] = `zooObjMenuListCmds $src`;
@@ -115,7 +126,7 @@ global proc zooRemoveSpace( string $src, string $tgt ) {
 		delete $constraint;
 		deleteAttr ( $src +".parent" );
 		}
-	else parentConstraint -rm $tgt $constraint;
+	else eval( $constraintType +" -rm "+ $tgt +" "+ $constraint );
 	for( $n=0; $n<`size $cmds`; $n++ ) {
 		string $cmdName = `zooGetObjMenuCmdName $src $cmds[$n]`;
 		if( $cmdName == ( "parent to "+ $name )) zooRemoveMenu $src $cmds[$n];
@@ -189,13 +200,17 @@ global proc string zooGetSpaceName( string $src, string $tgt ) {
 //------
 global proc zooGetSpaceTargetsNames( string $src, string $tgts[], string $names[] ) {
 	string $constraint = `zooFindConstraint $src`;
+	if( !`objExists $constraint` ) return;
+
+	string $constraintType = `nodeType $constraint`;
 	string $space = `zooFindSpace $src`;
+
 	if( !`objExists $constraint` ) return;
 	if( !`objExists $space` ) return;
 
 	clear $tgts;
 	clear $names;
-	string $targetsOnConstraint[] = `parentConstraint -q -tl $constraint`;
+	string $targetsOnConstraint[] = eval( $constraintType +" -q -tl "+ $constraint );
 	int $cmds[] = `zooObjMenuListCmds $src`;
 	int $tgtsNum = 0;
 
@@ -209,8 +224,8 @@ global proc zooGetSpaceTargetsNames( string $src, string $tgts[], string $names[
 		if( `match "^parent to " $cmdName` != "parent to " ) continue;
 		tokenize $cmdStr "\n" $cmdLines;
 		tokenize $cmdLines[2] " " $temp;
-		$names[$tgtsNum] = `substring $cmdName 11 (size($cmdName))`; //match "[^=]+$" $cmdLines[3]`;
-		$index = `match "^[0-9]+" $temp[3]`;//`match "[0-9]+" $cmdLines[2]`;
+		$names[$tgtsNum] = `substring $cmdName 11 (size($cmdName))`;
+		$index = `match "^[0-9]+" $temp[3]`;
 
 		$tgts[$tgtsNum] = $targetsOnConstraint[$index];
 		$tgtsNum++;
@@ -247,12 +262,11 @@ global proc string zooFindConstraint( string $obj ) {
 	if( !`objExists $parentAttrOn` ) return "";
 
 	string $conditions[] = `listConnections -type condition -s 0 ( $parentAttrOn +".parent" )`;
-	string $constraint[] = `listConnections -type parentConstraint -s 0 ( $conditions[0] +".outColorR" )`;
-
 	for( $n=0; $n<`size $conditions`; $n++ ) {
-		clear $constraint;
 		string $constraint[] = `listConnections -type parentConstraint -s 0 ( $conditions[$n] +".outColorR" )`;
+		$constraint = zooAddArray_str($constraint,`listConnections -type pointConstraint -s 0 ( $conditions[$n] +".outColorR" )`);
 		if( `objExists $constraint[0]` ) return $constraint[0];
+		clear $constraint;
 		}
 
 	return "";

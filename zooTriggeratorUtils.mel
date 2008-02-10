@@ -10,6 +10,15 @@ zooTriggeredUtils;
 zooUtils;
 
 
+global proc string[] zooListTriggeratorShapes() {
+	string $shapes[] = `zooListAllPresets zooTriggerator shape {} 0`;
+	string $baseShapes[] = `getFileList -fld (resolvePath("%VGAME%/sdktools/maya/presets/zooTriggerator/")) -fs "*.shape"`;
+
+	$shapes = `zooAddArray_str $shapes $baseShapes`;
+	return $shapes;
+	}
+
+
 global proc zooTriggeratorUtils() {
 	return;
 	}
@@ -69,7 +78,6 @@ global proc zooExportFolder( string $folder, string $filename ){
 		$exportStr += `getAttr ( $childFolders[$n] +".tx" )` +","+ `getAttr ( $childFolders[$n] +".ty" )` +","+ `getAttr ( $childFolders[$n] +".rz" )` +","+ `getAttr ( $childFolders[$n] +".sx" )` +","+ `getAttr ( $childFolders[$n] +".sy" )` +","+ `getAttr ( $childFolders[$n] +".sz" )` +"\n";
 		$exportStr += "<end>\n";
 		for( $i=0; $i<`size $triggers`; $i++ ) {
-			$triggers[$i] = `match "[^:|]+$" $triggers[$i]`;
 			string $baseStr = `zooWriteTriggerExportStr $triggers[$i] 1`;
 			string $shapes[] = `listRelatives -s -pa $triggers[$i]`;
 

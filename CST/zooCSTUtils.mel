@@ -202,7 +202,7 @@ global proc zooReplaceShape( string $srcObj, string $tgtObj ) {
 	for( $c in $cs ) if( `objExists $c` ) delete $c;
 	if( `size $tgtShapes` ) delete $tgtShapes;
 	zooAttrState "-attrs t r s -k 1 -l 0" $dupeSrc;  //make sure all transform attributes are unlocked
-	zooAlign ( "-src "+ $tgtObj +" -tgt "+ $dupeSrc );
+	delete `parentConstraint $tgtObj $dupeSrc`;
 	parent $dupeSrc $tgtObj;
 	makeIdentity -a 1 -t 1 -r 1 -s 1 $dupeSrc;
 	for( $shape in $srcShapes ) parent -add -s $shape $tgtObj;

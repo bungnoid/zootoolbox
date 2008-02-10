@@ -22,13 +22,6 @@ global proc zooTriggeredPresets() {
 // -threshold [float]		defaults to 0.65 - this is the name matching threshold used when guessing matching objects.  it is weighted from 0-1 where 1 is an exact match only (with namespaces stripped out), while 0 is a very loose match
 // -locale [str]				which locale to search in for the preset?  global is default, local is the alternative
 global proc zooImportTriggers( string $preset, string $optionStr, string $searchDomain[] ) {
-	string $srcNamespaces[] = {};
-	string $tgtNamespaces[] = {};
-
-	if( !`size $srcNamespaces` ) $srcNamespaces = `zooGetNamespacesFromFile $preset`;
-	if( !`size $tgtNamespaces` ) $tgtNamespaces = $srcNamespaces;
-	if( !`size $searchDomain` ) $searchDomain = `ls -type transform`;
-
 	string $temp[] = {};
 	string $locale = "local";
 	float $threshold = 0.65;
@@ -49,6 +42,13 @@ global proc zooImportTriggers( string $preset, string $optionStr, string $search
 	string $connectStr = "";
 	string $objMenus[] = {};
 	string $namespaces[] = {};
+
+	//get namespaces from the file
+	string $srcNamespaces[] = {};
+	string $tgtNamespaces[] = {};
+	if( !`size $srcNamespaces` ) $srcNamespaces = `zooGetNamespacesFromFile $preset $locale`;
+	if( !`size $tgtNamespaces` ) $tgtNamespaces = $srcNamespaces;
+	if( !`size $searchDomain` ) $searchDomain = `ls -type transform`;
 
 	if( !`size $fileContents` ) warning "either the file didn't exist, or it was empty";
 	for( $n=0; $n<`size $fileContents`; $n++ ) {
@@ -113,7 +113,7 @@ global proc zooImportTriggers( string $preset, string $optionStr, string $search
 	}
 
 
-global proc string[] zooGetNamespacesFromFile( string $preset ) {
+global proc string[] zooGetNamespacesFromFile( string $preset, string $locale ) {
 	string $locale = "local";
 	string $presetFile = `zooGetPresetDirectory $locale zooTriggered` + $preset +".trigger";
 	string $fileContents[] = `zooReadFile $presetFile "-strip 1"`;
@@ -196,11 +196,9 @@ global proc string zooExportTriggers( string $triggers[], string $exportTo ) {
 	if( !`filetest -d $base` ) sysFile -makeDir $base;
 
 	string $namespaces[] = `zooGetAllNamespaces $triggers`;
-	string $exportStr = `zooWriteTriggersExportStr $triggers 0`;
-
-	$exportStr = `zooArrayToStr_str $namespaces "\n"` +"\n<endnamespaces>\n"+ $exportStr;
-
+	string $exportStr = `zooArrayToStr_str $namespaces "\n"` +"\n<endnamespaces>\n"+ `zooWriteTriggersExportStr $triggers 0`;
 	int $fileID = `fopen $presetFile "w"`;
+
 	fprint $fileID $exportStr;
 	fclose $fileID;
 	return $presetFile;
@@ -227,7 +225,7 @@ global proc string zooWriteTriggersExportStr( string $triggers[], int $scrubName
 
 global proc string zooWriteTriggerExportStr( string $trigger, int $scrubNamespace ) {
 	if( !`objExists $trigger` ) return "";
-	string $exportStr = "n="+ `match "[^:]+$" $trigger` +"\n";
+	string $exportStr = "n="+ `match "[^:|]+$" $trigger` +"\n";
 
 	//export the connects list
 	int $connects[] = `zooGetAllTriggerSlots $trigger`;

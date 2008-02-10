@@ -79,27 +79,29 @@ global proc string zooPanelCyclerGetAlias( string $alias ) {
 global proc zooGetAllAlias( string $alias[], string $names[] ) {
 	clear $alias;
 	clear $names;
-	$alias[( `size $alias` )] = "graph";
-	$alias[( `size $alias` )] = "dope";
-	$alias[( `size $alias` )] = "trax";
-	$alias[( `size $alias` )] = "hypershade";
-	$alias[( `size $alias` )] = "hypergraph";
-	$alias[( `size $alias` )] = "map";
-	$alias[( `size $alias` )] = "outliner";
-	$alias[( `size $alias` )] = "render";
-	$alias[( `size $alias` )] = "component";
-	$alias[( `size $alias` )] = "blendshape";
+	$alias[`size $alias`] = "graph";
+	$alias[`size $alias`] = "dope";
+	$alias[`size $alias`] = "trax";
+	$alias[`size $alias`] = "hypershade";
+	$alias[`size $alias`] = "hypergraph";
+	$alias[`size $alias`] = "map";
+	$alias[`size $alias`] = "outliner";
+	$alias[`size $alias`] = "render";
+	$alias[`size $alias`] = "component";
+	$alias[`size $alias`] = "blendshape";
+	$alias[`size $alias`] = "script";
 
-	$names[( `size $names` )] = "graphEditor1";
-	$names[( `size $names` )] = "dopeSheetPanel1";
-	$names[( `size $names` )] = "clipEditorPanel1";
-	$names[( `size $names` )] = "hyperShadePanel1";
-	$names[( `size $names` )] = "hyperGraphPanel1";
-	$names[( `size $names` )] = "polyTexturePlacementPanel1";
-	$names[( `size $names` )] = "outlinerPanel1";
-	$names[( `size $names` )] = "renderView";
-	$names[( `size $names` )] = "componentEditorPanel1";
-	$names[( `size $names` )] = "blendShapePanel1";
+	$names[`size $names`] = "graphEditor1";
+	$names[`size $names`] = "dopeSheetPanel1";
+	$names[`size $names`] = "clipEditorPanel1";
+	$names[`size $names`] = "hyperShadePanel1";
+	$names[`size $names`] = "hyperGraphPanel1";
+	$names[`size $names`] = "polyTexturePlacementPanel1";
+	$names[`size $names`] = "outlinerPanel1";
+	$names[`size $names`] = "renderView";
+	$names[`size $names`] = "componentEditorPanel1";
+	$names[`size $names`] = "blendShapePanel1";
+	$names[`size $names`] = "scriptEditorPanel1";
 	}
 
 

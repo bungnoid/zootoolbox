@@ -67,8 +67,8 @@ global proc string[] zooCSTBuildPrimReverseSpine( string $prefix, string $root, 
 		string $constraints[] = {};
 
 		for( $n=0; $n<$numSpines; $n++ ) {
-			$forwardSpine[$n] = `zooBuildControl ( $prefix +"_forward_spine_"+($n+1)) ( "-type "+ $type +" -place "+ $spines[$n] +" -scale "+ $scale +" -colour darkblue 0.65" )`;
-			$reverseSpine[$n] = `zooBuildControl ( $prefix +"_reverse_spine_"+($numSpines-$n)) ( "-type "+ $type +" -place "+ $spines[$n] +" -scale "+ $scale +" -colour darkblue 0.65" )`;
+			$forwardSpine[$n] = `zooBuildControl ( "forward_spine_"+($n+1)) ( "-type "+ $type +" -place "+ $spines[$n] +" -scale "+ $scale +" -colour darkblue 0.65" )`;
+			$reverseSpine[$n] = `zooBuildControl ( "reverse_spine_"+($numSpines-$n)) ( "-type "+ $type +" -place "+ $spines[$n] +" -scale "+ $scale +" -colour darkblue 0.65" )`;
 			if( $align ) $forwardSpaces[$n] = `zooCSTOrient2Obj $spines[$n] $forwardSpine[$n]`;
 			else $forwardSpaces[$n] = $forwardSpine[$n];
 			if( $align ) $reverseSpaces[$n] = `zooCSTOrient2Obj $spines[$n] $reverseSpine[$n]`;
@@ -88,8 +88,8 @@ global proc string[] zooCSTBuildPrimReverseSpine( string $prefix, string $root, 
 	//if the root joint has been specified, build a different shape control for it
 	//------
 		if( `objExists $root` ) {
-			string $newRootShape1 = `zooBuildControl ( $prefix +"_forward_spine_root" ) ( "-type ring -place "+ $forwardSpine[0] +" -scale "+ (3.1*$scale) +" -colour "+ $colour )`;
-			string $newRootShape2 = `zooBuildControl ( $prefix +"_reverse_spine_root" ) ( "-type ring -place "+ $reverseSpine[0] +" -scale "+ (3.1*$scale) +" -colour "+ $colour )`;
+			string $newRootShape1 = `zooBuildControl ( "forward_spine_root" ) ( "-type ring -place "+ $forwardSpine[0] +" -scale "+ (3.1*$scale) +" -colour "+ $colour )`;
+			string $newRootShape2 = `zooBuildControl ( "reverse_spine_root" ) ( "-type ring -place "+ $reverseSpine[0] +" -scale "+ (3.1*$scale) +" -colour "+ $colour )`;
 			zooReplaceShape $newRootShape1 $forwardSpine[0];
 			zooReplaceShape $newRootShape2 $reverseSpine[( `size $reverseSpine`-1 )];
 			delete $newRootShape1 $newRootShape2;
@@ -101,8 +101,8 @@ global proc string[] zooCSTBuildPrimReverseSpine( string $prefix, string $root, 
 	//------
 		string $hipsControl = "";
 		if( $buildhips ) {
-			$hipsControl = `zooBuildControl ( $prefix +"_hips_ctrl" ) ( "-type "+ $type +" -place "+ $root +" -scale "+ $scale +" -offset -0.5up"+" -colour "+ $colour )`;
-			$hipsSpace = `zooBuildControl ( $prefix +"_hips_space" ) ( "-type null -place "+ $root )`;
+			$hipsControl = `zooBuildControl ( "hipsControl" ) ( "-type "+ $type +" -place "+ $root +" -scale "+ $scale +" -offset -0.5up"+" -colour "+ $colour )`;
+			$hipsSpace = `zooBuildControl ( "hipsSpace" ) ( "-type null -place "+ $root )`;
 			parent $hipsControl $hipsSpace;
 			parent $hipsSpace $worldControl;
 			orientConstraint $hipsControl $hips;
@@ -225,7 +225,7 @@ global proc string[] zooCSTBuildPrimReverseSpine( string $prefix, string $root, 
 	//------
 	//now build a stand-in chest control that other primitives can get parented to
 	//------
-		string $chest = `zooBuildControl ( $prefix +"_chest" ) ( "-type null -place "+ $revSpineInterface +" -scale "+ $scale )`;
+		string $chest = `zooBuildControl ( "chest" ) ( "-type null -place "+ $revSpineInterface +" -scale "+ $scale )`;
 		string $chestCon = zooGetElement_str(0,`parentConstraint -mo $forwardSpine[0] $chest`);
 
 		parentConstraint -mo $revSpineInterface $chest;
@@ -238,7 +238,7 @@ global proc string[] zooCSTBuildPrimReverseSpine( string $prefix, string $root, 
 	//------
 	//now build a stand-in root control that other primitives can get parented to
 	//------
-		string $rootStandIn = `zooBuildControl ( $prefix +"_root" ) ( "-type null -place "+ $reverseSpine[0] +" -scale "+ $scale )`;
+		string $rootStandIn = `zooBuildControl ( "root" ) ( "-type null -place "+ $reverseSpine[0] +" -scale "+ $scale )`;
 		string $rootControl = zooGetElement_str(0,`parentConstraint -mo (zooGetElement_str(-1,$forwardSpine)) $rootStandIn`);
 
 		parentConstraint -mo $reverseSpine[0] $rootStandIn;

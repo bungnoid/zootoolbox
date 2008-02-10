@@ -196,11 +196,12 @@ global proc string[] zooVisManListHeirarchically() {
 		float $time = `timerX`;
 		int $showState = 0;
 
+		$modelPanels = `zooSubtractArray_str $modelPanels {"zooTriggeratorPanel"}`;
 		if( `getPanel -to $panel` == "modelPanel" ) $showState = `modelEditor -q -nurbsCurves $panel`;
-		for( $p in $visPanels ) if( `getPanel -to $p` == "modelPanel" ) $modelPanels[( `size $modelPanels` )] = $p;
+		for( $p in $visPanels ) if( `getPanel -to $p` == "modelPanel" ) $modelPanels[`size $modelPanels`] = $p;
 		if( !`selectionConnection -ex zooVisManCurrent` ) zooVisInitialSetup;
 		if( $state ) zooVisManManageObjects;
-		for( $panel in $modelPanels ) modelEditor -e -vs $state -mlc zooVisManCurrent $panel;
+		for( $panel in $modelPanels ) if( $panel != "zooTriggeratorPanel" ) modelEditor -e -vs $state -mlc zooVisManCurrent $panel;
 
 		print( "time to view selected:  "+ `timerX -startTime $time` +" seconds\n" );
 		}

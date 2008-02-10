@@ -49,7 +49,7 @@ global proc zooAnimFileWrite( string $filename, string $optionStr, string $objs[
 	$optionTemp = `zooGetFlagArguments $optionStr strip`; if( `size $optionTemp` ) $strip = $optionTemp[0];
 	$optionTemp = `zooGetFlagArguments $optionStr world`; if( `size $optionTemp` ) $world = $optionTemp[0];
 	if( !`size $objs` ) $objs = `ls -sl -o`;
-	if( !`size $objs` ) { warning "you haven't specified any objects to export animation for - select the objects, or specify in the export command"; return; }
+	if( !`size $objs` ) { warning "zooAnimFile::zooAnimFileWrite() you haven't specified any objects to export animation for - select the objects, or specify in the export command"; return; }
 
 	//make sure the filename has an extension
 	if( `match ".znm$" $filename` == "" ) $filename += ".znm";
@@ -58,14 +58,14 @@ global proc zooAnimFileWrite( string $filename, string $optionStr, string $objs[
 	//make sure there are some keyable channels in the list of selected objects
 	//------
 	string $allAttribs[] = `listAttr -keyable -visible -scalar -multi $objs`;
-	if( !`size $allAttribs` ) { warning "there are no keyable channels on any selected objects"; return; }
+	if( !`size $allAttribs` ) { warning "zooAnimFile::zooAnimFileWrite() there are no keyable channels on any selected objects"; return; }
 
 	//------
 	//figure out the start and end times - if no start and end time is specified, use the time for the first key
 	//as the start and the time of the last key as the end time
 	//------
 	float $allKeys[] = sort(`keyframe -q $objs`);
-	if( !`size $allKeys` ) { warning "there are no keyframes on any of the selected objects"; progressWindow -endProgress; return; }
+	if( !`size $allKeys` ) { warning "zooAnimFile::zooAnimFileWrite() there are no keyframes on any of the selected objects"; progressWindow -endProgress; return; }
 
 	float $start = $allKeys[0];
 	float $end = $allKeys[`size $allKeys`-1];
@@ -225,13 +225,13 @@ global proc zooAnimFileWritePose( string $filename, string $optionStr, string $o
 	string $sourceFile = `file -q -sn`;
 	if( !`filetest -r $sourceFile` ) $sourceFile = "<-scene not saved->";
 	string $fileData = ".znm Anim File Format v"+ `zooAnimFileInfo version` +"\nExported by: "+ `getenv USER` +"\nSource file: "+ $sourceFile +"\nOptionStr: -pose 1 -offset "+ `currentTime -q` +" "+ $optionStr +"\n";
-	if( !`size $objs` ) { warning "you have no objects selected - select the objects you want to export animation from"; return; }
+	if( !`size $objs` ) { warning "zooAnimFile::zooAnimFileWritePose() you have no objects selected - select the objects you want to export animation from"; return; }
 
 	//------
 	//make sure there are some keyable channels in the list of selected objects
 	//------
 	string $allAttribs[] = `listAttr -keyable -visible -scalar -multi $objs`;
-	if( !`size $allAttribs` ) { warning "there are no keyable channels on any selected objects"; return; }
+	if( !`size $allAttribs` ) { warning "zooAnimFile::zooAnimFileWritePose() there are no keyable channels on any selected objects"; return; }
 
 	//------
 	//if the animation is to be exported as world space transforms, then we have to convert all transform data to worldspace
@@ -345,9 +345,9 @@ global proc zooAnimFileLoadObjects( string $filename, string $optionStr, string 
 	int $numSrcs = `size $srcs`;
 	int $numTgts = `size $tgts`;
 
-	if( !`filetest -r $filename` ) { warning "the specified file doesn't exist"; return; }
-	if( !$numSrcs ) { warning "there are no source objects specified"; return; }
-	if( !$numTgts ) { warning "there are no target objects specified"; return; }
+	if( !`filetest -r $filename` ) { warning "zooAnimFile::zooAnimFileLoadObjects() the specified file doesn't exist"; return; }
+	if( !$numSrcs ) { warning "zooAnimFile::zooAnimFileLoadObjects() there are no source objects specified"; return; }
+	if( !$numTgts ) { warning "zooAnimFile::zooAnimFileLoadObjects() there are no target objects specified"; return; }
 
 	//next, read the options that were set in the file header at export time
 	string $headerData[] = `zooReadAnimFileHeader $filename`;
@@ -358,7 +358,7 @@ global proc zooAnimFileLoadObjects( string $filename, string $optionStr, string 
 	string $worldCache[] = {};
 	string $temp[] = {};
 	string $fileContents[] = {};
-	float $timeOffset = float($exportStart[0])*-1;
+	float $timeOffset = $exportStart[0];  //assume the user wants the data pasted back in the same place it was exported from
 	float $incrementalApply = 1.0;
 	int $incrementOn = 0;
 	int $additive = 0;
@@ -368,7 +368,7 @@ global proc zooAnimFileLoadObjects( string $filename, string $optionStr, string 
 	int $world = 0;
 	int $n = 0;
 
-	$temp = `zooGetFlagArguments $optionStr offset`; if( `size $temp` ) { if( $temp[0] == "*" ) $timeOffset += `currentTime -q`; else $timeOffset = $temp[0]; }
+	$temp = `zooGetFlagArguments $optionStr offset`; if( `size $temp` ) { if( $temp[0] == "*" ) $timeOffset = `currentTime -q`; else $timeOffset = $temp[0]; }
 	$temp = `zooGetFlagArguments $optionStr incrementOn`; if( `size $temp` ) if( `size $temp` ) $incrementOn = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr increment`; if( `size $temp` ) if( `size $temp` ) $incrementalApply = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr additive`; if( `size $temp` ) $additive = $temp[0];
@@ -376,9 +376,6 @@ global proc zooAnimFileLoadObjects( string $filename, string $optionStr, string 
 	$temp = `zooGetFlagArguments $optionStr nocreate`; if( `size $temp` ) $nocreate = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr clear`; if( `size $temp` ) $clear = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr world`; if( `size $temp` ) $world = $temp[0];
-
-	//if incremental apply is on, and the increment value is zero, the import will have no effect, so bail
-	if( $incrementOn ) if( !$incrementalApply ) { warning "the incremental apply value is zero"; return; }
 
 	//prepare the object lists - ie strip namespaces if they exist, and determine the namespace for the target list
 	string $namespace = "";
@@ -579,9 +576,7 @@ global proc float[] zooZnmKeyTimeBounds( string $filepath ) {
 		}
 
 	$times =`sort $times`;
-	float $endTime = `zooGetElement_float -1 $times`;
-	float $keyBounds[] = { $times[0],$endTime };
-
+	float $keyBounds[] = { $times[0],(zooGetElement_float(-1,$times))};
 	return $keyBounds;
 	}
 

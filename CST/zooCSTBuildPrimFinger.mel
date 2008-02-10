@@ -84,7 +84,7 @@ global proc string[] zooCSTBuildPrimFinger( string $prefix, string $parity, stri
 	//build the controls
 	//------
 		if( !`objExists $fingerGrp` ) {
-			$fingerGrp = `zooBuildControl ( $prefix +"_fingers_grp"+ $suffix ) ( "-type null -place "+ $wrist )`;
+			$fingerGrp = `zooBuildControl ( "fingers_grp"+ $suffix ) ( "-type null -place "+ $wrist )`;
 			delete `orientConstraint $wrist $fingerGrp`;
 			zooBrandObject fingers $prefix $fingerGrp;  //the s on the fingers brand is deliberate
 			zooBrandObject parity $parity $fingerGrp;
@@ -94,7 +94,7 @@ global proc string[] zooCSTBuildPrimFinger( string $prefix, string $parity, stri
 		string $jointCtrls[] = {};
 		string $jointConstraints[] = {};
 		for( $n=0; $n<$num; $n++ ) {
-			$jointCtrls[$n] = `zooBuildControl ( $prefix +"_"+ $name +"_ctrl"+ $suffix ) ( "-type sphere -place "+ $joints[$n] +" -scale "+ $scale +" -colour "+ $colour )`;
+			$jointCtrls[$n] = `zooBuildControl ( ""+ $name +"Control"+ $suffix ) ( "-type sphere -place "+ $joints[$n] +" -scale "+ $scale +" -colour "+ $colour )`;
 			$jointSpaces[$n] = `zooCSTOrient2Obj $joints[$n] $jointCtrls[$n]`;
 			if( $n ) parent $jointSpaces[$n] $jointCtrls[( $n-1 )];
 			$jointConstraints = zooAddArray_str( `parentConstraint $jointCtrls[$n] $joints[$n]`, $jointConstraints );
@@ -189,7 +189,7 @@ global proc string[] zooCSTBuildPrimFinger( string $prefix, string $parity, stri
 			if( !`objExists $fingerTrig` ) {
 				string $paritySign = "-";
 				if( $parity == "r" ) $paritySign = "";
-				$fingerTrig = `zooBuildControl ( $prefix +"_fingers_select_trigger"+ $suffix ) ( "-type arrow -place "+ $wrist +" -offset -3.5fwd -scale "+ (0.5*$scale) +" -colour "+ $colour )`;
+				$fingerTrig = `zooBuildControl ( "fingers_select_trigger"+ $suffix ) ( "-type arrow -place "+ $wrist +" -offset -3.5fwd -scale "+ (0.5*$scale) +" -colour "+ $colour )`;
 				zooBrandObject fingersSel $prefix $fingerTrig;
 				zooBrandObject parity $parity $fingerTrig;
 				parent $fingerTrig $fingerGrp;

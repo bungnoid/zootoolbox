@@ -68,7 +68,7 @@ global proc string[] zooCSTBuildPrimFKSpine( string $prefix, string $root, strin
 		$spines = `zooAddArray_str $spines { $spineBase }`;
 		$spines = `zooReverseArray_str $spines`;
 
-		for( $spine in $spines ) $spineProxies[( `size $spineProxies` )] = `zooBuildControl ( $prefix +"_lockthis_spine_proxy" ) ( "-joint 1 -type null -place "+ $spine )`;
+		for( $spine in $spines ) $spineProxies[`size $spineProxies`] = `zooBuildControl ( "lockthis_spine_proxy" ) ( "-joint 1 -type null -place "+ $spine )`;
 		for( $n=0; $n<`size $spines`; $n++ ) orientConstraint -mo $spineProxies[$n] $spines[$n];
 
 
@@ -81,10 +81,14 @@ global proc string[] zooCSTBuildPrimFKSpine( string $prefix, string $root, strin
 	//------
 	//create the controls, and parent them
 	//------
-		string $baseSpace = `zooBuildControl ( $prefix +"_spine_base_space" ) ( "-type null -place "+ $spineBase )`;
-		string $baseControl = `zooBuildControl ( $prefix +"_spine_base_ctrl" ) ( "-type "+ $type +" -place "+ $spineBase +" -scale "+ $scale +" -colour "+ $colour )`;
-		string $chestSpace = `zooBuildControl ( $prefix +"_spine_chest_space" ) ( "-type null -place "+ $spines[$mid+1] )`;
-		string $chestControl = `zooBuildControl ( $prefix +"_spine_chest_ctrl" ) ( "-type "+ $type +" -place "+ $spines[$mid+1] +" -scale "+ $scale +" -colour "+ $colour )`;
+		//determine what axis to draw the spine controls - assume they're all the same as the spine base
+		string $axis = zooVectorAsAxis(`zooAxisInDirection $spineBase {0.,0.,-1.}`);
+		$axis = `substitute "-" $axis "_"`;
+
+		string $baseSpace = `zooBuildControl ( "spine_baseSpace" ) ( "-type null -place "+ $spineBase )`;
+		string $baseControl = `zooBuildControl ( "spine_baseControl" ) ( "-type "+ $type +" -axis "+ $axis +" -place "+ $spineBase +" -scale "+ $scale +" -colour "+ $colour )`;
+		string $chestSpace = `zooBuildControl ( "spine_chestSpace" ) ( "-type null -place "+ $spines[$mid+1] )`;
+		string $chestControl = `zooBuildControl ( "spine_chestControl" ) ( "-type "+ $type +" -place "+ $spines[$mid+1] +" -scale "+ $scale +" -colour "+ $colour )`;
 
 		parent $baseControl $baseSpace;
 		parent $chestControl $chestSpace;

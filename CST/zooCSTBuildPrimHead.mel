@@ -68,9 +68,9 @@ global proc string[] zooCSTBuildPrimHead( string $prefix, string $head, string $
 	//build all the control objects
 	//------
 		string $constraints[] = {};
-		string $headControlSpace = `zooBuildControl ( $prefix +"_head_space" ) ( "-type null -place "+ $head )`;
-		string $headGimbal = `zooBuildControl ( $prefix +"_head_gimbal_ctrl" ) ( "-type starCircle -place "+ $head +" -scale "+(3*$scale)+" -surface 0 -colour "+ $colour )`;
-		string $headControl = `zooBuildControl ( $prefix +"_head_ctrl" ) ( "-type "+ $headType +" -place "+ $head +" -placepivot %p -offset 0.5up -scale "+(1.5*$scale)+" -colour "+ $colour )`;
+		string $headControlSpace = `zooBuildControl ( "headSpace" ) ( "-type null -place "+ $head )`;
+		string $headGimbal = `zooBuildControl ( "head_gimbalControl" ) ( "-type starCircle -place "+ $head +" -scale "+(3*$scale)+" -surface 0 -colour "+ $colour )`;
+		string $headControl = `zooBuildControl ( "headControl" ) ( "-type "+ $headType +" -place "+ $head +" -placepivot %p -offset 0.5up -scale "+(1.5*$scale)+" -colour "+ $colour )`;
 		string $neckControlSpace = "";
 		string $neckControl = "";
 
@@ -84,20 +84,15 @@ global proc string[] zooCSTBuildPrimHead( string $prefix, string $head, string $
 
 		if( $buildNeck ) {
 			//determine what axis to draw the neck using
-			string $axis = zooVectorAsAxis(`zooAxisInDirection $neck {1.,0.,0.}`);
+			string $axis = zooVectorAsAxis(`zooAxisInDirection $neck {0.,0.,-1.}`);
 			$axis = `substitute "-" $axis "_"`;
 
-			$neckControlSpace = `zooBuildControl ( $prefix +"_neck_space" ) ( "-type null -place "+ $neck )`;
-			$neckControl = `zooBuildControl ( $prefix +"_neck_ctrl" ) ( "-axis "+ $axis +" -type "+ $neckType +" -place "+ $neck +" -align %p -scale "+ $scale +" -colour "+ $colour )`;
+			$neckControl = `zooBuildControl ( "neckControl" ) ( "-axis "+ $axis +" -type "+ $neckType +" -place "+ $neck +" -orient 1 -align %p -scale "+ ($scale*1.3) +" -colour "+ $colour )`;
+			$neckControlSpace = zooGetElement_str(0,`listRelatives -p $neckControl`);
 			string $shapes[] = `listRelatives -pa -s $neckControl`;
 
-			select -cl;
-			for( $s in $shapes ) select -add ( $s +".cv[*]" );
-			scale -r 2 1 1;
 			//if( $orient ) delete `orientConstraint $neck $neckControlSpace`;
 			parent $neckControlSpace $worldControl;
-			parent $neckControl $neckControlSpace;
-			makeIdentity -a 1 -t 1 -r 1 $neckControl;
 			parent $headControlSpace $neckControl;
 			if( `objExists $rootControl` ) parent $neckControlSpace $rootControl;
 			if( `objExists $chestControl` ) parent $neckControlSpace $chestControl;
@@ -139,10 +134,10 @@ global proc string[] zooCSTBuildPrimHead( string $prefix, string $head, string $
 		if( $pickwalking ) {
 			zooPickwalk "-load";
 			if( $buildNeck ) {
-				zooSetPickwalkObj $headControl $neckControl "-dir up -reciprocal 1";
-				zooSetPickwalkObj $neckControl $chestControl "-dir up -reciprocal 1";
+				zooSetPickwalkObj $neckControl $headControl "-dir up -reciprocal 1";
+				zooSetPickwalkObj $chestControl $neckControl "-dir up -reciprocal 1";
 				}
-			else zooSetPickwalkObj $headControl $chestControl "-dir up -reciprocal 1";
+			else zooSetPickwalkObj $chestControl $headControl "-dir up -reciprocal 1";
 			}
 
 

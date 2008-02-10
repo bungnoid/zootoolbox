@@ -7,6 +7,7 @@ zooObjMenuUtils;
 zooCSTPrimitives;
 zooSpaceSwitching;
 zooRenamerUtils;
+zooXferAnimUtils;
 
 
 //script documentation is at the end of this file
@@ -24,13 +25,11 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 		int $spaceswitching = 1;
 		int $pickwalking = 1;
 		int $stretch = 0;
-		int $kneeMode = 0;
 
 		$optionTemp = `zooGetFlagArguments $optionStr root`; if( `size $optionTemp` ) $rootFlag = $optionTemp[0];
 		$optionTemp = `zooGetFlagArguments $optionStr ikType`; if( `size $optionTemp` ) $ikType = $optionTemp[0];
 		$optionTemp = `zooGetFlagArguments $optionStr hips`; if( `size $optionTemp` ) $hipsFlag = $optionTemp[0];
 		$optionTemp = `zooGetFlagArguments $optionStr stretch`; if( `size $optionTemp` ) $stretch = $optionTemp[0];
-		$optionTemp = `zooGetFlagArguments $optionStr kneeMode`; if( `size $optionTemp` ) $kneeMode = $optionTemp[0];
 		$optionTemp = `zooGetFlagArguments $optionStr spaceswitching`; if( `size $optionTemp` ) $spaceswitching = $optionTemp[0];
 		$optionTemp = `zooGetFlagArguments $optionStr pickwalking`; if( `size $optionTemp` ) $pickwalking = $optionTemp[0];
 		$optionTemp = `zooGetFlagArguments $optionStr colour`; if( `size $optionTemp` ) $colour = `zooArrayToStr_str $optionTemp " "`;
@@ -53,20 +52,21 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 
 		if( `objExists $rootFlag` ) $rootControl = $rootFlag;
 		if( `objExists $hipsFlag` ) $hipsControl = $hipsFlag;
-		string $controls[] = `zooCSTBuildIKFK $prefix $parity $thigh $knee $ankle ( "-twistUpObj "+ $hipsControl +" -id "+ $id +" "+ $optionStr )`;
+		string $controls[] = `zooCSTBuildIKFK $prefix $parity $thigh $knee $ankle ( "-twistUpObj "+ $hipsControl +" -id "+ $id +" -alignEnd 0 "+ $optionStr )`;
 		string $primitive = `zooCSTCreatePrimRecord leg $id $prefix`;
 		cycleCheck -e 0;  //turn this off because when the script executes, it gives an annoying warning about a cycle that only exists for the duration of the script
+		if( !`objExists $rootControl` ) warning "zooCSTBuildPrimLeg() no root control has been found, and no root control was specified on the command-line.  this may break this script - to manually specify a root control, please use the \"-root controlName\" flag when building this part of the rig";
 
 
 	//------
 	//rename the objects created by the ikfk proc
 	//------
-		for( $n=0; $n<`size $controls`; $n++ ) $controls[$n] = `zooRenamerFunctions replace limb leg $controls[$n]`;
 		for( $n=0; $n<`size $controls`; $n++ ) $controls[$n] = `zooRenamerFunctions replace limbUpper thigh $controls[$n]`;
 		for( $n=0; $n<`size $controls`; $n++ ) $controls[$n] = `zooRenamerFunctions replace limbMiddle knee $controls[$n]`;
 		for( $n=0; $n<`size $controls`; $n++ ) $controls[$n] = `zooRenamerFunctions replace limbEnd ankle $controls[$n]`;
+		for( $n=0; $n<`size $controls`; $n++ ) $controls[$n] = `zooRenamerFunctions replace limb leg $controls[$n]`;
 		for( $n=0; $n<`size $controls`; $n++ ) $controls[$n] = `zooRenamerFunctions replace pole knee $controls[$n]`;
-		$controls[0] = `rename $controls[0] ( $prefix +"_leg_ik"+ $suffix )`;
+		$controls[0] = `rename $controls[0] ( "leg_ik"+ $suffix )`;
 
 
 	//------
@@ -90,21 +90,25 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 	//------
 	//build the objects to control the foot
 	//------
-		string $legControlSpace = `zooBuildControl ( $prefix +"_leg_space"+ $suffix ) ( "-type null -place "+ $ankle )`;
-		string $legControl = `zooBuildControl ( $prefix +"_leg_ctrl"+ $suffix ) ( "-type "+ $ikType +" -place "+ $ankle +" -scale "+ $scale +" -colour "+ $colour )`;
+		string $legControlSpace = `zooBuildControl ( "legSpace"+ $suffix ) ( "-type null -place "+ $ankle )`;
+		string $legControl = `zooBuildControl ( "legControl"+ $suffix ) ( "-type "+ $ikType +" -place "+ $ankle +" -scale "+ $scale +" -colour "+ $colour )`;
 		string $toeRoll;
-		string $heelRoll = `zooBuildControl ( $prefix +"_heel_roll_piv"+ $suffix ) ( "-type null -place "+ $ankle +" -scale "+ $scale +" -offset -0.5fwd" )`;
-		string $footControlSpace = `zooBuildControl ( $prefix +"_foot_control_space"+ $suffix ) ( "-type null -place "+ $ankle )`;
-		string $footRollControl = `zooBuildControl ( $prefix +"_leg_roll_piv"+ $suffix ) ( "-type null -place "+ $toe )`;
-		string $toeOrient = `zooBuildControl ( $prefix +"_leg_toe_orient_piv"+ $suffix ) ( "-type null -place "+ $toe )`;
-		string $footBankL = `zooBuildControl ( $prefix +"_leg_bank_in_piv"+ $suffix ) ( "-type null -place "+ $toe +" -scale "+ $scale +" -offset "+($parity=="r"?1:-1)+"side" )`;
-		string $footBankR = `zooBuildControl ( $prefix +"_leg_bank_out_piv"+ $suffix ) ( "-type null -place "+ $toe +" -scale "+ $scale +" -offset "+($parity=="r"?-1:1)+"side" )`;
+		string $heelRoll = `zooBuildControl ( "heel_roll_piv"+ $suffix ) ( "-type null -place "+ $ankle +" -scale "+ $scale +" -offset -0.5fwd" )`;
+		string $footControlSpace = `zooBuildControl ( "foot_controlSpace"+ $suffix ) ( "-type null -place "+ $ankle )`;
+		string $footRollControl = `zooBuildControl ( "leg_roll_piv"+ $suffix ) ( "-type null -place "+ $toe )`;
+		string $toeOrient = `zooBuildControl ( "leg_toe_orient_piv"+ $suffix ) ( "-type null -place "+ $toe )`;
+		string $footBankL = `zooBuildControl ( "leg_bank_in_piv"+ $suffix ) ( "-type null -place "+ $toe +" -scale "+ $scale +" -offset "+($parity=="r"?1:-1)+"side" )`;
+		string $footBankR = `zooBuildControl ( "leg_bank_out_piv"+ $suffix ) ( "-type null -place "+ $toe +" -scale "+ $scale +" -offset "+($parity=="r"?-1:1)+"side" )`;
 		string $constraints[] = {};  //holds all constraints created by the script
+		string $spaceNodes[] = {};  //holds all the space nodes created herein
 
-		if( `objExists $toeTip` ) $toeRoll = `zooBuildControl ( $prefix +"_leg_toe_roll_piv"+ $suffix ) ( "-type null -place "+ $toeTip )`;
-		else $toeRoll = `zooBuildControl ( $prefix +"_leg_toe_roll_piv"+ $suffix ) ( "-type null -place "+ $toe +" -scale "+ $scale +" -offset 1fwd" )`;
+		if( `objExists $toeTip` ) $toeRoll = `zooBuildControl ( "leg_toe_roll_piv"+ $suffix ) ( "-type null -place "+ $toeTip )`;
+		else $toeRoll = `zooBuildControl ( "leg_toe_roll_piv"+ $suffix ) ( "-type null -place "+ $toe +" -scale "+ $scale +" -offset 1fwd" )`;
 		select $heelRoll;  //stupid move command doesn't support object naming when specifying a single axis move, so we must selec the object first
 		move -rpr -y 0;
+		//move pivots to the ground
+		eval( "move -a -y 0 0 0 "+ $footBankL +".rotatePivot "+ $footBankL +".scalePivot;" );
+		eval( "move -a -y 0 0 0 "+ $footBankR +".rotatePivot "+ $footBankR +".scalePivot;" );
 
 
 	//------
@@ -134,6 +138,21 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 		parent $legControl $legControlSpace;
 		makeIdentity -apply 1 -t 1 -r 1 $legControl;
 		orientConstraint -mo $legIK $ankle;
+
+
+	//------
+	//build the knee setup
+	//------
+		string $kneePos = `group -em`;
+
+		$kneePos = `rename $kneePos ( "knee_world_pos"+ $id )`;
+		delete `parentConstraint $kneeControl $kneePos`;
+		parent $kneePos $worldControl;
+		pointConstraint -mo $rootControl $kneePos;
+		if( $spaceswitching ) $spaceNodes = zooAddArray_str(`zooBuildSpaceSwitch $kneeControl $kneeControlSpace { $legControl, $rootControl, $kneePos } { "leg", "root", "root pos only" } "-mo "`,$spaceNodes);
+
+		zooAttrState "-attrs t r s v -k 0 -l 1" $kneePos;
+		makeIdentity -apply 1 -t 1 $kneeControl;
 
 
 	//------
@@ -201,9 +220,7 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 	//------
 	//build space switching expressions
 	//------
-		string $spaceNodes[] = {};
 		string $legControlParents[] = { $worldControl, $rootControl, $hipsControl };
-
 		if( `objExists $hipsControl` ) parent $fkLegSpace $hipsControl;
 		if( `size $parents` ) zooAddArray_str $legControlParents $parents;
 		if( $spaceswitching ) zooAddArray_str $spaceNodes `zooBuildSpaceSwitch $legControl $legControlSpace $legControlParents { "world", "root", "hips" } "-mo"`;
@@ -235,49 +252,32 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 	//------
 	//add the zooObjMenu commands to the object for easy switching to FK mode
 	//------
-		int $FKcmdNum = `zooObjMenuAddCmd $legControl`;
-		int $IKcmdNum = `zooObjMenuAddCmd $legControl`;
-		int $cmdANum = `zooObjMenuAddCmd $legControl`;
-		string $FKcmdStr =  "zooFlags;\nzooAlign \"-src # -tgt %1\";\nsetAttr #.fkBlend 1;";
-		string $IKcmdStr = "zooFlags;\nzooAlign \"\";\nzooAlignIK \"-control # -ikHandle %1 -pole %2 -offCmd setAttr #.fkBlend 0\";";
-		string $cmdAStr = "zooBrandTools;\nzooCSTPrimitives;\nzooLineOfAction;\nstring $prim = `zooGetPrimFromRegistered #`;\nstring $inputs[] = `zooCSTListRegistered input $prim`;\nzooLineOfAction_multi $inputs \"\";";
+		int $idx_eff = `zooAddConnect $legControl $legIK`;
+		int $idx_kne = `zooAddConnect $legControl $kneeControl`;
+		int $fkIdx = `zooObjMenuAddCmdAll $legControl "switch to FK" ( "zooFlags;\nzooAlignFK \"-control # -ikHandle %"+ $idx_eff +" -onCmd setAttr #.fkBlend 0 -offCmd setAttr #.fkBlend 1\";" )`;
+		zooObjMenuAddCmdAll $legControl "switch to FK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $fkIdx +"))))\";" );
+		int $ikIdx = `zooObjMenuAddCmdAll $legControl "switch to IK" ( "zooFlags;\nzooAlign \"\";\nzooAlignIK \"-control # -ikHandle %"+ $idx_eff +" -pole %"+ $idx_kne +" -offCmd setAttr #.fkBlend 0\";" )`;
+		zooObjMenuAddCmdAll $legControl "switch to IK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $ikIdx +"))))\";" );
+		zooObjMenuAddCmdAll $legControl "draw line of action" "zooBrandTools;\nzooCSTPrimitives;\nzooLineOfAction;\nstring $prim = `zooGetPrimFromRegistered #`;\nstring $inputs[] = `zooCSTListRegistered input $prim`;\nzooLineOfAction_multi $inputs \"\";";
 
-		zooAddConnect $legControl $legIK;
-		zooAddConnect $legControl $kneeControl;
-		zooSetObjMenuCmdName $legControl "switch to FK" $FKcmdNum;
-		zooSetObjMenuCmdName $legControl "switch to FK" $FKcmdNum;
-		zooSetObjMenuCmdName $legControl "draw line of action" $cmdANum;
-		zooSetObjMenuCmdStr $legControl $FKcmdStr $FKcmdNum;
-		zooSetObjMenuCmdStr $legControl $IKcmdStr $IKcmdNum;
-		zooSetObjMenuCmdStr $legControl $cmdAStr $cmdANum;
+		int $idx_ctl = `zooAddConnect $driverAnkle $legControl`;
+		int $idx_eff = `zooAddConnect $driverAnkle $legIK`;
+		int $idx_kne = `zooAddConnect $driverAnkle $kneeControl`;
+		zooObjMenuAddCmdAll $driverAnkle "switch to IK" ( "zooFlags;\nzooAlign \"\";\nzooAlignIK \"-control %"+ $idx_ctl +" -ikHandle %"+ $idx_eff +" -pole %"+ $idx_kne +" -offCmd setAttr %"+ $idx_ctl +".fkBlend 0\";" );
 
 
 	//------
-	//rig the knee control so that its always between the root and the foot
+	//add known rig-skeleton offsets to feet controls (feet are the only rig controls that are oriented differently to teh
+	//underlying skeletal components, so we store this offset data on the controls so tracing works properly
 	//------
-		if( $kneeMode ) {
-			string $kneeTwist = `zooBuildControl ( $prefix +"_knee_twist_space"+ $suffix ) ( "-type null -place "+ $ankle +" -scale 1" )`;
-			parent $kneeTwist $legControl;
-			parent $kneeControl $kneeTwist;
-			zooAttrState "-attrs r -k 0 -l 1" $kneeControl;
-			addAttr -k 1 -ln twist -at double -min -90 -max 90 -dv 0 $legControl;
-			connectAttr -f ( $legControl +".twist" ) ( $kneeTwist +".ry" );
-			}
-
-		else {
-			string $kneeSpace = `zooBuildControl ( $prefix +"_knee_space"+ $suffix ) ( "-type null -place "+ $ankle +" -scale 1" )`;
-			if( $spaceswitching ) $spaceNodes = zooAddArray_str(`zooBuildSpaceSwitch $kneeControl $kneeControlSpace { $worldControl, $rootControl, $hipsControl } { "world", "root", "hips" } "-mo"`,$spaceNodes);
-			zooAddArray_str $constraints `pointConstraint -mo $legIK $kneeSpace`;
-			if( `objExists $rootControl` ) zooAddArray_str $constraints `pointConstraint -mo $rootControl $kneeSpace`;
-			connectAttr -f ( $legControl +".r"+ `upAxis -q -axis` ) ( $kneeSpace +".r"+ `upAxis -q -axis` );
-			connectAttr -f ( $legControl +".parent" ) ( $kneeControl +".parent" );
-
-			zooAttrState "-attrs r -k 1 -l 0" $kneeControl;
-			parent $kneeControl $kneeSpace;
-			parent $kneeSpace $kneeControlSpace;
-			makeIdentity -apply 1 -t 1 -r 1 $kneeControl;
-			zooAttrState "-attrs r parent -k 0 -l 1" $kneeControl;
-			}
+		float $offset[] = {0,0,0};
+		zooAlignFast $ankle $legControl 0 0;
+		$offset = `getAttr ( $legControl +".r" )`;
+		for( $i=0; $i<3; $i++ ) $offset[$i] *= -1;  //negate the rotational offset
+		setAttr ( $legControl +".t" ) 0 0 0;
+		setAttr ( $legControl +".r" ) 0 0 0;
+		zooSetPostTraceCmd $legControl ( "rotate -r -os "+ $offset[0] +" "+ $offset[1] +" "+ $offset[2] +" #;" );
+		zooSetPostTraceCmd $legControl ( "rotate -r -os "+ $offset[0] +" "+ $offset[1] +" "+ $offset[2] +" #;" );
 
 
 	//------
@@ -293,10 +293,12 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 	//------
 	//hide attribs, objects and cleanup
 	//------
-		setAttr ( $legIK +".v" ) 0;
 		delete `listRelatives -s -pa $legIK`;  //delete legIK shape nodes
 		zooAttrState "-attrs s kneePos -k 0 -l 1" $legControl;
 		zooAttrState "-attrs v -k 0" $legControl;
+		//get the condition node that drives ik control visibility, and connect it to the actual leg control's vis
+		string $cond = zooGetElement_str(0,`listConnections -d 0 ( $legIK +".v" )`);
+		//connectAttr -f ( $cond +".outColorG" ) ( $legControlSpace +".v" );  //commented out simply because the switch to IK objMenu cmd doesn't actually work properly atm...  too lazy to fix.  fk legs are rarely used anyways
 		string $toLock[] = {$legIK,$legControlSpace,$toeRoll,$heelRoll,$footControlSpace,$footRollControl,$toeOrient,$footBankL,$footBankR};
 		for( $a in $toLock ) zooAttrState "-attrs t r s -l 1" $a;
 
@@ -396,7 +398,6 @@ option flags
 -root [string]			use this to override which object is used as the root control
 -hips [string]			use this to override which object is used as the hips control
 -stretch [int]			turn this flag on if you want a stretchy leg
--kneeMode [int]			knee mode 0 is a simply parented knee control - mode 1 is constrained, and only rotates in the y-axis
 -parents [string]		use this to specify an additional list of parents for the dynamic parenting
 -scale [float]			scale factor to apply to the control (purely a visual thing - scale is frozen).  default: 1
 */

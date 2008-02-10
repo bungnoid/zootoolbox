@@ -2,6 +2,8 @@ zooArrays_str;
 zooStrUtils;
 zooUtils;
 
+global string $g_p4AutoCheckoutString = "Maya Auto Checkout";
+
 
 global proc p4() {
 	return;
@@ -139,7 +141,7 @@ global proc p4() {
 
 	//returns the perforce revision string for the given file - if the file arg
 	//given is empty, then it assumes the currently opened file
-	global proc string p4getRevStr( string $file ) {
+	global proc string p4_getRevStr( string $file ) {
 		if( $file == "" ) $file = `file -q -sn`;
 
 		//query perforce data about the current file
@@ -175,9 +177,16 @@ global proc p4() {
 
 
 	//adds a given file to perforce - returns the success of the command
-	global proc int p4_add( string $files[] ) {
-		string $fileStr = "";
+	global proc int p4_add( string $files[], int $existing ) {
 		int $num = `size $files`;
+		if( !$num ) {
+			print "no files specified!  aborting...\n";
+			return 0;
+			}
+
+		string $fileStr = "";
+		//if this is -1 then put it in the default maya auto checkout changelist
+		if( $existing == -1 ) $existing = p4_getMayaChangelist();
 
 		for( $n=0; $n<$num; $n++ ) {
 			$files[$n] = `zooResolvePath $files[$n]`;
@@ -185,20 +194,30 @@ global proc p4() {
 			$fileStr += "\""+ $files[$n] +"\" ";
 			}
 
-		string $p4Cmd = "p4 add "+ $fileStr;
+		string $p4Cmd = "p4 add -c "+ $existing +" "+ $fileStr;
 		print( $p4Cmd +"\n" );
-		print `system $p4Cmd`;
+		string $ret = `system $p4Cmd`;
+		print $ret;
 
 		$p4Cmd = strip($p4Cmd);
-		if( `match "opened for add$" $p4Cmd` != "" ) return 1;
+		if( `match "opened for add$" $ret` != "" ) return 1;
+		if( `match "is not under" $ret` != "" ) return -1;
+
 		return 0;
 		}
 
 
 	//returns whether the file was successfully opened for edit or not
-	global proc int p4_edit( string $files[] ) {
-		string $fileStr = "";
+	global proc int p4_edit( string $files[], int $existing ) {
 		int $num = `size $files`;
+		if( !$num ) {
+			print "no files specified!  aborting...\n";
+			return 0;
+			}
+
+		string $fileStr = "";
+		//if this is -1 then put it in the default maya auto checkout changelist
+		if( $existing == -1 ) $existing = p4_getMayaChangelist();
 
 		for( $n=0; $n<$num; $n++ ) {
 			$files[$n] = `zooResolvePath $files[$n]`;
@@ -206,7 +225,7 @@ global proc p4() {
 			$fileStr += "\""+ $files[$n] +"\" ";
 			}
 
-		string $p4Cmd = "p4 edit "+ $fileStr;
+		string $p4Cmd = "p4 edit -c "+ $existing +" "+ $fileStr;
 		print( $p4Cmd +"\n" );
 		string $ret = `system $p4Cmd`;
 		print $ret;
@@ -223,8 +242,11 @@ global proc p4() {
 	//then its relative to the head revision.  so p4_syncRev {} -2; does a sync to the
 	//second last revision for all files, and 0 is the head revision
 	global proc p4_sync( string $files[], int $rev ) {
-		string $fileStr = "";
 		int $num = `size $files`;
+		if( !$num ) {
+			print "no files specified!  aborting...\n";
+			return;
+			}
 
 		for( $n=0; $n<$num; $n++ ) {
 			$files[$n] = `zooResolvePath $files[$n]`;
@@ -252,7 +274,12 @@ global proc p4() {
 	//data, and publishing the changelist to perforce - returns the success state
 	global proc int p4_submit( string $files[], string $comment ) {
 		int $num = `size $files`;
-		for( $n=0; $n<$num; $n++ ) $files[$n] = `zooResolvePath $files[$n]`;
+		if( !$num ) {
+			print "no files specified!  aborting...\n";
+			return 0;
+			}
+
+		for( $n=0; $n<$num; $n++ ) $files[$n] = `resolvePath $files[$n]`;
 
 		int $oneIsAlreadyOpen = 0;
 		for( $n=0; $n<`size $files`; $n++ ) {
@@ -261,44 +288,37 @@ global proc p4() {
 			int $openIdx = `zooGetIdxOfElement_str $dataNames otherOpen`;
 
 			if( $openIdx > 0 ) if( $data[$openIdx] == "1" ) {
-				warning( $files[$n] +" seems to be open by someone already - please do the submit via the perforce interface" );
+				warning( "p4::p4_submit() "+ $files[$n] +" seems to be open by someone already - please do the submit via the perforce interface" );
 				$oneIsAlreadyOpen++;
 				}
 			}
 
 		if( $oneIsAlreadyOpen ) return 0;
 
-		string $user = `getenv USER`;
-		string $p4User = `p4User`;
-		string $computer = `getenv COMPUTERNAME`;
-		string $tempPath = zooResolvePath(`getenv TEMP`+"/");
-		string $tempFile = $tempPath +"p4_changelist_from_maya.txt";
-		string $tempDirNative = `zooReplaceChars $tempFile "/" "\\"`;
-		string $changelist = "Change:\tnew\n\nClient:\t"+ $computer +"\n\nUser:\t"+ $p4User +"\n\nStatus:\tnew\n\nDescription:\n\t"+ $comment +"\n\nFiles:";
-		int $fileID = `fopen $tempFile "w"`;
+		int $change = `p4_newChange $comment $files`;
+		p4_moveToChange $files $change;
 
-		for( $n=0; $n<$num; $n++ ) {
-			string $tempPath = `p4Path $files[$n]`;
-			$changelist += "\n\t"+ $tempPath +"\t# edit";
-			}
+		string $p4cmd = "p4 submit -c "+ $change;
+		string $res = `system $p4cmd`;
 
-		fprint $fileID $changelist;
-		fclose $fileID;
-		print $changelist;
-		string $p4Cmd = `system( "p4 submit -i < \""+ $tempDirNative +"\"" )`;
-		print $p4Cmd;
-		$p4Cmd = strip($p4Cmd);
-		sysFile -delete $tempFile;
-		if( `match "Change [0-9]+ submitted." $p4Cmd` != "" ) return 1;
+		print( $p4cmd +"\n" );
+		print( $res +"\n" );
+
+		$res = strip($res);
+		if( `match "Change [0-9]+ submitted." $res` != "" ) return 1;
 
 		return 0;
 		}
 
 
 	global proc int p4_revert( string $files[] ) {
-		string $fileStr = "";
 		int $num = `size $files`;
+		if( !$num ) {
+			print "no files specified!  aborting...\n";
+			return 0;
+			}
 
+		string $fileStr = "";
 		for( $n=0; $n<$num; $n++ ) {
 			$files[$n] = `zooResolvePath $files[$n]`;
 			$files[$n] = `zooReplaceChars $files[$n] "/" "\\"`;
@@ -317,12 +337,20 @@ global proc p4() {
 		}
 
 
+	//returns a list of all opened files in the default and "maya auto checkout" changelists
 	global proc string[] p4_opened() {
-		string $p4Cmd = `system( "p4 opened" )`;
+		string $p4Cmd = `system( "p4 opened -c default" )`;
 		string $outputToks[] = `zooTokenize (strip($p4Cmd)) "\n"`;
 		string $opened[] = {};
 
 		for( $n=0; $n<`size $outputToks`; $n++ ) $opened[$n] = `match "^[^#]+" (strip($outputToks[$n]))`;
+
+		int $mayaChange = `p4_getMayaChangelist`;
+		clear $outputToks;
+		$p4Cmd = `system( "p4 opened -c "+ $mayaChange )`;
+		$outputToks = `zooTokenize (strip($p4Cmd)) "\n"`;
+
+		for( $n=0; $n<`size $outputToks`; $n++ ) $opened[`size $opened`] = `match "^[^#]+" (strip($outputToks[$n]))`;
 
 		return $opened;
 		}
@@ -356,6 +384,92 @@ global proc p4() {
 		}
 
 
+	global proc int[] p4_getMayaChangelists( int $changelists[], string $descriptions[] ) {
+		string $cmd = "p4 changes -s pending -u "+ p4User() +" -c "+ p4Client();
+		string $dataStr = system($cmd);
+		string $data[] = `zooTokenize (strip($dataStr)) "\n"`;
+
+		clear $changelists;
+		clear $descriptions;
+
+		for( $line in $data ) {
+			$line = `substituteAllString $line "'" ""`;
+			$line = strip($line);
+			string $toks[] = {};
+			tokenize $line " " $toks;
+			if( `size $toks` < 2 ) continue;
+			$changelists[`size $changelists`] = $toks[1];
+			$toks = `zooIndexCrop_str $toks "7:"`;
+			$descriptions[`size $descriptions`] = `zooArrayToStr_str $toks " "`;
+			}
+
+		return $changelists;
+		}
+
+
+	global proc int p4_getMayaChangelist() {
+		global string $g_p4AutoCheckoutString;
+		string $descriptions[] = {};
+		int $changes[] = {};
+		int $change = -1;
+
+		p4_getMayaChangelists $changes $descriptions;
+		int $num = `size $changes`;
+		for( $n=0; $n<$num; $n++ ) {
+			if( $descriptions[$n] == $g_p4AutoCheckoutString ) $change = $changes[$n];
+			}
+
+		if( $change == -1 ) $change = `p4_newChange $g_p4AutoCheckoutString {}`;
+
+		return $change;
+		}
+
+
+	global proc int p4_newChange( string $comment, string $files[] ) {
+		int $change = -1;
+
+		string $changelist = "Change:\tnew\n\nClient:\t"+ p4Client() +"\n\nUser:\t"+ p4User() +"\n\nStatus:\tnew\n\nDescription:\n\t"+ $comment +"\n";
+		string $tempPath = resolvePath(`getenv TEMP`+"/");
+		string $tempFile = $tempPath +"p4_changelist_from_maya.txt";
+		string $tempDirNative = `zooReplaceChars $tempFile "/" "\\"`;
+		int $fileID = `fopen $tempFile "w"`;
+
+		fprint $fileID $changelist;
+		fclose $fileID;
+
+		string $cmd = "p4 change -i < \""+ $tempDirNative +"\"";
+		string $res = system($cmd);
+		$change = `match "[0-9]+" $res`;
+		sysFile -delete $tempFile;
+
+		if( $change != -1 ) if( `size $files` ) for( $file in $files ) {
+			//$changelist += ( "Files:\n\t" + `zooArrayToStr_str $files "\n\t"` );
+			string $p4cmd = "p4 reopen -c "+ $change +" \""+ $file +"\"";
+			string $res = system( $p4cmd );
+			}
+
+		return $change;
+		}
+
+
+	global proc int p4_moveToChange( string $files[], int $change ) {
+		if( $change == -1 ) $change = `p4_getMayaChangelist`;
+
+		if( `size $files` ) {
+			string $fileStr = "\""+ `zooArrayToStr_str $files "\" \""` +"\"";
+			$fileStr = `substituteAllString $fileStr "/" "\\"`;
+
+			string $p4cmd = "p4 reopen -c "+ $change +" "+ $fileStr;
+			string $res = system( $p4cmd );
+
+			print( $p4cmd +"\n" );
+			print( $res +"\n" );
+			}
+
+		return $change;
+		}
+
+
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 // SUPPORT PROCS - these are convenience procs to simplify the wrapper commands
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -369,9 +483,13 @@ global proc p4() {
 		//so if the user has passed non-empty arrays, then we assume the arrays contain valid
 		//perforce fstat data, so we work with it instead
 		if( !`size $data` ) $data = `p4_fstat $file $dataNames {} 1`;
+		int $headAction = `zooGetIdxOfElement_str $dataNames "headAction"`;
 		int $headRev = `zooGetIdxOfElement_str $dataNames "headRev"`;
 		int $haveRev = `zooGetIdxOfElement_str $dataNames "haveRev"`;
 		int $actIdx = `zooGetIdxOfElement_str $dataNames "action"`;
+
+		//if the headAction is delete, then the file can't be out of sync...
+		if( $headAction != -1 ) if( $data[$headAction] == "delete" ) return 1;
 
 		//so if the head rev is -1 that means it doesn't have a head revision which
 		//means either the file isn't in perforce - OR its been added to perforce but
@@ -449,4 +567,170 @@ global proc p4() {
 		return $line;
 		}
 
+
+	global proc string p4Client() {
+		string $info = tolower( `system "p4 info"` );
+		string $data[] = `zooTokenize $info "\n"`;
+		string $line = "";
+		int $num = `size $data`;
+
+		for( $n=0; $n<$num; $n++ ) if( `match "^client name: " $data[$n]` != "" ) {
+			$line = `strip $data[$n]`;
+			break;
+			}
+
+		$line = `match "[^ :]+$" $line`;
+
+		return $line;
+		}
+
+
+	global proc p4_gatherUsedFilesIntoChangelist() {
+
+		}
+
+
+	//lists all files that a scene uses that are currently open for edit - makes doing an atomic commit
+	//in maya a lot easier
+	global proc string[] getFilesThatAreOpenForEdit() {
+		string $allFiles[] = `getFilesSceneUses`;
+		string $filesOpen[] = {};
+
+		for( $file in $allFiles ) {
+			int $isEdit = `isEdit $file {} {}`;
+			if( $isEdit == 1 ) $filesOpen[`size $filesOpen`] = $file;
+			else if( $isEdit == -1 ) {
+				//if the file is used, but hasn't been added to perforce - set that up now
+				int $addSuccess = `p4_add {$file} -1`;
+				if( $addSuccess == 1 ) $filesOpen[`size $filesOpen`] = $file;
+				}
+			}
+
+		return $filesOpen;
+		}
+
+
+	//lists all files that a scene depends on/generates - other maya scenes,
+	//generated .dmx files (only if they're managed through the export manager),
+	//textures if the option is turned on
+	global proc string[] getFilesSceneUses() {
+		int $ignoreTextureFiles = `optionVar -ex vIgnoreTexturesOnCheckin`? `optionVar -q vIgnoreTexturesOnCheckin`: 0;
+		string $thatMayaKnowsAbout[] = `file -q -l`;
+		string $existingFromMaya[] = {};
+		string $fromAssets[] = {};
+		string $allFiles[] = {};
+		string $allInfoNodes[] = `zooGetExistingAssetNodes`;
+
+		//look to see if we have a "_reference.ma" file open.  if so, look for a corresponding "_rig.ma" file
+		//one tricky, and not uncommon path is if you have made changes to a reference file AND a rig file, but
+		//you have the reference open when building a changelist, the rig can get overlooked
+			string $filepath = `file -q -sn`;
+			string $info[] = `zooSplitPath $filepath "/"`;
+
+			if( `match "_reference\\.m[ab]+$" $info[1]` != "" ) {
+				string $ext = `match "[^\\.]+$" $info[1]`;
+				string $basename =`substitute "_reference\\.m[ab]+$" $info[1] ""`;
+				string $rigName = $basename +"_rig."+ $ext;
+				string $rigPath =  $info[0] + $rigName;
+
+				if( `filetest -f $rigPath` ) $fromAssets[`size $fromAssets`] = $rigPath;
+				}
+
+		//file -q -l lists all the external files that the maya scene references, but that doesn't guarantee
+		//that the files exist - so cull all non-existent files...
+			for( $file in $thatMayaKnowsAbout ) if( `filetest -f $file` ) $existingFromMaya[`size $existingFromMaya`] = $file;
+			$thatMayaKnowsAbout = $existingFromMaya;
+
+		//now go through all the info nodes in the scene, and look for the assets they spit out (if any)
+		//and add them to the list
+			for( $node in $allInfoNodes ) {
+				zooSetAssetNode $node;
+				int $assets[] = `zooListAssets`;
+
+				//look through all the assets in the scene
+				for( $asset in $assets ) {
+					string $path = resolvePath(`zooGetSlotExportFilepath $asset` +".dmx");
+					if( `filetest -f $path` ) $fromAssets[`size $fromAssets`] = $path;
+					}
+
+				//look at the .qc file associated with the scene - if any
+				string $compileScript = resolvePath(`zooGetGlobalAttrData compileCmd`);
+				if( `filetest -f $compileScript` ) {
+					$fromAssets[`size $fromAssets`] = $compileScript;
+
+					//add any open mdl to list if the compile script is a .qc file...
+					if( `match "\\.qc$" $compileScript` == ".qc" ) {
+						string $cmd = "python -m printMDLpath \""+ $compileScript +"\"";
+						string $res = system($cmd);
+						string $data[] = `zooTokenize (strip($res)) "\n"`;
+						string $mdlPath = zooGetElement_str(-1,$data);
+
+						//if the mdl exists - look for other files of the same name but different extension
+						if( `filetest -r $mdlPath` ) {
+							string $pathInfo[] = `zooSplitPath $mdlPath "/"`;
+							string $basepath = $pathInfo[0];
+							string $basename = `substitute "\\.mdl$" $pathInfo[1] ""`;
+							string $others[] = `getFileList -folder $basepath -fs ( $basename +".*" )`;
+
+							for( $n=0; $n<`size $others`; $n++ ) $fromAssets[`size $fromAssets`] = $basepath + $others[$n];
+							}
+						}
+					}
+				}
+
+		//look for any vmt nodes in the scene and add them - vmt files are easy to miss when checking in a bunch of changes...
+			string $vmtNodes[] = `ls -type vsVmtToTex`;
+			if( !$ignoreTextureFiles ) for( $node in $vmtNodes ) {
+				string $relPath = `getAttr ( $node +".materialPath" )`;
+				string $pathToVMT = `resolvePath ( "%VGAME%/%VMOD%/materials/"+ $relPath +".vmt" )`;
+
+				if( `filetest -f $pathToVMT` ) $fromAssets[`size $fromAssets`] = $pathToVMT;
+				}
+
+		//now remove any texture files if they're not wanted
+			string $textureExtensions[] = {"tga","bmp","psd","vtf","jpg","jpeg"};
+			if( $ignoreTextureFiles ) {
+				string $nonTextureFiles[] = {};
+				for( $tex in $thatMayaKnowsAbout ) {
+					int $isTex = 0;
+					for( $ext in $textureExtensions ) {
+						string $curExt = `match "[^\\.]+$" $tex`;
+						if( $curExt == $ext ) {
+							$isTex = 1;
+							break;
+							}
+						if( $isTex ) break;
+						}
+					if( !$isTex ) $nonTextureFiles[`size $nonTextureFiles`] = $tex;
+					}
+				$thatMayaKnowsAbout = $nonTextureFiles;
+				}
+
+		$allFiles = `zooAddArray_str $thatMayaKnowsAbout $fromAssets`;
+		$allFiles = `stringArrayRemoveDuplicates $allFiles`;
+		for( $n=0; $n<`size $allFiles`; $n++ ) $allFiles[$n] = `zooScrubPath $allFiles[$n]`;
+
+		return $allFiles;
+		}
+
+
+	global proc string[] listOutOfSyncDependencies() {
+		string $refFiles[] = `file -q -l`;
+		string $relevantExts[] = {"ma","mb","dmx"};
+		string $relevantFiles[] = {};
+
+		for( $file in $refFiles ) {
+			for( $ext in $relevantExts ) {
+				if( `match ( "\\."+ $ext +"$" ) $file` != "" ) {
+					$relevantFiles[`size $relevantFiles`] = $file;
+					break;
+					}
+				}
+			}
+
+		string $badSyncFiles[] = {};
+		for( $file in $relevantFiles ) if( `isLatest $file {} {}` == 0 ) $badSyncFiles[`size $badSyncFiles`] = $file;
+
+		return $badSyncFiles;
+		}
 

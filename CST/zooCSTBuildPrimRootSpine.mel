@@ -44,8 +44,8 @@ global proc string[] zooCSTBuildPrimRootSpine( string $prefix, string $root, str
 	//------
 	//create the controls, and parent them
 	//------
-	string $rootControl = `zooBuildControl ( $prefix +"_root_ctrl" ) ( "-type ring -place "+ $root +" -scale "+ (3.1*$scale) +" -colour "+ $colour )`;
-	string $rootGimbal = `zooBuildControl ( $prefix +"_root_gimbal_ctrl" ) ( "-type starCircle -place "+ $root +" -scale "+ (4*$scale) +" -surface 0 -colour "+ $colour )`;
+	string $rootControl = `zooBuildControl "upperBodyControl" ( "-type ring -place "+ $root +" -scale "+ (3.1*$scale) +" -colour "+ $colour )`;
+	string $rootGimbal = `zooBuildControl "root_gimbalControl" ( "-type starCircle -place "+ $root +" -scale "+ (4*$scale) +" -surface 0 -colour "+ $colour )`;
 	string $hipsControl = "";
 
 	parent $rootGimbal $rootControl;
@@ -54,7 +54,7 @@ global proc string[] zooCSTBuildPrimRootSpine( string $prefix, string $root, str
 	orientConstraint -mo $rootGimbal $root;
 
 	if( $buildhips ) {
-		$hipsControl = `zooBuildControl ( $prefix +"_hips_ctrl" ) ( "-type cube -place "+ $root +" -scale "+ $scale +" -offset -0.5up"+" -colour "+ $colour )`;
+		$hipsControl = `zooBuildControl "hipsControl" ( "-type cube -place "+ $root +" -scale "+ $scale +" -offset -0.5up"+" -colour "+ $colour )`;
 		parent $hipsControl $rootGimbal;
 		orientConstraint -mo $hipsControl $hips;
 		zooAttrState "-attrs t s -k 0 -l 1" $hipsControl;
@@ -69,7 +69,7 @@ global proc string[] zooCSTBuildPrimRootSpine( string $prefix, string $root, str
 	string $rootSpace = "";
 	if( `size $parents` && $spaceswitching ) {
 		$parents = `zooAddArray_str { $worldControl } $parents`;
-		$rootSpace = `zooBuildControl ( $prefix +"_root_space" ) ( "-type null -place "+ $root )`;
+		$rootSpace = `zooBuildControl "rootSpace" ( "-type null -place "+ $root )`;
 		parent $rootSpace $worldControl;
 		parent $rootControl $rootSpace;
 		$spaceNodes = `zooBuildSpaceSwitch $rootControl $rootSpace $parents { "world" } "-mo 1"`;

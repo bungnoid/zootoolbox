@@ -178,6 +178,7 @@ global proc zooCSTWindowFunctions( string $function, string $variable01 ) {
 
 			if( `objExists $roots[0]` ) textField -e -tx $roots[0] zooCSTTextRoot;
 			else if( `objExists $roots[1]` ) textField -e -tx $roots[1] zooCSTTextRoot;
+			if( objExists(`textField -q -tx zooCSTTextRoot`)) zooCSTWindowFunctions guessSize "";
 
 			$matches = `zooMatchNames { "hips","spine_base","chest","head","neck","eye_L","eye_R" } $allJoints "-strip 1 -parity 1 -threshold 1"`;
 			textField -e -tx $matches[0] zooCSTTextWaist;
@@ -187,6 +188,10 @@ global proc zooCSTWindowFunctions( string $function, string $variable01 ) {
 			textField -e -tx $matches[4] zooCSTTextNeck;
 			textField -e -tx $matches[5] zooCSTTextEyeL;
 			textField -e -tx $matches[6] zooCSTTextEyeR;
+			if( objExists(`textField -q -tx zooCSTTextWaist`)) checkBox -e -v 1 zooCSTCheckRootHips;
+			else checkBox -e -v 0 zooCSTCheckRootHips;
+			if( objExists(`textField -q -tx zooCSTTextNeck`)) checkBox -e -v 1 zooCSTCheckHeadNeck;
+			else checkBox -e -v 0 zooCSTCheckHeadNeck;
 
 			$matches = `zooMatchNames { "bicep_L","bicep_R","elbow_L","elbow_R","wrist_L","wrist_R" } $allJoints "-strip 1 -parity 1 -threshold 1"`;
 			textField -e -tx $matches[0] zooCSTTextBicepL;
@@ -195,6 +200,13 @@ global proc zooCSTWindowFunctions( string $function, string $variable01 ) {
 			textField -e -tx $matches[3] zooCSTTextElbowR;
 			textField -e -tx $matches[4] zooCSTTextWristL;
 			textField -e -tx $matches[5] zooCSTTextWristR;
+
+			textField -e -tx $matches[0] zooCSTTextIkfkObjLUpper;
+			textField -e -tx $matches[1] zooCSTTextIkfkObjRUpper;
+			textField -e -tx $matches[2] zooCSTTextIkfkObjLMid;
+			textField -e -tx $matches[3] zooCSTTextIkfkObjRMid;
+			textField -e -tx $matches[4] zooCSTTextIkfkObjLLower;
+			textField -e -tx $matches[5] zooCSTTextIkfkObjRLower;
 
 			$matches = `zooMatchNames { "thigh_L","thigh_R","knee_L","knee_R","ankle_L","ankle_R","toe_L","toe_R" } $allJoints "-strip 1 -parity 1 -threshold 1"`;
 			textField -e -tx $matches[0] zooCSTTextThighL;
@@ -303,6 +315,7 @@ global proc zooCSTWindowFunctions( string $function, string $variable01 ) {
 			//create the controls
 			string $headControls[] = {};
 			if( $headType == 1 ) $headControls = `zooCSTBuildPrimHead $prefix $head ( $options +" -buildneck "+ $buildneck +" -neck "+ $neck +" -scale "+ $scale )`;
+			print( "zooCSTBuildPrimHead "+ $prefix +" "+ $head +" \""+ $options +" -buildneck "+ $buildneck +" -neck "+ $neck +" -scale "+ $scale +"\";\n" );
 			break;
 
 		case "createEyes":
@@ -821,4 +834,3 @@ global proc zooCSTPrimitiveListWindow() {
 
 
 //zoo.end
-//macaroniKazoo ©2007

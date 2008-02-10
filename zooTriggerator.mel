@@ -18,15 +18,15 @@ global proc zooTriggerator() {
 
 	if( $showTips ) zooTipsWin zooTriggerator 0;
 	if( `window -ex $windowName` ) deleteUI $windowName;
-	window -title $windowTitle -mb 1 -resizeToFitChildren 0 -maximizeButton 1 -sizeable 1 -widthHeight 280 325 $windowName;
+	window -t $windowTitle -mb 1 -resizeToFitChildren 0 -maximizeButton 1 -sizeable 1 -widthHeight 280 325 $windowName;
 		scriptJob -p $windowName -e "SceneOpened" "";
 		menu -l "Presets";
 			menuItem -l "Export Folder Preset" -c( "zooTriggeratorFunctions -exportFolder" );
 			menuItem -d 1;
 			menuItem -l "Import" -sm 1 -pmc( "zooTriggeratorBuildImportMenu triggeratorImport;" ) triggeratorImport;
 			setParent -m ..;
-			menuItem -d 1;
 			menuItem -l "Manage Presets" -c( "zooPresetManagerWin \"local\" zooTriggerator preset;" );
+			menuItem -l "Sync to Global Presets" -c( "print `system \"p4 sync "+ `zooGetPresetDirectory "global" zooTriggerator` +"...\"`; " );
 		menu -l "Camera";
 			menuItem -l "Use Camera..." -sm 1 -pmc "zooTrigListCameras zooTrigUIPopupCams" zooTrigUIPopupCams;
 			setParent -m ..;
@@ -295,7 +295,7 @@ global proc zooTriggeratorBuildShapeMenu( string $parent ) {
 	menu -e -dai $parent;
 	setParent -m $parent;
 
-	string $cShapes[] = `zooListAllPresets zooTriggerator shape {} 0`;
+	string $cShapes[] = `zooListTriggeratorShapes`;
 	for( $n=0; $n<`size $cShapes`; $n++ ) $cShapes[$n] = `match "^[^.]+" $cShapes[$n]`;
 	if( `size $cShapes` ) for( $cShape in $cShapes ) menuItem -l $cShape -c( "textField -e -tx "+ $cShape +" zooTriggeratorTextShape;" );
 	else menuItem -l "no shapes found";
@@ -318,7 +318,7 @@ global proc zooTriggeratorBuildImportMenu( string $parent ) {
 		menuItem -l $presets[$n] -c( "zooImportFolder "+ $presets[$n] +" \"-locale "+ $localeList[$n] +"\";" );
 		}
 	if( `size $presets` ) menuItem -d 1;
-	menuItem -l "Manage Presets" -c( "zooPresetManagerWin \"local\" zooTriggerator preset;" );
+	menuItem -l "manage presets" -c( "zooPresetManagerWin \"local\" zooTriggerator preset;" );
 	}
 
 
@@ -560,6 +560,45 @@ global proc string zooGetTriggerFolder( string $trigger ) {
 	for( $connection in $managerConx ) if( $connection == $manager ) return $parent;
 
 	return "";
+	}
+
+
+global proc zooTriggeratorTearOff() {
+	string $windowName = "zooTriggeratorTearOffWin";
+	string $windowTitle = "triggerator tear off";
+	string $panelName = "zooTriggeratorPanel";
+
+	if( `window -q -ex $windowName` ) deleteUI $windowName;
+	while( `modelPanel -q -ex $panelName` ) deleteUI $panelName;
+	window -t $windowTitle -mb 1 -rtf 0 -maximizeButton 1 -sizeable 1 -widthHeight 350 350 $windowName;
+		//scriptJob -p $windowName -e "SceneOpened" "";
+		string $masterForm = `formLayout`;
+			string $panel = `modelPanel -mbv 0 $panelName`;
+
+	formLayout -e
+		-af $panel "top" 0
+		-af $panel "left" 0
+		-af $panel "right" 0
+		-af $panel "bottom" 0
+		$masterForm;
+
+	string $triggerCam = "triggerCam1";
+	string $selCon = "zooTriggerator";
+	string $eazel = `zooGetEazel 1`;
+
+	if( `selectionConnection -ex $selCon` ) deleteUI $selCon;
+	$selCon = `selectionConnection $selCon`;
+	selectionConnection -e -s $eazel $selCon;
+
+	if( !`objExists $triggerCam` ) $triggerCam = zooGetElement_str(0,`camera -n $triggerCam`);
+	string $triggerCamShape = zooGetElement_str(0,`listRelatives -f -s $triggerCam`);
+	setAttr -l 0 ( $triggerCamShape +".v" );
+	setAttr -l 1 ( $triggerCamShape +".v" ) 0;
+	modelPanel -e -cam $triggerCam $panel;
+	modelEditor -e -vs 1 -alo 0 -mlc $selCon $panel;
+	modelEditor -e -pm 1 -wos 1 -da smoothShaded -gr 0 $panel;
+
+	showWindow $windowName;
 	}
 
 

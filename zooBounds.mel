@@ -52,6 +52,19 @@ global proc float[] zooGetBounds( string $objs[] ) {
 	return { $minX,$minY,$minZ, $maxX,$maxY,$maxZ };
 	}
 
+
+//returns the bounding box from the skinned geo affected by the transform
+global proc float[] zooGetSkinnedBounds( string $skinDeformer ) {
+	string $verts[] = {};
+	int $vertIdxs[] = {};
+
+	zooSurgeonUtils;
+	zooGetJointVerts $skinDeformer 0.1 {} {} $verts $vertIdxs {};
+	float $bbox[] = `exactWorldBoundingBox $verts`;
+	return $bbox;
+	}
+
+
 //similar to bounds, but uses object pivots instead of object bounds, so doesn't
 //take child nodes into account - like geometry, or child transforms etc...
 global proc float[] zooGetPivotBounds( string $pivs[] ) {

@@ -100,13 +100,13 @@ global proc string[] zooCSTBuildSplineIK( string $prefix, string $start, string 
 			string $fkCtrls[] = {};
 			string $ikCtrls[] = {};
 			string $clusters[] = {};
-			string $ikSpace = `zooBuildControl ( $prefix +"_ik_space" ) ( "-type null -place "+ $joints[0] +" align %p -freeze 0" )`;
+			string $ikSpace = `zooBuildControl ( "ikSpace" ) ( "-type null -place "+ $joints[0] +" align %p -freeze 0" )`;
 
 			for( $n=0; $n<$numJoints; $n++ ) {
 				string $axis = `zooCSTJointDirection $joints[$n]`;
 				$axis = `substitute "-" $axis "_"`;
-				$fkCtrls[$n] = `zooBuildControl ( $prefix +"_fk_ctrl_"+ ($n+1)) ( "-type cylinder -axis "+ $axis +" -place "+ $joints[$n] +" -align %p -orient 1 -scale "+ ($scale*2) +" -colour orange 0.6" )`;
-				$ikCtrls[$n] = `zooBuildControl ( $prefix +"_ik_ctrl_"+ ($n+1)) ( "-type sphere -axis "+ $axis +" -place "+ $joints[$n] +" -align %p -orient 1 -scale "+ $scale +" -colour purple 0.6" )`;
+				$fkCtrls[$n] = `zooBuildControl ( "fkControl_"+ ($n+1)) ( "-type cylinder -axis "+ $axis +" -place "+ $joints[$n] +" -align %p -orient 1 -scale "+ ($scale*2) +" -colour orange 0.6" )`;
+				$ikCtrls[$n] = `zooBuildControl ( "ikControl_"+ ($n+1)) ( "-type sphere -axis "+ $axis +" -place "+ $joints[$n] +" -align %p -orient 1 -scale "+ $scale +" -colour purple 0.6" )`;
 				$clusters[$n] = zooGetElement_str(1,eval( "cluster "+ $baseCurve +".cv["+ $n +"];" ));
 				if( $n ) parent `listRelatives -p $fkCtrls[$n]` $fkCtrls[( $n-1 )];
 				$clusters[$n] = zooGetElement_str(0,`parent $clusters[$n] $ikCtrls[$n]`);
@@ -124,9 +124,9 @@ global proc string[] zooCSTBuildSplineIK( string $prefix, string $start, string 
 			setAttr -l 1 ( $ikHandle +".v" ) 0;
 
 			if( !`objExists $control` ) $control = $fkCtrls[0];
-			string $fkVisCond = `shadingNode -n( $prefix +"_fk_vis" ) -asUtility condition`;
-			string $ikVisCond = `shadingNode -n( $prefix +"_ik_vis" ) -asUtility condition`;
-			string $rev = `shadingNode -n( $prefix +"_ikfk_blend" ) -asUtility reverse`;
+			string $fkVisCond = `shadingNode -n( "fk_vis" ) -asUtility condition`;
+			string $ikVisCond = `shadingNode -n( "ik_vis" ) -asUtility condition`;
+			string $rev = `shadingNode -n( "ikfk_blend" ) -asUtility reverse`;
 
 			//add the ikChain attr to the control if it doesn't already exist
 			if( !`objExists ( $control +".ikChain" )`) {
@@ -190,7 +190,7 @@ global proc string[] zooCSTBuildSplineIK( string $prefix, string $start, string 
 
 		if( $stretch ) {
 			$curveInfo = `arclen -ch 1 $curve`;
-			$initLenMult = `shadingNode -n( $prefix +"_initial_length_multiplier" ) -asUtility multiplyDivide`;
+			$initLenMult = `shadingNode -n( "initial_length_multiplier" ) -asUtility multiplyDivide`;
 			$nodes = `zooAddArray_str $nodes { $curveInfo, $initLenMult }`;
 			float $len = `arclen $curve`;
 
@@ -206,7 +206,7 @@ global proc string[] zooCSTBuildSplineIK( string $prefix, string $start, string 
 			//yes, this is an expression...  I'm really far too lazy to bother building such
 			//a simplistic network of like 5 nodes just to do some adding and multiplication
 			//in a certain order...  I'm sure it barely slows anything down.  deal with it
-			string $exp = `expression -ae 0 -n( $prefix +"_stretch_expression" ) -s( $initLenMult +".input1X = (("+ $curveInfo +".arcLength - "+ $len +") * "+ $control +".autoStretch + "+ $len +") * "+ $control +".stretchMultiplier;" )`;
+			string $exp = `expression -ae 0 -n( "stretch_expression" ) -s( $initLenMult +".input1X = (("+ $curveInfo +".arcLength - "+ $len +") * "+ $control +".autoStretch + "+ $len +") * "+ $control +".stretchMultiplier;" )`;
 			string $finalLengthOutput = $initLenMult +".outputX";
 			for( $n=0; $n<$numJoints; $n++ ) {  //you may want to change to ($numJoints-1) so the last joint can be parent constrained to an end chain control...
 				string $joint = $joints[$n];

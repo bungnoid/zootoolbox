@@ -44,7 +44,6 @@ global proc string[] zooCSTBuildPrimBasicSpine( string $prefix, string $root, st
 		string $partsControl = $worldParts[1];
 		string $masterqss = $worldParts[2];
 		string $qss = $worldParts[3];
-		if( !`objExists $hips` || $hips == $root ) $buildhips = 0;
 
 
 	//------
@@ -57,8 +56,19 @@ global proc string[] zooCSTBuildPrimBasicSpine( string $prefix, string $root, st
 		string $rootGimbal = $roots[3];
 
 		parent $rootSpace $worldControl;
-		parentConstraint -mo $rootControl $root;
-		if( `objExists $hipsControl` ) parentConstraint -mo $hipsControl $hips;
+		if( `objExists $hipsControl` ) {
+			if( $rootControl == $hipsControl ) {
+				pointConstraint -mo $rootControl $root;
+				orientConstraint -mo $hipsControl $root;
+				}
+			else {
+				parentConstraint -mo $rootControl $root;
+				parentConstraint -mo $hipsControl $hips;
+				}
+			}
+		else parentConstraint -mo $rootControl $root;
+		addAttr -ln stretch -at double  -min 0.5 -max 2 -dv 1 $rootControl;
+		setAttr -e -keyable 1 ( $rootControl +".stretch" );
 
 
 	//------
@@ -74,18 +84,40 @@ global proc string[] zooCSTBuildPrimBasicSpine( string $prefix, string $root, st
 	//------
 	//create the controls, and parent them
 	//------
+		//determine what axis to draw the spine controls - assume they're all the same as the spine base
+		string $axis = zooVectorAsAxis(`zooAxisInDirection $spineBase {0.,0.,-1.}`);
+		$axis = `substitute "-" $axis "_"`;
+
+		int $num = `size $spines`;
 		string $controlSpaces[] = {};
 		string $controllers[] = {$rootControl};
+		float $startColour[] = {1.,0.3,0.};
+		float $endColour[] = {0.8,1.,0.};
+		float $spineColourR = $startColour[0];
+		float $spineColourG = $startColour[1];
+		float $spineColourB = $startColour[2];
+		float $colourIncR = ($endColour[0] - $startColour[0])/$num;
+		float $colourIncG = ($endColour[1] - $startColour[1])/$num;
+		float $colourIncB = ($endColour[2] - $startColour[2])/$num;
 
-		for( $n=0; $n<`size $spines`; $n++ ) {
-			$controlSpaces[$n] = `zooBuildControl ( $prefix + "_spine_"+$n+"_space" ) ( "-type null -place "+ $spines[$n] )`;
-			$controllers[$n] = `zooBuildControl ( $prefix + "_spine_"+$n+"_ctrl" ) ( "-type "+ $type +" -place "+ $spines[$n] +" -scale "+ $scale +" -colour "+ $colour )`;
-			parent $controllers[$n] $controlSpaces[$n];
+		for( $n=0; $n<$num; $n++ ) {
+			$controllers[$n] = `zooBuildControl ( "spine_"+$n+"FKControl" ) ( "-orient 1 -align %p -type "+ $type +" -axis "+ $axis +" -place "+ $spines[$n] +" -scale "+ ($scale*1.5) +" -colour "+ $spineColourR +" "+ $spineColourG +" "+ $spineColourB +" 0.65" )`;
+			$controlSpaces[$n] = zooGetElement_str(0,`listRelatives -p $controllers[$n]`);
+
+			string $parent = $rootGimbal;
+			if( $n ) $parent = $controllers[( $n-1 )];
+
+			parent $controlSpaces[$n] $parent;
+			delete `pointConstraint $parent $controlSpaces[$n]`;
+			makeIdentity -a 1 -t 1 $controlSpaces[$n];
+			delete `pointConstraint $spines[$n] $controlSpaces[$n]`;
+
+			pointConstraint -mo $controllers[$n] $spines[$n];
 			orientConstraint -mo $controllers[$n] $spines[$n];
-			if( $n ) parent $controlSpaces[$n] $controllers[( $n-1 )];
+			$spineColourR += $colourIncR;
+			$spineColourG += $colourIncG;
+			$spineColourB += $colourIncB;
 			}
-
-		parent $controlSpaces[0] $rootGimbal;
 
 
 	//------
@@ -114,6 +146,29 @@ global proc string[] zooCSTBuildPrimBasicSpine( string $prefix, string $root, st
 
 
 	//------
+	//create the stretch
+	//------
+		float $betweenVector[] = `zooCSTBetweenVector $spines[0] $spines[$num-1]`;
+		for( $n=0; $n<`size $spines`; $n++ ) {
+			string $stretchAxis = zooVectorAsAxis(`zooAxisInDirection $spines[$n] $betweenVector`);
+			int $direction = 1;
+
+			if( `substring $stretchAxis 1 1` == "-" ) {
+				$direction = -1;
+				$stretchAxis = `substring $stretchAxis 2 2`;
+				}
+
+			string $axisName = $controlSpaces[$n] +".t"+ $stretchAxis;
+			float $cur = `getAttr $axisName`;
+
+			setAttr -l 0 $axisName;
+			setDrivenKeyframe -cd( $rootControl +".stretch" ) -dv 1 $axisName;
+			setDrivenKeyframe -cd( $rootControl +".stretch" ) -dv 0.5 -v( $cur/2 ) $axisName;
+			setDrivenKeyframe -cd( $rootControl +".stretch" ) -dv 2 -v( $cur*2 ) $axisName;
+			}
+
+
+	//------
 	//turn unwanted transforms off, so that they are locked, and no longer keyable
 	//------
 		for( $obj in $controllers ) zooAttrState "-attrs t s -k 0 -l 1" $obj;
@@ -137,8 +192,9 @@ global proc string[] zooCSTBuildPrimBasicSpine( string $prefix, string $root, st
 	//------
 		if( $pickwalking ) {
 			zooPickwalk "-load";
-			for( $n=0; $n<`size $controllers`-1; $n++ ) zooSetPickwalkObj $controllers[$n] $controllers[( $n+1 )] "-dir down -reciprocal 1";
-			zooSetPickwalkObj $controllers[0] $rootControl "-dir up -reciprocal 1";
+			for( $n=`size $controllers`-1; $n>0; $n-- ) zooSetPickwalkObj $controllers[$n] $controllers[$n-1] "-dir down -reciprocal 1";
+			zooSetPickwalkObj $rootControl $controllers[0] "-dir up -reciprocal 1";
+			if( `objExists $hipsControl` ) zooSetPickwalkObj $rootControl $hipsControl "-dir down -reciprocal 1";
 			}
 
 

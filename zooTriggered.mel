@@ -372,8 +372,10 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			string $ans = `promptDialog -t "export selected triggers" -m "preset name" -tx "trigger" -b "OK" -b "Cancel" -db "OK"`;
 			if( $ans != "OK" ) return;
 			string $preset = `promptDialog -q -tx`;
-			string $sel[] = `ls -sl`;
+			string $sel[] = {};
 
+			if( `objExists $trigger` ) $sel = {$trigger};
+			else $sel = `ls -sl`;
 			if( !`size $sel` ) return;
 			zooExportTriggers $sel $preset;
 			break;
