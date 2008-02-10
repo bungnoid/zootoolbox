@@ -17,7 +17,7 @@ global proc string[] zooCSTBuildPrimBasicSpine( string $prefix, string $root, st
 		string $optionTemp[] = {};
 		string $parents[] = {};
 		string $hips = "";
-		string $type = "ring";
+		string $type = "pin";
 		string $colour = "lightblue 0.65";
 		float $scale = 1;
 		int $buildroot = 1;

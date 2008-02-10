@@ -49,6 +49,7 @@ global proc string[] zooGetSubDirs( string $path, int $includeRoot ){
 global proc string[] zooGetRecursedSubDirs( string $path ) {
 	string $pathsFound[] = {};
 
+	if( !`filetest -d $path` ) return {};
 	if( `substring $path (size($path)) (size($path))` != "/" ) $path += "/";
 	$pathsFound[0] = $path;
 	for( $n=0; $n<`size $pathsFound`; $n++ ) {
@@ -61,7 +62,7 @@ global proc string[] zooGetRecursedSubDirs( string $path ) {
 
 		//just a safeguard
 		if( $n>100000 ) {
-			warning "has searched 100000 directories, aborting...";
+			warning "zooUtils::zooGetRecursedSubDirs() has searched 100000 directories, aborting...";
 			break;
 			}
 		}
@@ -120,7 +121,7 @@ global proc string[] zooReadFile( string $file, string $optionStr ){
 	if( $optionStr == "-strip 1" ) $strip = 1;
 
 	if( !`filetest -r $file` ) {
-		warning "file doesn't exists";
+		warning "zooUtils::zooReadFile() file doesn't exist";
 		return {};
 		}
 	string $fileContents[] = {};
@@ -385,6 +386,24 @@ global proc string[] zooDistance( string $obj1, string $obj2 ) {
 	if( `objExists $obj2` ) pointConstraint $obj2 $end[0];
 
 	return $toReturn;
+	}
+
+
+//like the distance command above, this is a simple wrapper for creating annotation nodes,
+//and having the nodes you actually want returned to you.  whoever wrote these commands
+//should be shot.  with a large gun
+global proc string[] zooAnnotate( string $obj, string $text ) {
+	string $end = zooGetElement_str(0,`spaceLocator`);
+	string $shape = `annotate -p (rand(1000000)) (rand(2000000)) 2364 -tx $text $end`;
+	string $start = zooGetElement_str(0,`listRelatives -p $shape`);
+	string $endShape = zooGetElement_str(0,`listRelatives -s $end`);
+	delete `parentConstraint $obj $end`;
+	setAttr ( $start +".t" ) 0 0 0;
+	setAttr ( $endShape +".v" ) 0;
+	setAttr -l 1 ( $endShape +".v" );
+	parent $end $obj;
+
+	return {$start,$end,$shape};
 	}
 
 

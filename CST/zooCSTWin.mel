@@ -220,14 +220,14 @@ window -mb 1 -title $windowTitle -width 520 -sizeable 1 $windowName;
 				string $armFrameLOpts = `frameLayout -label "" -labelVisible 0 -collapse 0 -collapsable 0 -labelAlign top -borderStyle etchedOut`;
 					rowColumnLayout -numberOfColumns 2 -columnWidth 1 65 -columnWidth 2 100 -columnAttach 1 "both" 0 -columnAttach 2 "both" 0;
 						checkBox -l "left arm" -v 1 -cc( "zooCSTWindowFunctions update \"*\"" ) zooCSTCheckArmL;
-						checkBox -l "stretchy" -v 1 -cc( "zooCSTWindowFunctions update \"*\"" ) zooCSTCheckArmStretchL;
+						checkBox -l "stretchy" -v 0 -cc( "zooCSTWindowFunctions update \"*\"" ) zooCSTCheckArmStretchL;
 					setParent ..;
 				setParent ..;
 
 				string $armFrameROpts = `frameLayout -label "" -labelVisible 0 -collapse 0 -collapsable 0 -labelAlign top -borderStyle etchedOut`;
 					rowColumnLayout -numberOfColumns 2 -columnWidth 1 65 -columnWidth 2 100 -columnAttach 1 "both" 0 -columnAttach 2 "both" 0;
 						checkBox -l "right arm" -v 1 -cc( "zooCSTWindowFunctions update \"*\"" ) zooCSTCheckArmR;
-						checkBox -l "stretchy" -v 1 -cc( "zooCSTWindowFunctions update \"*\"" ) zooCSTCheckArmStretchR;
+						checkBox -l "stretchy" -v 0 -cc( "zooCSTWindowFunctions update \"*\"" ) zooCSTCheckArmStretchR;
 					setParent ..;
 				setParent ..;
 

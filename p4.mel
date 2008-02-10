@@ -248,6 +248,7 @@ global proc p4() {
 			return;
 			}
 
+		string $fileStr = "";
 		for( $n=0; $n<$num; $n++ ) {
 			$files[$n] = `zooResolvePath $files[$n]`;
 			$files[$n] = `zooReplaceChars $files[$n] "/" "\\"`;
