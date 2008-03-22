@@ -255,7 +255,7 @@ global proc string zooToolCmd( string $tool ) {
 		default:
 			return $tool;
 		case "zooAlign":
-			return "zooHotkeyer zooAlign \"{\\nstring $sel[] = `ls -sl`;\\nfloat $pos[] = `xform -q -ws -rp $sel[0]`;\\nfloat $rot[] = `xform -q -ws -ro $sel[0]`;\\nfor( $n=1; $n<`size $sel`; $n++ ) {\\n\tmove -a -ws -rpr $pos[0] $pos[1] $pos[2] $sel[$n];\\n\trotate -a -ws $rot[0] $rot[1] $rot[2];\\n\t}\\n}\" \"\" \"-default a -alt 1 -enableMods 1 -ann aligns two objects\"";
+			return "zooHotkeyer zooAlign \"{zooAlign \\\"-load 1\\\";\\nstring $sel[] = `ls -sl`;\\nfor( $n=1; $n<`size $sel`; $n++ ) zooAlignSimple $sel[0] $sel[$n];}\" \"\" \"-default a -alt 1 -enableMods 1 -ann aligns two objects\"";
 		case "zooAutoSave":
 			return "source zooAutoSave; zooAutoSaveConfig;";
 		case "zooBoltOnIK":

@@ -26,7 +26,7 @@ global proc zooAlign( string $optionStr ) {
 	$temp = `zooGetFlagArguments $optionStr tgt`; if( `size $temp` ) $tgts = $temp;
 	$temp = `zooGetFlagArguments $optionStr pivot`; if( `size $temp` ) $pivot = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr key`; if( `size $temp` ) $key = $temp[0];
-	$temp = `zooGetFlagArguments $optionStr runPostXfer`; if( `size $temp` ) $runPostXfer = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr postCmds`; if( `size $temp` ) $runPostXfer = $temp[0];
 
 	for( $tgt in $tgts ) zooAlignFast $src $tgt $key $pivot;
 	if( $runPostXfer ) {
@@ -46,7 +46,6 @@ global proc zooAlign( string $optionStr ) {
 //------
 global proc zooAlignFast( string $src, string $tgt, int $key, int $pivotOnly ){
 	//these two lines check to make sure the objects to be aligned are both transform (or joint) nodes, otherwise, it quits
-	if( !`objExists $src` || !`objExists $tgt` ) return;
 	if( !`objExists ( $src +".t" )` || !`objExists ( $tgt +".t" )` ) return;
 
 	//
@@ -81,15 +80,16 @@ global proc zooAlignFast( string $src, string $tgt, int $key, int $pivotOnly ){
 
 		//now restore the original rotation order
 		global string $g_roos[];
-		xform -p 1 -roo $g_roos[$tgtRo];
+		if( $srcRo != $tgtRo ) xform -p 1 -roo $g_roos[$tgtRo] $tgt;
 		}
 
-	if( $key ) setKeyframe -at t -at r $tgt;
+	if( $key ) catch( setKeyframe("-at","t","-at","r",$tgt) );
 	}
 
 
-//does a simple align which basically means it doesn't take into account locked attributes or differing rotation orders
+//does a simple align which basically means it doesn't take into account locked attributes
 global proc zooAlignSimple( string $src, string $tgt ){
+	global string $g_roos[];
 	//these two lines check to make sure the objects to be aligned are both transform (or joint) nodes, otherwise, it quits
 	if( !`objExists $src` || !`objExists $tgt` ) return;
 	if( !`objExists ( $src +".t" )` || !`objExists ( $tgt +".t" )` ) return;
@@ -97,8 +97,17 @@ global proc zooAlignSimple( string $src, string $tgt ){
 	float $pos[] = `xform -q -ws -rp $src`;
 	float $rot[] = `xform -q -ws -ro $src`;
 
+	int $srcRoo = `getAttr ( $src +".rotateOrder")`;
+	int $tgtRoo = `getAttr ( $tgt +".rotateOrder" )`;
+
 	move -rpr $pos[0] $pos[1] $pos[2] $tgt;
+
+	if( $srcRoo == $tgtRoo ) rotate -a -ws $rot[0] $rot[1] $rot[2] $tgt;
+	else {
+		setAttr ( $tgt +".rotateOrder" ) `getAttr ( $src +".rotateOrder")`;
 	rotate -a -ws $rot[0] $rot[1] $rot[2] $tgt;
+		xform -p 1 -roo $g_roos[$tgtRoo];
+		}
 	}
 
 

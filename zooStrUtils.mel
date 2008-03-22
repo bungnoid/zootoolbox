@@ -137,4 +137,38 @@ global proc string[] zooSplitPath( string $path, string $separator ) {
 	}
 
 
+//returns word tokens for a camel case word
+//example:
+//zooSplitCamelCase thisIsACamelCaseWord
+//returns the array: { "this", "Is", "A", "Camel", "Case", "Word" };
+global proc string[] zooSplitCamelCase( string $name ) {
+	string $words[] = {};
+	string $letters[] = `zooStrToArray $name`;
+	int $len = `size $name`;
+	int $word = 0;
+
+	for( $n=0; $n<$len; $n++ ) {
+		if( $n ) if( `match "[A-Z]" $letters[$n]` != "" ) $word++;
+		if( `match "[_0-9]" $letters[$n]` != "" ) {
+			$word++;
+			while( `match "[_0-9]" $letters[$n]` != "" ) {
+				$words[$word] = $words[$word] + $letters[$n];
+				$n++;
+				}
+			$word++;
+			}
+		$words[$word] = $words[$word] + $letters[$n];
+		}
+
+	return $words;
+	}
+
+
+global proc int isStringNumeric( string $theString ) {
+	//for( $n=0; $n<`size $theString`; $n++ ) {
+	if( int($theString) == int(string(int($theString))) ) return 1;
+	return 0;
+	}
+
+
 //zoo.end

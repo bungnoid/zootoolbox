@@ -368,6 +368,20 @@ global proc zooExploreTo( string $filepath ) {
 	}
 
 
+global proc zooCmdTo( string $filepath ) {
+	$filepath = `zooScrubPath $filepath`;
+	if( !`filetest -d $filepath` ) {
+		string $toks[] = `zooTokenize $filepath "/"`;
+		$toks = `zooIndexCrop_str $toks ":-1"`;
+		$filepath = `zooArrayToStr_str $toks "/"`;
+		}
+	if( !`filetest -d $filepath` ) return;
+	string $cmd = "start cmd /K cd "+ (zooReplaceInString($filepath,"/","\\\\"));
+	print( $cmd +"\n" );
+	system $cmd;
+	}
+
+
 //this script is just a simple wrapper around the distanceDimension command - basically
 //because its shit and only returns the shape node.  this command returns an array
 //containing the distanceTransform node, distance shape node, start locator and end locator
@@ -404,6 +418,17 @@ global proc string[] zooAnnotate( string $obj, string $text ) {
 	parent $end $obj;
 
 	return {$start,$end,$shape};
+	}
+
+
+//returns whether a transform is of a certain type - ie a camera, mesh etc...  instead of having to
+//list shapes and check their node types
+global proc int isOfType( string $obj, string $type ) {
+	if( `nodeType $obj` == $type ) return 1;
+	string $shapes[] = `listRelatives -pa -s $obj`;
+	if( !`size $shapes` ) return 0;
+	for( $shape in $shapes ) if( `nodeType $shape` != $type ) return 0;
+	return 1;
 	}
 
 

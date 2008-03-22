@@ -69,8 +69,6 @@ global proc p4buildMenu( string $parent, string $file ) {
 		menuItem -en( $isEdit==0 ) -l "Open for Edit" -c( "p4_sync {\""+ $file +"\"} 0; p4_edit {\""+ $file +"\"} -1;" );
 		menuItem -d 1;
 		menuItem -l "Submit Scene and Dependencies..." -c( "p4submitUI `getFilesThatAreOpenForEdit`;//{\""+ $file +"\"};" );
-		menuItem -l "Add to Maya Auto-Checkout Changelist" -ann "adds all files that this scene depends on or generates (ie textures, dmx files, .qc files, .mdl files etc...) to an existing maya auto-checkout perforce changelist" -c( "p4_moveToChange `getFilesThatAreOpenForEdit` -1;" );
-		menuItem -l "Create Changelist for Scene" -ann "creates a perforce changelist for the current scene and all files that is depends on or generates (ie textures, dmx files, .qc files, .mdl files etc...)" -c( "p4_newChange \"these files were gathered by maya for submission - they are all either used by, or generated from the maya scene.\" `getFilesThatAreOpenForEdit`;" );
 		menuItem -d 1;
 		menuItem -en $isEdit -l "Revert File" -c( "p4_revert {\""+ $file +"\"};{ string $ans = `confirmDialog -m \"do you want to reload the file?\" -b \"Yes\" -b \"No\" -db \"No\"`; if( $ans == \"Yes\" ) file -f -o \""+ $file +"\"; }" );
 		}

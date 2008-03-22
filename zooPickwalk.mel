@@ -132,7 +132,6 @@ global proc int zooSetPickwalkObj( string $src, string $tgt, string $optionStr )
 
 		if( !`objExists $objPath` ) addAttr -ln $attrName -at message $tgt;
 		connectAttr -f ( $src +".message" ) $objPath;
-		if( `objExists $objPath` ) print( "connectingRecip  "+ $objPath +"\n" );
 		}
 
 	return 1;

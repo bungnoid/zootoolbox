@@ -29,13 +29,16 @@ global proc string zooAddSpaceSwitch( string $src, string $space, string $tgt, s
 	string $skipRotates[] = {};
 	string $parentAttrNode = $src;
 	int $pointConstraint = 0;
+	int $orientConstraint = 0;
 
 	$temp = `zooGetFlagArguments $optionStr mo`; if( $temp[0] != "" ) if( $temp[0] == "0" ) $mo = "";
 	$temp = `zooGetFlagArguments $optionStr st`; if( `size $temp` ) $skipTranslates = $temp;
 	$temp = `zooGetFlagArguments $optionStr sr`; if( `size $temp` ) $skipRotates = $temp;
 	$temp = `zooGetFlagArguments $optionStr parentAttrNode`; if( $temp[0] != "" ) if( `objExists $temp[0]` ) $parentAttrNode = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr pointConstraint`; if( $temp[0] != "" ) $pointConstraint = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr orientConstraint`; if( $temp[0] != "" ) $orientConstraint = $temp[0];
 	if( $pointConstraint ) $cmd = "pointConstraint";
+	if( $orientConstraint ) $cmd = "orientConstraint";
 
 	//verify that all space objects exist - if not this proc will automatically exclude them from the space switch
 	string $clnSrcName = `match "[^|:]+$" $src`;
@@ -61,7 +64,7 @@ global proc string zooAddSpaceSwitch( string $src, string $space, string $tgt, s
 		//have spaces on the object, we need to turn the -mo flag off regardless of what the
 		//user set it to, as the pointConstraint maintain offset has different behaviour to
 		//the parent constraint
-		if( $pointConstraint ) $cmdOptionStr = "";
+		if( $pointConstraint || $orientConstraint ) $cmdOptionStr = "";
 		}
 	else addAttr -k 1 -ln parent -at "enum" -en $name $parentAttrNode;
 
@@ -70,7 +73,6 @@ global proc string zooAddSpaceSwitch( string $src, string $space, string $tgt, s
 
 	for( $axis in $skipTranslates ) $cmdOptionStr += " -st "+ $axis;
 	for( $axis in $skipRotates ) $cmdOptionStr += " -sr "+ $axis;
-	print ( $cmd +" "+ $cmdOptionStr +" "+ $tgt +" "+ $space +";\n" );
 	$constraint = zooGetElement_str(0,eval( $cmd +" "+ $cmdOptionStr +" "+ $tgt +" "+ $space ));
 
 	string $constraintAttrs[] = `listAttr -ud $constraint`;
@@ -265,6 +267,7 @@ global proc string zooFindConstraint( string $obj ) {
 	for( $n=0; $n<`size $conditions`; $n++ ) {
 		string $constraint[] = `listConnections -type parentConstraint -s 0 ( $conditions[$n] +".outColorR" )`;
 		$constraint = zooAddArray_str($constraint,`listConnections -type pointConstraint -s 0 ( $conditions[$n] +".outColorR" )`);
+		$constraint = zooAddArray_str($constraint,`listConnections -type orientConstraint -s 0 ( $conditions[$n] +".outColorR" )`);
 		if( `objExists $constraint[0]` ) return $constraint[0];
 		clear $constraint;
 		}

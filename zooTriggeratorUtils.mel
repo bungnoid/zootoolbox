@@ -12,9 +12,23 @@ zooUtils;
 
 global proc string[] zooListTriggeratorShapes() {
 	string $shapes[] = `zooListAllPresets zooTriggerator shape {} 0`;
-	string $baseShapes[] = `getFileList -fld (resolvePath("%VGAME%/sdktools/maya/presets/zooTriggerator/")) -fs "*.shape"`;
+	string $baseShapes[] = {};
+	string $otherShapes[] = `getFileList -fld (zooGetScriptLocation("zooTriggerator")); -fs "*.shape"`;
+
+	if( `about -nt` ) {
+		string $vistaPath = zooResolvePath("%USERPROFILE%/Documents/");
+		string $xpPath = zooResolvePath("%USERPROFILE%/My Documents/maya/presets/.zooTriggerator/");
+		string $pathToUse = $vistaPath;
+
+		if( `filetest -d $xpPath` ) $pathToUse = $xpPath;
+		$pathToUse += "maya/presets/.zooTriggerator/";
+		$baseShapes = `getFileList -fld $pathToUse -fs "*.shape"`;
+		}
+	else if( `about -linux` ) $baseShapes = `getFileList -fld (zooResolvePath("%HOME%/maya/presets/.zooTriggerator/")) -fs "*.shape"`;
 
 	$shapes = `zooAddArray_str $shapes $baseShapes`;
+	$shapes = `zooAddArray_str $shapes $otherShapes`;
+
 	return $shapes;
 	}
 
@@ -520,9 +534,13 @@ global proc string zooBuildShape( string $shapeName, string $optionStr ) {
 
 	//colour the shape
 	if( $colour != "" ) {
-		zooShaders;print( $colour +"\n" );
+		zooShaders;
 		zooSetObjShader $obj `zooCreateShader $colour`;
 		}
+
+	//turn the objMenu passthrough on
+	addAttr -at "bool" -ln showMenusFromConnects $obj;
+	setAttr ( $obj +".showMenusFromConnects" ) 1;
 
 	//now do trs offsets
 	setAttr ( $obj +".t" ) $translate[0] $translate[1] 0;

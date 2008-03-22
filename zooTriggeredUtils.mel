@@ -127,7 +127,6 @@ global proc string zooPopulateCmdStrRaw( string $trigger, string $cmdStr ) {
 	string $matchStr = "(@[0-9]+,-*[0-9]+)";
 	string $match = `match $matchStr $cmdStr`;
 	while( $match != "" ) {
-		print( $match +"\n" );
 		int $start = `match "[0-9]+" $match`;  //get the first number
 		int $end = `match "-*[0-9]+$" $match`;  //get the second number
 

@@ -274,6 +274,25 @@ global proc string zooGetOpposite( string $name ) {
 	}
 
 
+//given a full path to an object, this will return the opposite path - it doesn't check for the existence of the
+//object however, it just does a zooGetOpposite on all the path tokens
+global proc string zooGetOppositePath( string $path ) {
+	string $pathToks[] = {};
+	string $newPathToks[] = {};
+
+	tokenize $path "|" $pathToks;
+	for( $tok in $pathToks ) {
+		string $opposite = `zooGetOpposite $tok`;
+		if( $opposite == "" ) $newPathToks[`size $newPathToks`] = $tok;
+		else $newPathToks[`size $newPathToks`] = $opposite;
+		}
+
+	string $oppositePath = `zooArrayToStr_str $newPathToks "|"`;
+
+	return $oppositePath;
+	}
+
+
 /*
 example:
 zooMatchNames { "arm_L", "char_leg_left" }{ "an_objectName", "leg_left", "char_leg", "head_ctrl_obj", "arm_R", "char_arm_L" } "-parity 1 -threshold 0.8"

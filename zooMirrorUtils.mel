@@ -13,6 +13,7 @@ zooAnimStoreUtils;
 zooArrays_str;
 zooBrandTools;
 zooCSTPrimitives;
+zooVectors;
 
 
 global proc zooMirrorUtils() {
@@ -278,41 +279,50 @@ global proc zooMirrorSrcToTgt( string $src, string $ref, string $tgt ) {
 global proc float[] zooGetMirroredXform( string $obj, string $optionStr ) {
 	string $temp[] = {};
 	string $mirrorRef = "";
+	string $axis = "x";
 	int $aim = -1;
 	int $up = 1;
 
 	$temp = `zooGetFlagArguments $optionStr around`; if( `size $temp` ) $mirrorRef = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr axis`; if( `size $temp` ) $axis = tolower($temp[0]);
 	$temp = `zooGetFlagArguments $optionStr aim`; if( `size $temp` ) $aim = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr up`; if( `size $temp` ) $up = $temp[0];
 
+	$upAxis = "y";
+	if( $axis == "y" ) {
+		$upAxis = "x";
+		}
+
+	float $aimv[] = `zooAxisAsVector $axis`;
+	float $upv[] = `zooAxisAsVector $upAxis`;
 	string $parent = zooGetElement_str(0,`listRelatives -f -p $obj`);
 	string $mirGrp = `group -em`;
 	string $objMir = `group -em`;
-	string $xLoc = `group -em`;
-	string $yLoc = `group -em`;
+	string $aimLoc = `group -em`;
+	string $upLoc = `group -em`;
 
 	if( `objExists $parent` ) parent $mirGrp $parent;
-	parent $xLoc $objMir;
-	parent $yLoc $objMir;
+	parent $aimLoc $objMir;
+	parent $upLoc $objMir;
 	parent $objMir $mirGrp;
 	zooAlignFast $mirrorRef $mirGrp 0 0;
 	zooAlignFast $obj $objMir 0 0;
-	setAttr ( $xLoc +".tx" ) $aim;
-	setAttr ( $yLoc +".ty" ) $up;
-	setAttr ( $mirGrp +".sx" ) -1;
-	for( $a in {$mirGrp,$objMir,$xLoc,$yLoc}) setAttr( $a +".displayHandle" ) 1;
+	setAttr ( $aimLoc +".t"+ $axis ) $aim;
+	setAttr ( $upLoc +".t"+ $upAxis ) $up;
+	setAttr ( $mirGrp +".s"+ $axis ) -1;
+	for( $a in {$mirGrp,$objMir,$aimLoc,$upLoc}) setAttr( $a +".displayHandle" ) 1;
 
 	string $objMirRot = `group -em`;
 	zooAlignFast $objMir $objMirRot 0 0;
-	aimConstraint -aim 1 0 0 -u 0 1 0 -wut object -wuo $yLoc $xLoc $objMirRot;
+	aimConstraint -aim $aimv[0] $aimv[1] $aimv[2] -u $upv[0] $upv[1] $upv[2] -wut object -wuo $upLoc $aimLoc $objMirRot;
 
-	//zooAlignFast $objMirRot $obj 0 0;
 	float $tForm[] = `xform -q -a -ws -rp $objMirRot`;
 	float $rForm[] = `xform -q -a -ws -ro $objMirRot`;
 	float $xform[] = `zooAddArray_float $tForm $rForm`;
 
 	delete $objMirRot;
 	delete $objMir;
+	delete $mirGrp;
 
 	return $xform;
 	}

@@ -168,16 +168,16 @@ global proc zooPresetManagerFunctions( string $function, string $locale, string 
 		case "-copy":
 			string $otherDir = `zooGetPresetDirectory $other $script`;
 			for( $p in $sel ) {
-				if( `filetest -f ( $otherDir + $p )` ) {
-					if( $locale == "local" && $useP4 ) {
-						//if we're copying from local, the existing global copy of the file may be managed by perforce
-						p4;
 						string $data[] = {};
 						string $dataNames[] = {};
-						int $isEdit = `isEdit ( $otherDir + $p ) $data $dataNames`;
+				int $isEdit = 0;
 
-						//so if the file isn't open for edit - ask whether the user wants it checked out first
+				if( $useP4 ) $isEdit = `isEdit ( $otherDir + $p ) $data $dataNames`;
+				if( `filetest -f ( $otherDir + $p )` ) {
+					if( $locale == "local" ) {
+						//if we're copying from local, the existing global copy of the file may be managed by perforce
 						if( $isEdit == 0 ) {
+							//so if the file isn't open for edit - ask whether the user wants it checked out first
 							string $answer = `confirmDialog -t "Open For Edit?" -message( "The "+ $p +" preset you're trying to copy\nhasn't been open for edit.  Do you want to open it for edit now?" ) -button "Yes" -button "No" -defaultButton "Yes" -cancelButton "No" -dismissString "No"`;
 							if( $answer != "Yes" ) continue;
 							int $openStatus = `p4_edit {( $otherDir + $p )} -1`;
@@ -195,6 +195,7 @@ global proc zooPresetManagerFunctions( string $function, string $locale, string 
 						}
 					}
 				sysFile -copy ( $otherDir + $p ) ( $dir + $p );
+				if( $useP4 ) if( $isEdit == -1 ) p4_add {( $otherDir + $p )} -1;
 				}
 			break;
 		case "-delete":

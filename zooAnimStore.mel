@@ -240,6 +240,8 @@ global proc zooClipPopup( string $popup, string $locale, string $clip, string $t
 	setParent -m $popup;
 
 	if( $locale == "global" ) $otherLoc = "<-- local";
+	menuItem -l "select items in pose (if they exist)" -c( "zooSelectClipItems \""+ $clip +"."+ $type +"\" \""+ $store +"\" \""+ $locale +"\" 1 0;" );
+	menuItem -d 1;
 	menuItem -l "apply with tight name matching" -c( "zooApplyClip \""+ $clip +"."+ $type +"\" \""+ $store +"\" \""+ $locale +"\" 1 0;" );
 	menuItem -l "apply with loose name matching" -c( "zooApplyClip \""+ $clip +"."+ $type +"\" \""+ $store +"\" \""+ $locale +"\" 0 0;" );
 	menuItem -l "apply with xferAnim" -c( "zooAnimStoreWindowFunctions_var -loadInXfer_"+ $locale +" "+ $clip +"."+ $type +";" );
@@ -535,4 +537,21 @@ global proc zooApplyClip( string $clip, string $store, string $locale, float $na
 	}
 
 
-//zoo.end
+global proc string[] zooSelectClipItems( string $clip, string $store, string $locale, float $nameThreshold, int $incrementOn ) {
+	string $location = `zooGetPresetDirectory $locale zooAnimStore` + $store +"/";
+	string $objs[] = `zooAnimFileGetObjs ( $location + $clip +".znm" )`;
+	string $notFound[] = {};
+
+	select -cl;
+	for( $item in $objs ) {
+		if( `objExists $item` ) select -add $item;
+		else $notFound[`size $notFound`] = $item;
+		}
+
+	string $matches[] = `zooMatchNames (ls("-type","transform")) $notFound "-unique 1 -parity 1"`;
+	for( $item in $matches ) if( `objExists $item` ) select -add $item;
+
+	return `ls -sl`;
+	}
+
+

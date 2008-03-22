@@ -2,6 +2,7 @@ zooAnimFile;
 zooArrays_str;
 zooPresetManager;
 zooUtils;
+zooStrUtils;
 zooXferAnimUtils;
 
 

@@ -29,6 +29,7 @@ zooUtils;
 //of the scene "up axis"
 global proc string zooBuildControl( string $name, string $optionStr ) {
 	string $temp[] = {};
+	string $useJoints[] = {};
 	string $type = "cube";
 	string $typecurve = "";
 	string $typesurface = "";
@@ -41,6 +42,7 @@ global proc string zooBuildControl( string $name, string $optionStr ) {
 	string $pivot = "";
 	string $offset = "";
 	float $scale = 1;
+	float $expand = 0.04;
 	int $joint = 0;
 	int $orient = 0;
 	int $freeze = 1;
@@ -69,8 +71,22 @@ global proc string zooBuildControl( string $name, string $optionStr ) {
 		if( `filetest -d $tempPath` ) $path = $tempPath;
 		}
 
+	if( $type == "skingeometry" ) {
+		$curve = 0;
+		$typesurface = $type;
+		$typecurve = "null";
+
+		$temp = `zooGetFlagArguments $optionStr expand`; if( `size $temp` ) $expand = $temp[0];
+		$temp = `zooGetFlagArguments $optionStr useJoints`; if( `size $temp` ) $useJoints = $temp;
+
+		if( !`size $useJoints` ) $useJoints[0] = $place;
+		if( !`size $useJoints` ) error "you haven't specified any joints to use for skingeometry extraction";
+		$expand *= $scale;
+		}
+	else {
 	if( $typecurve == "" ) $typecurve = $type;
 	if( $typesurface == "" ) $typesurface = $type;
+		}
 	if( $align == "%p" ) $align = $place;
 	if( $placepivot == "%p" ) $placepivot = $place;
 	if( $placepivot == "%a" ) $placepivot = $align;
@@ -98,7 +114,7 @@ global proc string zooBuildControl( string $name, string $optionStr ) {
 	string $obj = $sel[0];
 
 	//now to deal with the surface - if its different from the curve, then build it
-	if( $typesurface != $typecurve && $typesurface != "null" ) {
+	if( $typesurface != $typecurve && $typesurface != "null" && $typesurface != "skingeometry" ) {
 		//if the typesurface is different from the typecurve, then first delete all existing surface shapes under the control
 		string $shapesTemp[] = `listRelatives -f -s $obj`;
 		for( $s in $shapesTemp ) if( `nodeType $s` == "nurbsSurface" ) delete $s;
@@ -127,6 +143,7 @@ global proc string zooBuildControl( string $name, string $optionStr ) {
 		select -cl;
 		string $j = `joint`;
 		for( $s in $shapes ) parent -add -s $s $j;
+		setAttr -cb 0 ( $j +".radius" );
 		delete $obj;
 		$obj = $j;
 		}
@@ -196,11 +213,28 @@ global proc string zooBuildControl( string $name, string $optionStr ) {
 	string $shapes[] = `listRelatives -f -s $obj`;
 	if( !$curve ) for( $s in $shapes ) if( `nodeType $s` == "nurbsCurve" ) delete $s;
 	if( !$surface ) for( $s in $shapes ) if( `nodeType $s` == "nurbsSurface" ) delete $s;
-	if( $colour != "" ) zooSetObjShader $obj `zooGetShader $colour 1`;
 
-	//finally snap the pivot to alignpivot object if it exists
+	//now snap the pivot to alignpivot object if it exists
 	if( `objExists $placepivot` ) zooAlign ( "-pivot 1 -src "+ $placepivot +" -tgt "+ $obj );
-	print( "zooBuildControl \""+ $name +"\" \""+ $optionStr +"\";\n" );
+	// print( "zooBuildControl \""+ $name +"\" \""+ $optionStr +"\";\n" );
+
+	//if the user has specified skin geometry as the representation type, then build the geo
+	//NOTE: this really needs to happen after ALL the placement has happened otherwise the extracted
+	//will be offset from the surface its supposed to be representing
+	if( $typesurface == "skingeometry" ) {
+		//extract the surface geometry
+		string $jointListStr = `zooArrayToStr_str $useJoints " "`;
+		string $geo[] = `zooExtractJointMesh ("-joints "+ $jointListStr +" -expand "+ $expand )`;
+		parent $geo[0] $obj;
+		makeIdentity -a 1 -t 1 -r 1 -s 1 $geo[0];
+		parent -w $geo[0];
+		zooReplaceShape $geo[0] $obj;
+		delete $geo[0];
+
+		//when selected, turn the mesh display off, and only highlight edges
+		zooTrigSetCmd $obj "for( $s in `listRelatives -s #` ) setAttr ( $s +\".displayEdges\" ) 2;";
+		}
+	if( $colour != "" ) zooSetObjShader $obj `zooGetShader $colour 1`;
 
 	return $obj;
 	}

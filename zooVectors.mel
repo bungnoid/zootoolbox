@@ -7,6 +7,29 @@ zooFlags;
 global proc zooVectors() { return; }
 
 
+//find the pole position and actually does the placement, with optional keying
+global proc zooPlacePole( string $optionStr ) {
+	float $pos[] = `zooFindPolePosition $optionStr`;
+	string $temp[] = {};
+	string $obj = zooGetElement_str(0,`ls -sl`);
+	int $removeKey = 0;
+	int $key = 0;
+
+	$temp = `zooGetFlagArguments $optionStr key`; if( `size $temp` ) $key = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr obj`; if( `size $temp` ) $obj = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr removeKey`; if( `size $temp` ) $removeKey = $temp[0];
+
+	if( !`objExists $obj` ) return;
+	if( `size $pos` == 0 ) {
+		if( $removeKey ) cutKey -t (currentTime("-q")) -cl $obj;
+		return;  //if the position could not be determined, bail
+		}
+
+	move -a -ws -rpr $pos[0] $pos[1] $pos[2] $obj;
+	if( $key ) setKeyframe -at t $obj;
+	}
+
+
 //returns the position of a pole vector that won't affect the orientation of the chain once ik is applied
 //endJoint is the end (ie ankle or wrist) of the 3 joint chain you want to find the pole vector position for
 global proc float[] zooFindPolePosition( string $optionStr ){
@@ -15,12 +38,17 @@ global proc float[] zooFindPolePosition( string $optionStr ){
 	string $midJoint = "";
 	string $endJoint = "";
 	float $dist = 1.0;
+	int $invalidMode = 0;
 
 	$temp = `zooGetFlagArguments $optionStr start`; if( `size $temp` ) $startJoint = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr mid`; if( `size $temp` ) $midJoint = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr end`; if( `size $temp` ) $endJoint = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr dist`; if( `size $temp` ) $dist = $temp[0];
-	if( !`objExists $endJoint` ) return { 0,0,0 };
+	$temp = `zooGetFlagArguments $optionStr invalidMode`; if( `size $temp` ) $invalidMode = $temp[0];
+	if( !`objExists $endJoint` ) {
+		if( $invalidMode == 0 ) return { 0,0,0 };
+		if( $invalidMode == 1 ) return {};
+		}
 
 	string $joint2 = $endJoint;
 	string $joint1 = "";
@@ -28,26 +56,27 @@ global proc float[] zooFindPolePosition( string $optionStr ){
 
 	if( `objExists $midJoint` ) $joint1 = $midJoint;
 	else {
-		string $parents[] = `listRelatives -p $joint2`;
+		string $parents[] = `listRelatives -pa -p $joint2`;
 		if( `size $parents` ) $joint1 = $parents[0];
 		}
 	if( `objExists $startJoint` ) $joint0 = $startJoint;
 	else {
-		string $parents[] = `listRelatives -p $joint1`;
+		string $parents[] = `listRelatives -pa -p $joint1`;
 		if( `size $parents` ) $joint0 = $parents[0];
 		}
 
-	if( !`objExists $joint0` ) return {};
-	if( !`objExists $joint1` ) return {};
-	if( !`objExists $joint2` ) return {};
-	float $pos0[]=`xform -q -ws -rp $joint0`;
-	float $pos1[]=`xform -q -ws -rp $joint1`;
-	float $pos2[]=`xform -q -ws -rp $joint2`;
+	if( !`objExists $joint0` || !`objExists $joint1` ) {
+		if( $invalidMode == 0 ) return { 0,0,0 };
+		if( $invalidMode == 1 ) return {};
+		}
+	float $pos0[] = `xform -q -ws -rp $joint0`;
+	float $pos1[] = `xform -q -ws -rp $joint1`;
+	float $pos2[] = `xform -q -ws -rp $joint2`;
 	float $midway[] = { ($pos2[0]+$pos0[0])/2, ($pos2[1]+$pos0[1])/2, ($pos2[2]+$pos0[2])/2 };
-	float $dotA[] = { $pos2[0]-$pos0[0], $pos2[1]-$pos0[1], $pos2[2]-$pos0[2] };
-	float $dotB[] = { $pos1[0]-$pos0[0], $pos1[1]-$pos0[1], $pos1[2]-$pos0[2] };
-	float $lengthFactor = sqrt( $dotA[0]*$dotA[0] + $dotA[1]*$dotA[1] + $dotA[2]*$dotA[2] );
-	float $projAB[] = `zooVectorProj $dotA $dotB`;
+	float $vec02[] = { $pos2[0]-$pos0[0], $pos2[1]-$pos0[1], $pos2[2]-$pos0[2] };
+	float $vec01[] = { $pos1[0]-$pos0[0], $pos1[1]-$pos0[1], $pos1[2]-$pos0[2] };
+	float $lengthFactor = sqrt( $vec02[0]*$vec02[0] + $vec02[1]*$vec02[1] + $vec02[2]*$vec02[2] );
+	float $projAB[] = `zooVectorProj $vec02 $vec01`;
 	float $multiplier = 1.0;
 	float $int[] = {};
 	float $sub[] = {};
@@ -57,7 +86,14 @@ global proc float[] zooFindPolePosition( string $optionStr ){
 	$dist *= $lengthFactor;  //the length factor is simply the rough length of the leg.  doing this aims to fit the distance the pole appropriately
 	float $mag = sqrt( $sub[0]*$sub[0] + $sub[1]*$sub[1] + $sub[2]*$sub[2] );
 
-	if( $mag < 0.001 ) return $pos1;  //if the magnitude is really small, this means the knee angle is really small.  In this case, simply return the position of the knee
+	//if the magnitude is really small, this means the knee angle is really small.  In this case, the behaviour is determined by the invalidMode variable
+	if( $mag < 0.001 ) {
+		//mode 0 simply returns the position of the "mid" object
+		if( $invalidMode == 0 ) return $pos1;
+
+		//mode 1 returns an empty array to indicate the failure state of the script
+		if( $invalidMode == 1 ) return {};
+		}
 	else $multiplier = $dist/$mag;
 	$int[0] = $midway[0] + $sub[0]*$multiplier;
 	$int[1] = $midway[1] + $sub[1]*$multiplier;
@@ -206,6 +242,16 @@ global proc float[] zooVectorPlusVector( float $vector1[], float $vector2[] ) {
 
 	for( $n=0; $n<$num; $n++ ) $vector[$n] = $vector1[$n]+$vector2[$n];
 	return $vector;
+	}
+
+
+global proc float[] zooConvertSpace( float $vector[], float $basisX[], float $basisY[], float $basisZ[] ) {
+	float $newVector[] = {};
+	$newVector[0] = dot($vector,$basisX);
+	$newVector[1] = dot($vector,$basisY);
+	$newVector[2] = dot($vector,$basisZ);
+
+	return $newVector;
 	}
 
 
