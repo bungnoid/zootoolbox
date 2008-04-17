@@ -194,43 +194,42 @@ global proc string[] zooExtractJointMesh( string $optionStr ) {
 	$temp = `zooGetFlagArguments $optionStr expand`; if( `size $temp` ) $expand = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr tol`; if( `size $temp` ) $tol = $temp[0];
 
-	select -cl;
-	string $allMeshes[] = {};
-	for( $joint in $joints ) {
-		string $meshes[] = {};
-		string $vertsStr[] = {};
-		int $verts[] = {};
+	//get the faces
+	string $allFaces[] = {};
+	zooGetJointFaces $joints $tol $allFaces {};
 
-		zooGetJointVerts $joint $tol $meshes {} $vertsStr $verts {};
-		select -add $vertsStr;
-		$allMeshes = `zooAddArray_str $allMeshes $meshes`;
-		}
-
-	string $allVerts[] = `ls -sl -fl`;
+	//now create a dupe so we can extract the faces into a separate object
 	string $obj = `group -em -n ( $joints[0] +"_cutup" )`;
 	string $tempObj = `group -em -n ( $joints[0] +"_temp" )`;
 	string $uniqueMeshes[] = {};
 	string $meshes[] = {};
-	int $verts[] = {};
+	int $faces[] = {};
 
-	zooGetIdxFromComponent $allVerts $meshes $verts;
+	zooGetIdxFromComponent $allFaces $meshes $faces;
 	$uniqueMeshes = `stringArrayRemoveDuplicates $meshes`;
-	int $numVerts = `size $verts`;
+	int $numFaces = `size $allFaces`;
 	for( $mesh in $uniqueMeshes ) {
 		string $dupeMesh = zooGetElement_str(0,`duplicate -rc $mesh`);
-		string $dupeMeshVerts[] = {};
-		string $faces[] = {};
 
-		for( $n=0; $n<$numVerts; $n++ ) if( $meshes[$n] == $mesh ) $dupeMeshVerts[( `size $dupeMeshVerts` )] = ( $dupeMesh +".vtx["+ $verts[$n] +"]" );
-		$faces = `polyListComponentConversion -fv -tf $dupeMeshVerts`;
+		//before doing anything - remove any shape nodes that have been marked as intermediate objects
+		for( $s in `listRelatives -pa -s $dupeMesh` ) if( `getAttr ( $s +".io" )` ) delete $s;
 
-		if( $expand>0 ) polyMoveVertex -ch 0 -ltz $expand ( $dupeMesh +".vtx[*]" );
+		//now do the expansion if desired
+		if( $expand>0 ) polyMoveFacet -ch 0 -ltz $expand ( $dupeMesh +".vtx[*]" );
+
+		//now select everything and de-select the faces we want to keep, and delete the others
+		string $dupeFaces[] = {};
+		for( $n=0; $n<$numFaces; $n++ ) if( $meshes[$n] == $mesh ) $dupeFaces[`size $dupeFaces`] = ( $dupeMesh +".f["+ $faces[$n] +"]" );
 		select -r ( $dupeMesh +".f[*] " );
-		for( $f in $faces ) select -d $f;
+		for( $f in $dupeFaces ) select -d $f;
 		zooAttrState "-attrs t r s -k 1 -l 0" $dupeMesh;
 		delete;
 
-		for( $s in `listRelatives -f -s $dupeMesh` ) parent -add -s $s $tempObj;
+		for( $s in `listRelatives -f -s $dupeMesh` ) {
+			parent -add -s $s $tempObj;
+			//remove the shape nodes from any layer
+			delete -icn ( $s +".drawOverride" );
+			}
 		delete $dupeMesh;
 		}
 
@@ -241,12 +240,14 @@ global proc string[] zooExtractJointMesh( string $optionStr ) {
 	for( $s in `listRelatives -f -s $tempObj` ) parent -add -s $s $obj;
 	delete $tempObj;
 	if( $colour != "" ) zooSetObjShader $obj `zooGetShader $colour 1`;
-	$objs[( `size $objs` )] = $obj;
+	$objs[`size $objs`] = $obj;
 
 	return $objs;
 	}
 
 
+//strips the component data off a component path name and populates the meshes and idxs array with the two
+//pieces of data - mesh pathname and component type and idx
 global proc int[] zooGetIdxFromComponent( string $componentList[], string $meshes[], int $idxs[] ) {
 	clear $meshes;
 	clear $idxs;

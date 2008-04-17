@@ -68,8 +68,8 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 	//------
 		string $ikArmSpace = `zooBuildControl ( "ik_limbSpace"+ $id ) ( "-type null -align %p -place "+ $wrist )`;
 		string $fkArmSpace = `zooBuildControl ( "fk_limbSpace"+ $id ) ( "-type null -align %p -place "+ $bicep )`;
-		string $driverUpper = `zooBuildControl ( "fk_limbUpperControl"+ $id ) ( "-type "+ $fkType +" -align %p -place "+ $bicep +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
-		string $driverMid = `zooBuildControl ( "fk_limbMiddleControl"+ $id ) ( "-type "+ $fkType +" -align %p -place "+ $elbow +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
+		string $driverUpper = `zooBuildControl ( "fk_limbUpperControl"+ $id ) ( "-type "+ $fkType +" -useJoints "+ $bicep +" "+ (zooArrayToStr_str($bicepTwists," ")) +" -align %p -place "+ $bicep +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
+		string $driverMid = `zooBuildControl ( "fk_limbMiddleControl"+ $id ) ( "-type "+ $fkType +" -useJoints "+ $elbow +" "+ (zooArrayToStr_str($wristTwists," ")) +" -align %p -place "+ $elbow +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
 		string $driverLower = "";
 		if( $alignEnd ) $driverLower = `zooBuildControl ( "limbEndControl"+ $id ) ( "-type "+ $fkType +" -align %p -place "+ $wrist +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
 		else $driverLower = `zooBuildControl ( "limbEndControl"+ $id ) ( "-type "+ $fkType +" -place "+ $wrist +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
@@ -119,12 +119,16 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 	//build the IK handle
 	//------
 		string $limbControl = zooGetElement_str(0,`ikHandle -fs 1 -sj $driverUpper -ee $driverLower -solver ikRPsolver`);
-		string $limbControlObject = `zooBuildControl ( "limbControl"+ $id ) ( "-type "+ $ikType +" -scale "+ $scale +" -colour "+ $colour )`;
+		string $limbControlObject = `zooBuildControl ( "limbControl"+ $id ) ( "-type "+ $ikType +" -place "+ $wrist +" -align %p -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
 		string $limbControlOrient = `zooCSTOrient2Obj $wrist $limbControl`;
 
 		parent $limbControlOrient $ikArmSpace;
 		setAttr ( $limbControl +".snapEnable" ) 0;
 		for( $s in `listRelatives -f -s $limbControlObject` ) parent -add -s $s $limbControl;
+
+		//transfer the selection trigger command if there is one...
+		string $cmd = `zooTrigGetCmd $limbControlObject`;
+		if( $cmd != "" ) zooTrigSetCmd $limbControl $cmd;
 		delete $limbControlObject;
 		$limbControl = `rename $limbControl ( "limbControl"+ $id )`;
 
@@ -334,14 +338,14 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 
 		for( $n=0; $n<3; $n++ ) $poleConnectNums[$n] = `zooAddConnect $poleControl $fkControls[$n]`;
 		int $idx_toFK = `zooObjMenuAddCmdAll $poleControl "move to FK position" ( "zooVectors;\nfloat $pos[] = `zooFindPolePosition \"-start %"+ $poleConnectNums[0] +" -mid %"+ $poleConnectNums[1] +" -end %"+ $poleConnectNums[2] +"\"`;\nmove -rpr $pos[0] $pos[1] $pos[2] #;" )`;
-		zooObjMenuAddCmdAll $poleControl "move to FK pos for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $idx_toFK +"))))\";" );
+		zooObjMenuAddCmdAll $poleControl "move to FK pos for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $idx_toFK +")),{}))\";" );
 
 
 	//------
 	//build the post trace commands for the pole vectors - once they've been placed after a trace, its safe and almost always
 	//desireable to place the pole vectors a little more sensibly
 	//------
-	zooSetPostTraceCmd $poleControl ( "zooVectors;\nfloat $pos[] = `zooFindPolePosition \"-start %"+ $poleConnectNums[0] +" -mid %"+ $poleConnectNums[1] +" -end %"+ $poleConnectNums[2] +"\"`;\nmove -rpr $pos[0] $pos[1] $pos[2] #;" );
+	zooSetPostTraceCmd $poleControl ( "zooVectors; zooPlacePole \"-obj # -start %"+ $poleConnectNums[0] +" -mid %"+ $poleConnectNums[1] +" -end %"+ $poleConnectNums[2] +" -key 1 -removeKey 1 -invalidMode 1\";" );
 
 
 	//------
@@ -361,9 +365,9 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 		if( $cmds ) {
 			int $poleNum = `zooAddConnect $limbControl $poleControl`;
 			int $fkIdx = `zooObjMenuAddCmdAll $limbControl "switch to FK" "zooAlign \"\";\nzooAlignFK \"-ikHandle #\";"`;
-			zooObjMenuAddCmdAll $limbControl "switch to FK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $fkIdx +"))))\";" );
+			zooObjMenuAddCmdAll $limbControl "switch to FK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $fkIdx +")),{}))\";" );
 			int $ikIdx = `zooObjMenuAddCmdAll $limbControl "switch to IK" ( "zooAlign \"\";\nzooAlignIK \"-ikHandle # -pole %"+ $poleNum +"\";" )`;
-			zooObjMenuAddCmdAll $limbControl "switch to IK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $ikIdx +"))))\";" );
+			zooObjMenuAddCmdAll $limbControl "switch to IK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $ikIdx +")),{}))\";" );
 			}
 
 

@@ -37,7 +37,7 @@ global proc zooChangeSpace( string $optionStr, string $obj ) {
 	string $objs[] = $optionTemp;
 	float $objsPos[] = {};
 	float $objsRot[] = {};
-	for( $n=0; $n<`size $objs`; $n++ ) $objs[$n] = `zooPopulateCmdStrRaw $obj $objs[$n]`;  //an object name in the object list may be a triggered symbol
+	for( $n=0; $n<`size $objs`; $n++ ) $objs[$n] = `zooPopulateCmdStrRaw $obj $objs[$n] {}`;  //an object name in the object list may be a triggered symbol
 	for( $a in $objs ) if( `objExists $a` ) {
 		float $aPos[] = `xform -q -ws -rp $a`;
 		float $aRot[] = `xform -q -ws -ro $a`;
@@ -65,7 +65,7 @@ global proc zooChangeSpace( string $optionStr, string $obj ) {
 	$optionTemp = `zooGetFlagArguments $optionStr cmd`;
 	string $cmd = `zooArrayToStr_str $optionTemp " "`;
 
-	$cmd = `zooPopulateCmdStrRaw $obj $cmd`;
+	$cmd = `zooPopulateCmdStrRaw $obj $cmd {}`;
 	if( $cmd != "" ) eval( "{"+ $cmd +"}" );
 
 

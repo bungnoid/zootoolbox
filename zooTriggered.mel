@@ -217,7 +217,7 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 				}
 			else $cmdStr = `zooTrigGetCmd $trigger`;
 
-			if( $preview ) $cmdStr = `zooPopulateCmdStr $trigger $cmdStr`;
+			if( $preview ) $cmdStr = `zooPopulateCmdStr $trigger $cmdStr {}`;
 			scrollField -e -ed(!$preview) -tx $cmdStr zooTriggeredTextCustom;
 			break;
 		case "-updateCmdList":
@@ -382,7 +382,7 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 		case "-executeCmd":
 			if( $cmdViewMode ) if( $slot >= 0 ) {
 				string $cmd = `zooGetObjMenuCmdStr $trigger $slot`;
-				$cmd = `zooPopulateCmdStr $trigger $cmd`;
+				$cmd = `zooPopulateCmdStr $trigger $cmd {}`;
 				eval( $cmd );
 				}
 			break;

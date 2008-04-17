@@ -11,6 +11,7 @@ zooRenamerUtils;
 
 //script documentation is at the end of this file
 global proc string[] zooCSTBuildPrimHead( string $prefix, string $head, string $optionStr ) {
+	echoRigElementCreationCommand ( "zooCSTBuildPrimHead \""+ $prefix +"\" "+ $head +" \""+ $optionStr +"\";" );
 	//------
 	//parse optionStr to determine which flags are enabled for this proc
 	//------
@@ -20,7 +21,7 @@ global proc string[] zooCSTBuildPrimHead( string $prefix, string $head, string $
 		string $chestFlag;
 		string $headType = "cube";
 		string $neck = "";
-		string $neckType = "cylinder";
+		string $neckType = "pin";
 		string $colour = "blue 0.65";
 		float $scale = 1;
 		int $orient = 1;
@@ -109,6 +110,8 @@ global proc string[] zooCSTBuildPrimHead( string $prefix, string $head, string $
 
 		zooSetObjMenuCmdName $headControl $cmdName $cmd1Num;
 		zooSetObjMenuCmdStr $headControl $cmd1Str $cmd1Num;
+		setObjMenuKillState $headControl 1;
+		if( $buildNeck ) setObjMenuKillState $neckControl 1;
 
 
 	//------

@@ -11,6 +11,7 @@ zooRenamerUtils;
 
 //script documentation is at the end of this file
 global proc string[] zooCSTBuildPrimRootSpine( string $prefix, string $root, string $spineBase, string $spineEnd, string $optionStr ) {
+	echoRigElementCreationCommand ( "zooCSTBuildPrimRootSpine \""+ $prefix +"\" "+ $root +" "+ $spineBase +" "+ $spineEnd +" \""+ $optionStr +"\";" );
 	//------
 	//parse optionStr to determine which flags are enabled for this proc
 	//------

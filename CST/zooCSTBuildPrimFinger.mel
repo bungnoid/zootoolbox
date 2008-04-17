@@ -12,6 +12,7 @@ zooRenamerUtils;
 //script documentation is at the end of this file
 global proc string[] zooCSTBuildPrimFinger( string $prefix, string $parity, string $base, string $optionStr ) {
 	$optionStr = "."+ $optionStr;
+	echoRigElementCreationCommand ( "zooCSTBuildPrimFinger \""+ $prefix +"\" "+ $parity +" "+ $base +" \""+ $optionStr +"\";" );
 	//------
 	//parse optionStr to determine which flags are enabled for this proc
 	//------

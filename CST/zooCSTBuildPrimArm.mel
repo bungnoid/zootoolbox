@@ -12,6 +12,8 @@ zooRenamerUtils;
 
 //script documentation is at the end of this file
 global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string $bicep, string $elbow, string $wrist, string $optionStr ) {
+	echoRigElementCreationCommand ( "setAttr "+ $wrist +".r "+ (zooArrayToStr_float(`getAttr ( $wrist+".r" )`," ")) );  //echo the rotation settings of the wrist - this is done because the ik arm controls are oriented to the wrist, therefore its orientation is important.  by echoing the current rotation values, these numbers can be captured by rig macro recording tools
+	echoRigElementCreationCommand ( "zooCSTBuildPrimArm \""+ $prefix +"\" "+ $parity +" "+ $bicep +" "+ $elbow +" "+ $wrist +" \""+ $optionStr +"\";" );
 	//------
 	//parse optionStr to determine which flags are enabled for this proc
 	//------
@@ -137,6 +139,8 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 			parent $rootPos $worldControl;
 			pointConstraint -mo $rootControl $rootPos;
 			$spaceNodes1 = `zooBuildSpaceSwitch $elbowControl $elbowControlSpace { $chestControl, $rootControl, $rootPos } { "chest", "root", "root pos only" } "-mo"`;
+			for( $obj in {$armControl,$elbowControl,$clavControl} ) setObjMenuKillState $obj 1;
+			for( $obj in $fkControls ) setObjMenuKillState $obj 1;
 			}
 
 		delete -icn ( $fkArmSpace +".tx" );
@@ -170,9 +174,9 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 		int $clavNum = `zooAddConnect $armControl $clavControl`;  //add the clavicle as a connect
 
 		int $ikIdx = `zooObjMenuAddCmdAll $armControl "switch to FK" "zooAlign \"\";\nzooAlignFK \"-ikHandle #\";"`;
-		zooObjMenuAddCmdAll $armControl "switch to FK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $ikIdx +"))))\";" );
+		zooObjMenuAddCmdAll $armControl "switch to FK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $ikIdx +")),{}))\";" );
 		int $fkIdx = `zooObjMenuAddCmdAll $armControl "switch to IK" ( "zooAlign \"\";\nzooAlignIK \"-ikHandle # -pole %"+ $elbowNum +"\";" )`;
-		zooObjMenuAddCmdAll $armControl "switch to IK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $fkIdx +"))))\";" );
+		zooObjMenuAddCmdAll $armControl "switch to IK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $fkIdx +")),{}))\";" );
 		zooObjMenuAddCmdAll $armControl "select all arm controls" ( "select `ikHandle -q -jl #`;\nstring $effector = `ikHandle -q -ee #`;\nselect -add `listConnections -d 0 ( $effector +\".tx\" )`;\nselect -add %"+ $clavNum +" %"+ $elbowNum +" #;" );
 		zooObjMenuAddCmdAll $armControl "draw line of action" "zooBrandTools;\nzooCSTPrimitives;\nzooLineOfAction;\nstring $prim = `zooGetPrimFromRegistered #`;\nstring $inputs[] = `zooCSTListRegistered input $prim`;\nzooLineOfAction_multi $inputs \"\";";
 
@@ -251,6 +255,7 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 	//------
 	//cleanup - put all control objects where they should be in the outliner
 	//------
+		setAttr ( $elbowControl +".v" ) 0;
 		if( `objExists $rootControl` ) {
 			parent $elbowControlSpace $rootControl;
 			parent $ikArmSpace $rootControl;

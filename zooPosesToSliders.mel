@@ -39,7 +39,7 @@ global proc zooPosesToSliders( string $optionStr ) {
 
 	string $allTgts[] = {};
 	string $baseCmdStr = `zooGetObjMenuCmdStr $trigger 0`;
-	string $baseEval = `zooPopulateCmdStr $trigger $baseCmdStr`;
+	string $baseEval = `zooPopulateCmdStr $trigger $baseCmdStr {}`;
 	int $maxSlider = 10;
 	int $defaultValue = 0;
 	int $cmds[] = `zooObjMenuListCmds $trigger`;
@@ -99,7 +99,7 @@ global proc zooPosesToSliders( string $optionStr ) {
 	int $sliderKeyCounts[] = {};
 	for( $cmd in $cmds ) {
 		string $cmdStr = `zooGetObjMenuCmdStr $trigger $cmd`;
-		string $toEval = `zooPopulateCmdStr $trigger $cmdStr`;
+		string $toEval = `zooPopulateCmdStr $trigger $cmdStr {}`;
 		string $sliderName = `zooGetObjMenuCmdName $trigger $cmd`;
 		string $nameExtra = `match "[^_]+$" $sliderName`;
 

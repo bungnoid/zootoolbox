@@ -58,7 +58,7 @@ global proc zooAnimStore() {
 					setParent ..;
 					string $colB = `columnLayout`;
 						checkBox -v(optionVar("-q","zooAnimStoreApplyPar")) -l "apply to parent qss (all)" -onc( "checkBox -e -v 1 -en 0 zooStoreUICheckRig; optionVar -iv zooAnimStoreApplyPar 1;" ) -ofc( "checkBox -e -en 1 zooStoreUICheckRig; optionVar -rm zooAnimStoreApplyPar;" ) zooStoreUICheckRigAll;
-						checkBox -v(optionVar("-ex","zooAnimStoreApplyCur")?optionVar("-q","zooAnimStoreApplyCur"):1) -l "apply to current qss" -cc( "if( #1 ) optionVar -rm zooAnimStoreApplyCur; else optionVar -iv zooAnimStoreApplyCur 0;" ) zooStoreUICheckRig;
+						checkBox -v(optionVar("-ex","zooAnimStoreApplyCur")?optionVar("-q","zooAnimStoreApplyCur"):0) -l "apply to current qss" -cc( "optionVar -iv zooAnimStoreApplyCur #1;" ) zooStoreUICheckRig;
 						checkBox -v(optionVar("-q","zooAnimStoreClear")) -l "clear keys on import" -cc( "if( #1 ) optionVar -iv zooAnimStoreClear 1; else optionVar -rm zooAnimStoreClear;" ) zooStoreUICheckClearKeys;
 					setParent ..;
 					string $colC = `columnLayout -adj 1`;
@@ -303,6 +303,12 @@ global proc zooAnimStoreWindowFunctions( string $function ) {
 			else if( `size $stores` ) {
 				if( `optionVar -ex zooAnimStoreSelectedStore` ) textScrollList -e -si `optionVar -q zooAnimStoreSelectedStore` $storeUI;
 				else textScrollList -e -si $stores[0] $storeUI;
+				}
+
+			//create a default store if there are none already
+			if( !`size $stores` ) {
+				zooCreateStore "default";
+				zooAnimStoreWindowFunctions -updateStores;
 				}
 			break;
 		case "-updateSpacing":

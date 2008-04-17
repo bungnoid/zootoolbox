@@ -15,6 +15,7 @@ zooArrays_float;
 zooBrandTools;
 zooFlags;
 zooObjMenuUtils;
+zooPresetManager;
 zooTips;
 zooTriggeredUtils;
 zooUtils;

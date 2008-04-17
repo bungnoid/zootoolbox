@@ -12,6 +12,7 @@ zooXferAnimUtils;
 
 //script documentation is at the end of this file
 global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string $thigh, string $knee, string $ankle, string $optionStr ) {
+	echoRigElementCreationCommand ( "zooCSTBuildPrimLeg \""+ $prefix +"\" "+ $parity +" "+ $thigh +" "+ $knee +" "+ $ankle +" \""+ $optionStr +"\";" );
 	//------
 	//parse optionStr to determine which flags are enabled for this proc
 	//------
@@ -222,6 +223,7 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 	//------
 		string $legControlParents[] = { $worldControl, $rootControl, $hipsControl };
 		if( `objExists $hipsControl` ) parent $fkLegSpace $hipsControl;
+		else parent $fkLegSpace $rootControl;
 		if( `size $parents` ) zooAddArray_str $legControlParents $parents;
 		if( $spaceswitching ) zooAddArray_str $spaceNodes `zooBuildSpaceSwitch $legControl $legControlSpace $legControlParents { "world", "root", "hips" } "-mo"`;
 		if( $spaceswitching ) zooAddArray_str $spaceNodes `zooBuildSpaceSwitch $driverThigh $fkLegSpace { $hipsControl, $rootControl, $worldControl } { "hips", "root", "world" } "-mo"`;
@@ -255,15 +257,16 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 		int $idx_eff = `zooAddConnect $legControl $legIK`;
 		int $idx_kne = `zooAddConnect $legControl $kneeControl`;
 		int $fkIdx = `zooObjMenuAddCmdAll $legControl "switch to FK" ( "zooFlags;\nzooAlignFK \"-control # -ikHandle %"+ $idx_eff +" -onCmd setAttr #.fkBlend 0 -offCmd setAttr #.fkBlend 1\";" )`;
-		zooObjMenuAddCmdAll $legControl "switch to FK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $fkIdx +"))))\";" );
+		zooObjMenuAddCmdAll $legControl "switch to FK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $fkIdx +")),{}))\";" );
 		int $ikIdx = `zooObjMenuAddCmdAll $legControl "switch to IK" ( "zooFlags;\nzooAlign \"\";\nzooAlignIK \"-control # -ikHandle %"+ $idx_eff +" -pole %"+ $idx_kne +" -offCmd setAttr #.fkBlend 0\";" )`;
-		zooObjMenuAddCmdAll $legControl "switch to IK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $ikIdx +"))))\";" );
+		zooObjMenuAddCmdAll $legControl "switch to IK for all keys" ( "source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd \"eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\","+ $ikIdx +")),{}))\";" );
 		zooObjMenuAddCmdAll $legControl "draw line of action" "zooBrandTools;\nzooCSTPrimitives;\nzooLineOfAction;\nstring $prim = `zooGetPrimFromRegistered #`;\nstring $inputs[] = `zooCSTListRegistered input $prim`;\nzooLineOfAction_multi $inputs \"\";";
 
 		int $idx_ctl = `zooAddConnect $driverAnkle $legControl`;
 		int $idx_eff = `zooAddConnect $driverAnkle $legIK`;
 		int $idx_kne = `zooAddConnect $driverAnkle $kneeControl`;
 		zooObjMenuAddCmdAll $driverAnkle "switch to IK" ( "zooFlags;\nzooAlign \"\";\nzooAlignIK \"-control %"+ $idx_ctl +" -ikHandle %"+ $idx_eff +" -pole %"+ $idx_kne +" -offCmd setAttr %"+ $idx_ctl +".fkBlend 0\";" );
+		for( $obj in {$legControl,$kneeControl,$driverThigh,$driverKnee,$driverAnkle} ) setObjMenuKillState $obj 1;
 
 
 	//------
@@ -276,8 +279,8 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 		for( $i=0; $i<3; $i++ ) $offset[$i] *= -1;  //negate the rotational offset
 		setAttr ( $legControl +".t" ) 0 0 0;
 		setAttr ( $legControl +".r" ) 0 0 0;
-		zooSetPostTraceCmd $legControl ( "rotate -r -os "+ $offset[0] +" "+ $offset[1] +" "+ $offset[2] +" #;" );
-		zooSetPostTraceCmd $legControl ( "rotate -r -os "+ $offset[0] +" "+ $offset[1] +" "+ $offset[2] +" #;" );
+		zooSetPostTraceCmd $legControl ( "rotate -r -os "+ $offset[0] +" "+ $offset[1] +" "+ $offset[2] +" #; setKeyframe -at r #;" );
+		zooSetPostTraceCmd $legControl ( "rotate -r -os "+ $offset[0] +" "+ $offset[1] +" "+ $offset[2] +" #; setKeyframe -at r #;" );
 
 
 	//------
@@ -298,7 +301,7 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 		zooAttrState "-attrs v -k 0" $legControl;
 		//get the condition node that drives ik control visibility, and connect it to the actual leg control's vis
 		string $cond = zooGetElement_str(0,`listConnections -d 0 ( $legIK +".v" )`);
-		//connectAttr -f ( $cond +".outColorG" ) ( $legControlSpace +".v" );  //commented out simply because the switch to IK objMenu cmd doesn't actually work properly atm...  too lazy to fix.  fk legs are rarely used anyways
+		connectAttr -f ( $cond +".outColorG" ) ( $legControlSpace +".v" );
 		string $toLock[] = {$legIK,$legControlSpace,$toeRoll,$heelRoll,$footControlSpace,$footRollControl,$toeOrient,$footBankL,$footBankR};
 		for( $a in $toLock ) zooAttrState "-attrs t r s -l 1" $a;
 
@@ -326,6 +329,7 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 	//------
 	//build the primitive record
 	//------
+		setAttr ( $kneeControl +".v" ) 0;
 		zooCSTRegisterInput $thigh $primitive;
 		zooCSTRegisterInput $knee $primitive;
 		zooCSTRegisterInput $ankle $primitive;

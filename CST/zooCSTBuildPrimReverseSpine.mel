@@ -11,6 +11,7 @@ zooRenamerUtils;
 
 //script documentation is at the end of this file
 global proc string[] zooCSTBuildPrimReverseSpine( string $prefix, string $root, string $spineBase, string $spineEnd, string $optionStr ) {
+	echoRigElementCreationCommand ( "zooCSTBuildPrimReverseSpine \""+ $prefix +"\" "+ $root +" "+ $spineBase +" "+ $spineEnd +" \""+ $optionStr +"\";" );
 	//------
 	//parse optionStr to determine which flags are enabled for this proc
 	//------
@@ -164,7 +165,7 @@ global proc string[] zooCSTBuildPrimReverseSpine( string $prefix, string $root, 
 		$toRevScript += "setAttr #.reverse 1;";
 		zooSetObjMenuCmdStr $forwardSpine[0] $toRevScript $cmd1Num;
 		zooSetObjMenuCmdStr $forwardSpine[0] $toFwdScript $cmd2Num;
-		zooSetObjMenuCmdStr (zooGetElement_str(-1,$forwardSpine)) ( "zooObjMenuUtils;\nstring $cmd = `zooGetObjMenuCmdStr %"+ $other +" 0`;\n$cmd = `zooPopulateCmdStr %"+ $other +" $cmd`;\neval $cmd;" ) $cmd3Num;
+		zooSetObjMenuCmdStr (zooGetElement_str(-1,$forwardSpine)) ( "zooObjMenuUtils;\nstring $cmd = `zooGetObjMenuCmdStr %"+ $other +" 0`;\n$cmd = `zooPopulateCmdStr %"+ $other +" $cmd {}`;\neval $cmd;" ) $cmd3Num;
 
 
 	//------
@@ -200,7 +201,7 @@ global proc string[] zooCSTBuildPrimReverseSpine( string $prefix, string $root, 
 		$toRevScript += "setAttr %"+ $fwdConnects[0] +".reverse 1;";
 		zooSetObjMenuCmdStr $revSpineInterface $toFwdScript $cmd1Num;
 		zooSetObjMenuCmdStr $revSpineInterface $toRevScript $cmd2Num;
-		zooSetObjMenuCmdStr $reverseSpine[0] ( "zooObjMenuUtils;\nstring $cmd = `zooGetObjMenuCmdStr %"+ $other +" 0`;\n$cmd = `zooPopulateCmdStr %"+ $other +" $cmd`;\neval $cmd;" ) $cmd3Num;
+		zooSetObjMenuCmdStr $reverseSpine[0] ( "zooObjMenuUtils;\nstring $cmd = `zooGetObjMenuCmdStr %"+ $other +" 0`;\n$cmd = `zooPopulateCmdStr %"+ $other +" $cmd {}`;\neval $cmd;" ) $cmd3Num;
 
 
 	//------

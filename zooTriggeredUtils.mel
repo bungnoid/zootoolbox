@@ -36,7 +36,7 @@ global proc zooTriggerObject( string $trigger ) {
 	if( !`objExists $trigger` ) return;
 	string $slotPrefix = "zooTrig";
 	string $cmd = `zooTrigGetCmd $trigger`;
-	string $cmdStr = `zooPopulateCmdStr $trigger $cmd`;
+	string $cmdStr = `zooPopulateCmdStr $trigger $cmd {}`;
 
 	catch( `eval $cmdStr` );
 	}
@@ -87,9 +87,9 @@ global proc zooUnhighlightAllTriggers() {
 //this simply puts the command into its own scope - the actual population of the cmd string
 //is done in the proc below
 //------
-global proc string zooPopulateCmdStr( string $trigger, string $cmdStr ) {
+global proc string zooPopulateCmdStr( string $trigger, string $cmdStr, string $optionalStrings[] ) {
 	//the {} brackets are added so that any variables declared by the command are local variables only
-	return( "{\n"+ `zooPopulateCmdStrRaw $trigger $cmdStr` +"\n}" );
+	return( "{\n"+ `zooPopulateCmdStrRaw $trigger $cmdStr $optionalStrings` +"\n}" );
 	}
 
 
@@ -106,11 +106,12 @@ global proc string zooPopulateCmdStr( string $trigger, string $cmdStr ) {
 //scene with connects, and another in the scene containing the commands. this can also be useful for
 //creating customised character menus as used in the zooCharMenu script
 //------
-global proc string zooPopulateCmdStrRaw( string $trigger, string $cmdStr ) {
+global proc string zooPopulateCmdStrRaw( string $trigger, string $cmdStr, string $optionalStrings[] ) {
 	string $objectList[] = `zooGetConnects $trigger`;
 	string $connectsArrayStr = "{\""+ `zooArrayToStr_str $objectList "\",\""` +"\"}";
 	int $connectSlots[] = `zooGetAllTriggerSlots $trigger`;
 	int $numCts = `size $objectList`;
+	int $numOpt = `size $optionalStrings`;
 
 	//make the trigger the first object in the array - %0 can refer to it
 	//NOTE this is done after the string representation of the connects array has
@@ -150,6 +151,15 @@ global proc string zooPopulateCmdStrRaw( string $trigger, string $cmdStr ) {
 
 		if( $idx < 0 ) $cmdStr = `substitute $custom $cmdStr "*invalidConnect*"`;
 		else $cmdStr = `substitute $custom $cmdStr $objectList[$idx]`;
+		}
+
+	//the %opt3% string allows the user to specify an optional list of components to pass in
+	while( `match "%opt[0-9]+%" $cmdStr` != "" ) {
+		string $custom = `match "%opt[0-9]+%" $cmdStr`;
+		int $targetNum = `substring $custom 5 (size($custom)-1)`;
+
+		if( $numOpt > $targetNum ) $cmdStr = `substitute $custom $cmdStr $optionalStrings[$targetNum]`;
+		else $cmdStr = `substitute $custom $cmdStr "*invalidOptional*"`;
 		}
 
 	return $cmdStr;

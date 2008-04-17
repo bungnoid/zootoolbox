@@ -5,6 +5,7 @@ zooCSTUtils;
 zooFlags;
 zooObjMenuUtils;
 zooCSTPrimitives;
+zooShaders;
 zooSpaceSwitching;
 zooRenamerUtils;
 
@@ -86,16 +87,11 @@ global proc string[] zooCSTBuildRoot( string $prefix, string $root, string $opti
 	//------
 	//add right click menu to turn on the gimbal control
 	//------
-		string $cmdName = "toggle gimbal control";
-		string $cmd1Str =  "{\nstring $kids[] = `listRelatives -type transform #`;\n$kids = `listRelatives -s $kids[0]`;\nint $vis = `getAttr ( $kids[0] +\".v\" )`;\nfor( $k in $kids ) setAttr ( $k +\".v\" ) (!$vis);\n}";
-		string $cmd2Str =  "{\nstring $kids[] = `listRelatives -s #`;\nint $vis = `getAttr ( $kids[0] +\".v\" )`;\nfor( $k in $kids ) setAttr ( $k +\".v\" ) (!$vis);\nselect `listRelatives -p`;\n}";
-		int $cmd1Num = `zooObjMenuAddCmd $rootControl`;
-		int $cmd2Num = `zooObjMenuAddCmd $rootGimbal`;
-
-		zooSetObjMenuCmdName $rootControl $cmdName $cmd1Num;
-		zooSetObjMenuCmdStr $rootControl $cmd1Str $cmd1Num;
-		zooSetObjMenuCmdName $rootGimbal $cmdName $cmd2Num;
-		zooSetObjMenuCmdStr $rootGimbal $cmd2Str $cmd2Num;
+		zooObjMenuAddCmdAll $rootControl "toggle gimbal control" "{\nstring $kids[] = `listRelatives -type transform #`;\n$kids = `listRelatives -s $kids[0]`;\nint $vis = `getAttr ( $kids[0] +\".v\" )`;\nfor( $k in $kids ) setAttr ( $k +\".v\" ) (!$vis);\n}";
+		zooObjMenuAddCmdAll $rootGimbal "toggle gimbal control" "{\nstring $kids[] = `listRelatives -s #`;\nint $vis = `getAttr ( $kids[0] +\".v\" )`;\nfor( $k in $kids ) setAttr ( $k +\".v\" ) (!$vis);\nselect `listRelatives -p`;\n}";
+		zooObjMenuAddCmdAll $rootControl "mirror pose" ( "zooMirrorUtils;\nzooMirrorChar "+ $prefix +" \"\";" );
+		for( $obj in {$rootControl,$rootGimbal} ) setObjMenuKillState $obj 1;
+		if( $buildhips ) setObjMenuKillState $hipsControl 1;
 
 
 	//------
@@ -119,4 +115,3 @@ global proc string[] zooCSTBuildRoot( string $prefix, string $root, string $opti
 
 
 //zoo.end
-//macaroniKazoo ©2007

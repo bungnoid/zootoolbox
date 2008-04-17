@@ -114,7 +114,6 @@ global proc zooImportTriggers( string $preset, string $optionStr, string $search
 
 
 global proc string[] zooGetNamespacesFromFile( string $preset, string $locale ) {
-	string $locale = "local";
 	string $presetFile = `zooGetPresetDirectory $locale zooTriggered` + $preset +".trigger";
 	string $fileContents[] = `zooReadFile $presetFile "-strip 1"`;
 	string $namespaces[] = {};

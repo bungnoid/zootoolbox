@@ -58,10 +58,12 @@ global proc string[] zooCSTBuildWorld( string $prefix, string $optionStr ) {
 		int $qssIdx = `zooAddConnect $world $masterqss`;
 		zooObjMenuAddCmdAll $world "toggle rig vis" "{\nstring $childs[] = `listRelatives -type transform #`;\nint $vis = !`getAttr ( $childs[0]+\".v\" )`;\nfor($a in $childs) if( `objExists ( $a+\".v\" )`) if( `getAttr -se ( $a+\".v\" )`) setAttr ( $a+\".v\" ) $vis;\n}";
 		zooObjMenuAddCmdAll $world "reset to rigpose" ( "zooUtils;\nstring $all[] = `zooQuerySet %"+ $qssIdx +" 0 1`;\nfor( $a in $all ) zooResetAttrs $a;" );
-		zooObjMenuAddCmdAll $world "draw all lines of action" "string $menuObjs[] = `zooGetObjsWithMenus`;\nfor( $m in $menuObjs ) {\n\tint $cmds[] = `zooObjMenuListCmds $m`;\n\tfor( $c in $cmds ) {\n\t\tstring $name = `zooGetObjMenuCmdName $m $c`;\n\t\tif( `match \"draw line of action\" $name` != \"\" ) eval(`zooPopulateCmdStr $m (zooGetObjMenuCmdStr($m,$c))`);\n\t\t}\n\t}";
+		zooObjMenuAddCmdAll $world "draw all lines of action" "string $menuObjs[] = `zooGetObjsWithMenus`;\nfor( $m in $menuObjs ) {\n\tint $cmds[] = `zooObjMenuListCmds $m`;\n\tfor( $c in $cmds ) {\n\t\tstring $name = `zooGetObjMenuCmdName $m $c`;\n\t\tif( `match \"draw line of action\" $name` != \"\" ) eval(`zooPopulateCmdStr $m (zooGetObjMenuCmdStr($m,$c)) {}`);\n\t\t}\n\t}";
 		zooObjMenuAddCmdAll $world "controls as curves" ( "zooCSTCtrlType "+ $prefix +" 0 1;" );
 		zooObjMenuAddCmdAll $world "controls as solids" ( "zooCSTCtrlType "+ $prefix +" 1 0;" );
 		zooObjMenuAddCmdAll $world "controls as both" ( "zooCSTCtrlType "+ $prefix +" 1 1;" );
+		zooObjMenuAddCmdAll $world "mirror pose" ( "zooMirrorUtils;\nzooMirrorChar "+ $prefix +" \"\";" );
+		setObjMenuKillState $world 1;
 
 		//add world control to master qss
 		sets -add $masterqss $world;

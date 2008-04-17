@@ -28,12 +28,16 @@ global proc zooAlign( string $optionStr ) {
 	$temp = `zooGetFlagArguments $optionStr key`; if( `size $temp` ) $key = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr postCmds`; if( `size $temp` ) $runPostXfer = $temp[0];
 
-	for( $tgt in $tgts ) zooAlignFast $src $tgt $key $pivot;
+	string $srcPlusTgt[] = `zooAddArray_str {$src} $tgts`;
+	for( $tgt in $tgts ) {
+		zooAlignFast $src $tgt $key $pivot;
 	if( $runPostXfer ) {
 		string $cmd = `zooGetPostTraceCmd $tgt`;
 		if( $cmd != "" ) {
-			$cmd = `zooPopulateCmdStr $tgt $cmd`;
-			catch(eval($cmd));
+				$cmd = `zooPopulateCmdStr $tgt $cmd $srcPlusTgt`;
+				if( catch(eval($cmd)) ) warning( "zooAlign::zooAlign() post align command failed on: "+ $tgt +"\n" );
+				else print( "executed post align command on "+ $tgt +"\n" );
+				}
 			}
 		}
 	}

@@ -11,16 +11,20 @@
 
 
 zooObjMenuUtils;
+zooSpaceSwitching;
 
 
 //------
-//build the menuItems in the dagProcMenu
+//build the menuItems in the dagProcMenu - it is possible to set a "kill menu" attribute
+//on an object now that will stop the dagMenu building after the objMenu items have been
+//added
 //------
-global proc zooObjMenu( string $parent, string $obj ) {
+global proc int zooObjMenu( string $parent, string $obj ) {
 	string $cmdNames[] = {};
 	string $defaultCmdName = "<empty cmd>";
 	int $cmdSlots[] = `zooObjMenuListCmds $obj`;
 	int $menusFromConnects = 0;
+	int $killStatus = 0;
 
 	//source all dependencies
 	global int $zooObjMenuLoaded;
@@ -34,12 +38,27 @@ global proc zooObjMenu( string $parent, string $obj ) {
 	for( $n=0; $n<$numCmds; $n++ ) {
 		string $defaultCmdStr = ( "zooObjMenuEditCmd "+ $obj +" "+ $cmdSlots[$n] );
 		string $cmdName = `zooGetObjMenuCmdName $obj $cmdSlots[$n]`;
-		string $cmdStr = "eval(zooPopulateCmdStr(\""+ $obj +"\",(`zooGetObjMenuCmdStr "+ $obj +" "+ $cmdSlots[$n] +"`)))";
+		string $cmdStr = "eval(zooPopulateCmdStr(\""+ $obj +"\",(`zooGetObjMenuCmdStr "+ $obj +" "+ $cmdSlots[$n] +"`),{}))";
+		int $cbState = -1;
+
+		//so if the menu name starts with "parent to " then it assumed to be a menu item built by zooSpaceSwitching
+		if( `match "^parent to " $cmdName` != "" ) {
+			string $tgts[] = {};
+			string $names[] = {};
+			string $name = `substitute "^parent to " $cmdName ""`;
+
+			$cbState = 0;
+			zooGetSpaceTargetsNames $obj $tgts $names;
+			int $idx = `zooGetIdxOfElement_str $names $name`;
+			int $curIdx = -1;
+			if( `objExists ( $obj +".parent" )` ) $curIdx = `getAttr ( $obj +".parent" )`;
+			if( $idx == $curIdx ) $cbState = 1;
+			}
 
 		if( $cmdName == "" ) $cmdName = $defaultCmdName;
 		if( $cmdStr == "" ) $cmdStr = $defaultCmdStr;
-		//$cmdStr = `zooPopulateCmdStr $obj $cmdStr`;
-		menuItem -l $cmdName -c $cmdStr;
+		if( $cbState == -1 ) menuItem -l $cmdName -c $cmdStr;
+		else menuItem -l $cmdName -cb $cbState -c $cmdStr;
 		}
 
 	//the showMenusFromConnects attribute determines whether the object in question should show right click menus from any items connected to this one via triggered connects
@@ -54,7 +73,7 @@ global proc zooObjMenu( string $parent, string $obj ) {
 			for( $n=0; $n<$numCmds; $n++ ) {
 				string $defaultCmdStr = ( "zooObjMenuEditCmd "+ $con +" "+ $cmdSlots[$n] );
 				string $cmdName = `zooGetObjMenuCmdName $con $cmdSlots[$n]`;
-				string $cmdStr = "eval(zooPopulateCmdStr(\""+ $con +"\",(`zooGetObjMenuCmdStr "+ $con +" "+ $cmdSlots[$n] +"`)))";
+				string $cmdStr = "eval(zooPopulateCmdStr(\""+ $con +"\",(`zooGetObjMenuCmdStr "+ $con +" "+ $cmdSlots[$n] +"`),{}))";
 
 				if( $cmdName == "" ) $cmdName = $defaultCmdName;
 				if( $cmdStr == "" ) $cmdStr = $defaultCmdStr;
@@ -68,8 +87,15 @@ global proc zooObjMenu( string $parent, string $obj ) {
 		menuItem -l "edit cmd..." -c( "zooObjMenuEditCmd "+ $obj + " -1" );
 		}
 	menuItem -l "new cmd..." -c( "zooObjMenuNewCmd "+ $obj );
+
+	//should we die after menu build?
+	if( `objExists ( $obj +".zooObjMenuDie" )` ) $killStatus = `getAttr ( $obj +".zooObjMenuDie" )`;
+	if( !$killStatus ) {
 	menuItem -d 1;
 	menuItem -d 1;
+	}
+
+	return $killStatus;
 	}
 
 
@@ -103,7 +129,7 @@ global proc zooObjMenuEditCmd( string $obj, int $cmdNum ){
 
 			// Note that it's important to call zooObjMenuSaveCmd before changing the editable state of zooOMCmdText
 			// for an explanation of why, see the definition of zooObjMenuSaveCmd
-			string $previewCheck = `checkBox -l "preview command string" -cc( "{zooObjMenuSaveCmd "+ $obj +" "+ $cmdNum + "; scrollField -e -ed(!(#1)) zooOMCmdText; string $c = `zooGetObjMenuCmdStr "+ $obj +" "+ $cmdNum +"`; if( #1 ) $c = `zooPopulateCmdStr "+ $obj +" $c`; scrollField -e -tx $c zooOMCmdText;}" ) zooOMCheckPreview`;
+			string $previewCheck = `checkBox -l "preview command string" -cc( "{zooObjMenuSaveCmd "+ $obj +" "+ $cmdNum + "; scrollField -e -ed(!(#1)) zooOMCmdText; string $c = `zooGetObjMenuCmdStr "+ $obj +" "+ $cmdNum +"`; if( #1 ) $c = `zooPopulateCmdStr "+ $obj +" $c {}`; scrollField -e -tx $c zooOMCmdText;}" ) zooOMCheckPreview`;
 			string $closeButt = `button -height 20 -label "close" -c( "zooObjMenuSaveCmd "+ $obj +" "+ $cmdNum +"; deleteUI "+ $windowName )`;
 			string $deleteButt = `button -height 20 -label "delete" -c( "zooRemoveMenu "+ $obj +" "+ $cmdNum +"; deleteUI "+ $windowName )`;
 

@@ -145,6 +145,7 @@ global proc zooImportFolder( string $preset, string $optionStr ) {
 	string $shapes[] = {};
 	string $objMenus[] = {};
 	string $namespaces[] = {};
+	string $firstObjectCreated = "";
 	int $num = `size $fileContents`;
 
 	for( $n=0; $n<$num; $n++ ) {
@@ -159,6 +160,7 @@ global proc zooImportFolder( string $preset, string $optionStr ) {
 		//if we've reached the end of the trigger definition, flush all registers
 		if( $fileContents[$n] == "<end>" ) {
 			string $new = `zooCreateTriggerFromData $tgtNamespaces $trigger $trigCmd $connects $placement $shapes $objMenus`;
+			if( $firstObjectCreated == "" ) $firstObjectCreated = $new;
 
 			//make sure the trigger created by the zooCreateTriggerFromData command has the name it was given - otherwise other triggers may need to have their parents modified
 			if( $new != $trigger ) for( $i=$n; $i<$num; $i++ ) $fileContents[$i] = `substitute ( "^p="+ $trigger +"," ) $fileContents[$i] ( "p="+ $new +"," )`;
@@ -175,9 +177,12 @@ global proc zooImportFolder( string $preset, string $optionStr ) {
 		else if( $prefix == "t=" ) $trigCmd = $data;
 		else if( $prefix == "c=" ) $connects = $data;
 		else if( $prefix == "p=" ) $placement = $data;
-		else if( $prefix == "s=" ) $shapes[( `size $shapes` )] = $data;
-		else if( $prefix == "m=" ) $objMenus[( `size $objMenus` )] = $data;
+		else if( $prefix == "s=" ) $shapes[`size $shapes`] = $data;
+		else if( $prefix == "m=" ) $objMenus[`size $objMenus`] = $data;
 		}
+
+	zooCreateOutlines $firstObjectCreated 1;
+
 	return;
 	}
 
@@ -263,6 +268,10 @@ global proc string zooCreateTriggerFromData( string $tgtNamespaces[], string $n_
 	//add right click command to edit trigger
 	zooObjMenuUtils;
 	zooObjMenuAddCmdAll $trigger "edit trigger" "zooTriggerator; tabLayout -e -sti 2 zooTriggeratorTabs; select #; zooTriggeratorFunctions -loadTrigger;";
+
+	//turn the objMenu passthrough on
+	addAttr -at "bool" -ln showMenusFromConnects $trigger;
+	setAttr ( $trigger +".showMenusFromConnects" ) 1;
 
 	for( $n=0; $n<`size $connects`; $n++ ) zooAddConnectTo $trigger $connects[$n] $connectSlots[$n];
 	zooTrigSetCmd $trigger `zooStrNewlinesToRealNewlines $t_data`;
@@ -397,8 +406,8 @@ global proc int[] zooGetAdjecentVerts( string $shape, int $vert ) {
 //------
 global proc zooCreateOutlines( string $folderName, int $recursive ) {
 	string $folders[] = { $folderName };
-	float $scale = 1.02;
-	int $maxRecurse = 50;
+	float $scale = 1.06;
+	int $maxRecurse = 150;
 	int $n = 0;
 
 	if( $recursive ) while( true ) {

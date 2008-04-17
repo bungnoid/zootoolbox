@@ -59,15 +59,15 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 	//------
 	//build the objects
 	//------
-		string $ikArmSpace = `zooCSTBuildControl null ( $prefix +"_ik_limb_space"+ $id ) $wrist "-scale 1 -curve 0"`;
-		string $fkArmSpace = `zooCSTBuildControl null ( $prefix +"_fk_limb_space"+ $id ) $bicep "-scale 1 -curve 0"`;
-		string $driverUpper = `zooCSTBuildControl $fkType ( $prefix +"_fk_limbUpper_ctrl"+ $id ) $bicep ( "-orient 1 -scale "+ $scale +" -curve "+ $fkCurve +" -colour "+ $colour )`;
-		string $driverMid = `zooCSTBuildControl $fkType ( $prefix +"_fk_limbMiddle_ctrl"+ $id ) $elbow ( "-orient 1 -scale "+ $scale +" -curve "+ $fkCurve +" -colour "+ $colour )`;
-		string $driverLower = `zooCSTBuildControl $fkType ( $prefix +"_limbEnd_ctrl"+ $id ) $wrist ( "-orient 1 -scale "+ $scale +" -curve "+ $fkCurve +" -colour "+ $colour )`;
-		string $wristOrient = `zooCSTBuildControl null ( $prefix +"_limbEnd_orient_lockthis"+ $id ) $wrist "-orient 1 -scale 1 -curve 0"`;
-		string $wristOrientOffset = `zooCSTBuildControl null ( $prefix +"_limbEnd_orient_offset"+ $id ) $wrist "-scale 1 -curve 0"`;
-		string $poleControlSpace = `zooCSTBuildControl null ( $prefix +"_pole_space"+ $id ) "" "-scale 1 -curve 0"`;
-		string $poleControl = `zooCSTBuildControl $poleType ( $prefix +"_pole_ctrl"+ $id ) "" ( "-scale "+ $scale +" -curve "+ $isCurve +" -colour "+ $colour )`;
+		string $ikArmSpace = `zooCSTBuildControl null ( "ik_limbSpace"+ $id ) $wrist "-scale 1 -curve 0"`;
+		string $fkArmSpace = `zooCSTBuildControl null ( "fk_limbSpace"+ $id ) $bicep "-scale 1 -curve 0"`;
+		string $driverUpper = `zooCSTBuildControl $fkType ( "fk_limbUpperControl"+ $id ) $bicep ( "-orient 1 -scale "+ $scale +" -curve "+ $fkCurve +" -colour "+ $colour )`;
+		string $driverMid = `zooCSTBuildControl $fkType ( "fk_limbMiddleControl"+ $id ) $elbow ( "-orient 1 -scale "+ $scale +" -curve "+ $fkCurve +" -colour "+ $colour )`;
+		string $driverLower = `zooCSTBuildControl $fkType ( "limbEndControl"+ $id ) $wrist ( "-orient 1 -scale "+ $scale +" -curve "+ $fkCurve +" -colour "+ $colour )`;
+		string $wristOrient = `zooCSTBuildControl null ( "limbEnd_orient_lockthis"+ $id ) $wrist "-orient 1 -scale 1 -curve 0"`;
+		string $wristOrientOffset = `zooCSTBuildControl null ( "limbEnd_orient_offset"+ $id ) $wrist "-scale 1 -curve 0"`;
+		string $poleControlSpace = `zooCSTBuildControl null ( "poleSpace"+ $id ) "" "-scale 1 -curve 0"`;
+		string $poleControl = `zooCSTBuildControl $poleType ( "poleControl"+ $id ) "" ( "-scale "+ $scale +" -curve "+ $isCurve +" -colour "+ $colour )`;
 
 		parent $wristOrientOffset $wristOrient;
 		delete `parentConstraint $wrist $wristOrientOffset`;
@@ -94,7 +94,7 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 	//build the pole control selection trigger
 	//------
 		string $lineNode = `group -em`;
-		$lineNode = `rename $lineNode ( $prefix +"_pole_line"+ $id )`;
+		$lineNode = `rename $lineNode ( "pole_line"+ $id )`;
 		zooAlignFast $elbow $lineNode 0;
 		pointConstraint $elbow $lineNode;
 		zooAttrState "-attrs t r s v -k 0 -l 1" $lineNode;
@@ -104,10 +104,10 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 	//build the IK handle
 	//------
 		string $limbControl = zooGetElement_str(0,`ikHandle -fs 1 -sj $driverUpper -ee $driverLower -solver ikRPsolver`);
-		string $limbControlObject = `zooCSTBuildControl $ikType ( $prefix +"_limb_ctrl"+ $id ) "" ( "-scale "+ $scale +" -curve "+ $isCurve +" -colour "+ $colour )`;
+		string $limbControlObject = `zooCSTBuildControl $ikType ( "limbControl"+ $id ) "" ( "-scale "+ $scale +" -curve "+ $isCurve +" -colour "+ $colour )`;
 		string $limbControlOrient = `zooCSTOrient2Obj $wrist $limbControl`;
 
-		$limbControl = `rename $limbControl ( $prefix +"_limb_ctrl"+ $id )`;
+		$limbControl = `rename $limbControl ( "limbControl"+ $id )`;
 		parent $limbControlOrient $ikArmSpace;
 		for( $s in `listRelatives -f -s $limbControlObject` ) parent -add -s $s $limbControl;
 		delete $limbControlObject;
@@ -264,7 +264,7 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 
 		for( $n=1; $n<`size $bicepTwistGrps`-1; $n++ ) {
 			string $name = `match "[^|]+$" $bicepTwistGrps[$n]`;
-			string $multNode = `shadingNode -asUtility -name ( $prefix +"_"+ $name +"_fraction_pos" ) multiplyDivide`;
+			string $multNode = `shadingNode -asUtility -name ( ""+ $name +"_fraction_pos" ) multiplyDivide`;
 			string $objAxis = `zooCSTJointDirection $bicepTwistGrps[$n]`;
 
 			setAttr ( $multNode +".input1X" ) ( `getAttr ( $bicepTwistGrps[$n] +".t"+ $objAxis )`/$bicepLength );
@@ -278,7 +278,7 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 
 		for( $n=1; $n<`size $wristTwistGrps`; $n++ ) {
 			string $name = `match "[^|]+$" $wristTwistGrps[$n]`;
-			string $multNode = `shadingNode -asUtility -name ( $prefix +"_"+ $name +"_fraction_pos" ) multiplyDivide`;
+			string $multNode = `shadingNode -asUtility -name ( ""+ $name +"_fraction_pos" ) multiplyDivide`;
 			string $objAxis = `zooCSTJointDirection $wristTwistGrps[$n]`;
 
 			setAttr ( $multNode +".input1X" ) ( `getAttr ( $wristTwistGrps[$n] +".t"+ $objAxis )`/$elbowLength );

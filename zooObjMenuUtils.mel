@@ -115,4 +115,11 @@ global proc zooRemoveAllMenus( string $obj ) {
 	}
 
 
+global proc setObjMenuKillState( string $obj, int $state ) {
+	if( !$state ) if( `objExists ( $obj +".zooObjMenuDie" )` ) deleteAttr ( $obj +".zooObjMenuDie" );
+	if( !`objExists ( $obj +".zooObjMenuDie" )` ) addAttr -at "bool" -ln zooObjMenuDie $obj;
+	setAttr ( $obj +".zooObjMenuDie" ) 1;
+	}
+
+
 //zoo.end

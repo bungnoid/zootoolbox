@@ -249,6 +249,7 @@ global proc zooXferAnimTransferAdd( string $src, string $tgt, string $rangeStr, 
 //all frames once for each object
 //------
 global proc zooXferTrace( string $srcList[], string $tgtList[], int $keysOnly, int $keysOnlyRotate, int $matchRo, int $processPostCmds, int $sortByHeirarchy, int $start, int $end ) {
+	print("zooXferTrace {\""+ `zooArrayToStr_str $srcList "\",\""` +"\"} {\""+ `zooArrayToStr_str $tgtList "\",\""` +"\"} "+ $keysOnly +" "+ $keysOnlyRotate +" "+ $matchRo +" "+ $processPostCmds +" "+ $sortByHeirarchy +" "+ $start +" "+ $end +";\n" );
 	//first, make sure the src and tgt lists contain only valid items
 	string $cleanSrc[] = {};
 	string $cleanTgt[] = {};
@@ -302,7 +303,7 @@ global proc zooXferTrace( string $srcList[], string $tgtList[], int $keysOnly, i
 	string $postCmds[] = {};
 	for( $n=0; $n<$numTgts; $n++ ) {
 		string $cmd = `zooGetPostTraceCmd $tgtList[$n]`;
-		if( $cmd != "" ) $postCmds[$n] = `zooPopulateCmdStr $tgtList[$n] $cmd`;
+		if( $cmd != "" ) $postCmds[$n] = `zooPopulateCmdStr $tgtList[$n] $cmd {$srcList[$n]}`;
 		}
 
 	zooAllViews 0;

@@ -13,6 +13,7 @@ zooVectors;
 //script documentation is at the end of this file
 global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string $wrist, string $bases[], string $optionStr ) {
 	$optionStr = "."+ $optionStr;
+	echoRigElementCreationCommand ( "zooCSTBuildPrimHand \""+ $prefix +"\" "+ $parity +" "+ $wrist +" { \""+ `zooArrayToStr_str $bases "\", \""` +"\" } \""+ $optionStr +"\";" );
 	//------
 	//parse optionStr to determine which flags are enabled for this proc
 	//------
@@ -58,7 +59,7 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 		string $worldParts[] = `zooCSTBuildWorld $prefix $optionStr`;
 		string $handControl = zooGetElement_str(0,`zooGetBrandedWithList { "name", "arm" } { $prefix, $suffix }`);
 		string $wristControl = zooGetElement_str(0,`zooGetBrandedWithList { "name", "fk_wrist" } { $prefix, $suffix }`);
-		string $handqss = `sets -empty -text "gCharacterSet" -n ( $prefix + "_handControls"+ $suffix )`;
+		string $handqss = `sets -empty -text "gCharacterSet" -n ( "handControls"+ $suffix )`;
 		string $prim = "";
 		string $wristFromPrim = "";
 
@@ -117,6 +118,7 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 		zooAttrState "-attrs v -k 0" $poseCurve;
 		addAttr -at message -ln controlObject $poseCurve;  //build the attribute so posesToSliders knows where to write the pose sliders to when poses are rebuilt
 		connectAttr -f ( $handSliders +".message" ) ( $poseCurve +".controlObject" );
+		setAttr ( $poseCurve +".v" ) 0;
 
 	//now start building the controls
 		string $allCtrls[] = { $handSliders, $poseCurve };
@@ -279,16 +281,21 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 		string $toggleCmd = "int $vis = !`getAttr %"+ $connects[0] +".v`;\n";
 		string $offset1Cmd = "";
 		string $offset2Cmd = "";
+		float $smallIncrement = ($maxSlider-$minSlider)/80;
+		float $bigIncrement = ($maxSlider-$minSlider)/15;
 
 		for( $n in $connects ) $toggleCmd += "setAttr %"+ $n +".v $vis;\n";
-		for( $n=0; $n<`size $slider_bend`-1; $n++ ) $offset1Cmd += "setAttr -c #."+ $slider_bend[$n] +" ( `getAttr #."+ $slider_bend[$n] +"`+ "+ (0.1*($n+1)) +" );\n";  //-1 on the range because we assume the thumb is the last digit
-		for( $n=0; $n<`size $slider_bend`-1; $n++ ) $offset2Cmd += "setAttr -c #."+ $slider_bend[$n] +" ( `getAttr #."+ $slider_bend[$n] +"`+ "+ (0.35*($n+1)) +" );\n";
+		for( $n=0; $n<`size $slider_bend`-1; $n++ ) $offset1Cmd += "setAttr -c #."+ $slider_bend[$n] +" ( `getAttr #."+ $slider_bend[$n] +"`+ "+ ($smallIncrement*($n+1)) +" );\n";  //-1 on the range because we assume the thumb is the last digit
+		for( $n=0; $n<`size $slider_bend`-1; $n++ ) $offset2Cmd += "setAttr -c #."+ $slider_bend[$n] +" ( `getAttr #."+ $slider_bend[$n] +"`+ "+ ($bigIncrement*($n+1)) +" );\n";
 		int $qssIdx = `zooAddConnect $handSliders $handqss`;
 		zooObjMenuAddCmdAll $handSliders "hide/show fingers" $toggleCmd;
 		zooObjMenuAddCmdAll $handSliders "select all fingers" ( "select %"+ $qssIdx +";" );
 		zooObjMenuAddCmdAll $handSliders "add small offset to fingers" $offset1Cmd;
 		zooObjMenuAddCmdAll $handSliders "add bigger offset to fingers" $offset2Cmd;
+		zooObjMenuAddCmdAll $handSliders "record pose" "string $ans = `promptDialog -m \"pose name\" -t \"pose name\" -b OK -b Cancel -db OK`;\nif( $ans == \"OK\" ) {\n string $poseName = `promptDialog -q -tx`; string $objs[] = `listRelatives -ad -type nurbsSurface @1,5`;\n $objs = `listRelatives -p $objs`;\n string $cmdStr = `zooWriteSetAttrCmd # $objs`;\n zooObjMenuAddCmdAll # (\"POSE: \"+ $poseName ) $cmdStr;\n}";
 		for( $c in $allCtrls ) sets -add $handqss $c;
+		for( $b in $baseControls ) setAttr ( $b +".v" ) 0;  //individual controls are built hidden
+		for( $obj in {$handSliders} ) setObjMenuKillState $obj 1;
 
 
 	//------
@@ -371,4 +378,3 @@ option flags
 
 
 //zoo.end
-//macaroniKazoo ©2007

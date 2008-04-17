@@ -41,6 +41,9 @@ global proc string zooBuildControl( string $name, string $optionStr ) {
 	string $placepivot = "";
 	string $pivot = "";
 	string $offset = "";
+	string $hide = "";
+	string $lock = "";
+	string $parent = "";
 	float $scale = 1;
 	float $expand = 0.04;
 	int $joint = 0;
@@ -48,6 +51,7 @@ global proc string zooBuildControl( string $name, string $optionStr ) {
 	int $freeze = 1;
 	int $curve = 1;
 	int $surface = 1;
+	int $constrain = 0;
 
 	select -cl;
 	$temp = `zooGetFlagArguments $optionStr type`; if( `size $temp` ) $type = $temp[0];
@@ -66,6 +70,10 @@ global proc string zooBuildControl( string $name, string $optionStr ) {
 	$temp = `zooGetFlagArguments $optionStr placepivot`; if( `size $temp` ) $placepivot = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr pivot`; if( `size $temp` ) $pivot = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr offset`; if( `size $temp` ) $offset = `zooArrayToStr_str $temp " "`;
+	$temp = `zooGetFlagArguments $optionStr hide`; if( `size $temp` ) $hide = `zooArrayToStr_str $temp " "`;
+	$temp = `zooGetFlagArguments $optionStr lock`; if( `size $temp` ) $lock = `zooArrayToStr_str $temp " "`;
+	$temp = `zooGetFlagArguments $optionStr parent`; if( `objExists $temp[0]` ) $parent = $temp[0];
+	$temp = `zooGetFlagArguments $optionStr constrain`; if( `size $temp` ) $constrain = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr path`; if( `size $temp` ) {
 		string $tempPath = `zooArrayToStr_str $temp " "`;
 		if( `filetest -d $tempPath` ) $path = $tempPath;
@@ -90,6 +98,7 @@ global proc string zooBuildControl( string $name, string $optionStr ) {
 	if( $align == "%p" ) $align = $place;
 	if( $placepivot == "%p" ) $placepivot = $place;
 	if( $placepivot == "%a" ) $placepivot = $align;
+	if( $lock == "%h" ) $lock = $hide;
 
 	//make sure there are shape files in the path directory
 	string $shapes[] = `zooGetFiles $path "control.*.shape"`;
@@ -214,9 +223,18 @@ global proc string zooBuildControl( string $name, string $optionStr ) {
 	if( !$curve ) for( $s in $shapes ) if( `nodeType $s` == "nurbsCurve" ) delete $s;
 	if( !$surface ) for( $s in $shapes ) if( `nodeType $s` == "nurbsSurface" ) delete $s;
 
+	//if the parent exists - parent the new control to the given parent
+	if( `objExists $parent` ) parent $grp $parent;
+
+	//hide and lock attributes
+	if( $hide != "" ) zooAttrState ( "-attrs "+ $hide +" -k 0" ) $obj;
+	if( $lock != "" ) zooAttrState ( "-attrs "+ $lock +" -l 1" ) $obj;
+
 	//now snap the pivot to alignpivot object if it exists
 	if( `objExists $placepivot` ) zooAlign ( "-pivot 1 -src "+ $placepivot +" -tgt "+ $obj );
-	// print( "zooBuildControl \""+ $name +"\" \""+ $optionStr +"\";\n" );
+
+	//constrain the target object to this control?
+	if( $constrain ) if( `objExists $place` ) parentConstraint -mo $obj $place;
 
 	//if the user has specified skin geometry as the representation type, then build the geo
 	//NOTE: this really needs to happen after ALL the placement has happened otherwise the extracted

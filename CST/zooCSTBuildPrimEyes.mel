@@ -11,6 +11,7 @@ zooRenamerUtils;
 
 //script documentation is at the end of this file
 global proc string[] zooCSTBuildPrimEyes( string $prefix, string $eyeL, string $eyeR, string $optionStr ) {
+	echoRigElementCreationCommand ( "zooCSTBuildPrimEyes \""+ $prefix +"\" "+ $eyeL +" "+ $eyeR +" \""+ $optionStr +"\";" );
 	//------
 	//parse optionStr to determine which flags are enabled for this proc
 	//------

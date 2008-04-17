@@ -282,7 +282,7 @@ global proc string zooFindSpaceAttrNode( string $obj ) {
 
 	for( $n=0; $n<`size $cmds`; $n++ ) {
 		string $cmdName = `zooGetObjMenuCmdName $obj $cmds[$n]`;
-		string $cmdStr = zooPopulateCmdStr($obj,`zooGetObjMenuCmdStr $obj $cmds[$n]`);
+		string $cmdStr = zooPopulateCmdStr($obj,`zooGetObjMenuCmdStr $obj $cmds[$n]`,{});
 		string $cmdLines[] = {};
 
 		if( `match "^parent to " $cmdName` != "parent to " ) continue;

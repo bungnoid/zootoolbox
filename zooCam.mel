@@ -97,6 +97,7 @@ global proc zooCamUI() {
 		menuItem -l "other" -c( "{string $a=`promptDialog -m \"enter aspect ratio\" -b Create -b Cancel`; if( $a != \"Cancel\" ) zooAddCameraMask "+ $curCam +" `promptDialog -q -text`;}");
 	setParent -m ..;
 	menuItem -d 1;
+	menuItem -l "instance eazel for this camera" -c( "zooInstanceEazel "+ $curCam +";" );
 	menuItem -l "use this camera for eazel" -c( "zooGreaseMonkeyUtils; zooMonkeySee "+ $curCam +";" );
 	menuItem -cb $useForEazel -l "always use lookthru for eazel" -c( "if( #1 ) optionVar -iv zooCamSetEazel 1; else optionVar -rm zooCamSetEazel;" );
 	menuItem -d 1;

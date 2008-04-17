@@ -11,6 +11,7 @@ zooRenamerUtils;
 
 //script documentation is at the end of this file
 global proc string[] zooCSTBuildPrimBasicSpine( string $prefix, string $root, string $spineBase, string $spineEnd, string $optionStr ) {
+	echoRigElementCreationCommand ( "zooCSTBuildPrimBasicSpine \""+ $prefix +"\" "+ $root +" "+ $spineBase +" "+ $spineEnd +" \""+ $optionStr +"\";" );
 	//------
 	//parse optionStr to determine which flags are enabled for this proc
 	//------
@@ -101,7 +102,7 @@ global proc string[] zooCSTBuildPrimBasicSpine( string $prefix, string $root, st
 		float $colourIncB = ($endColour[2] - $startColour[2])/$num;
 
 		for( $n=0; $n<$num; $n++ ) {
-			$controllers[$n] = `zooBuildControl ( "spine_"+$n+"FKControl" ) ( "-orient 1 -align %p -type "+ $type +" -axis "+ $axis +" -place "+ $spines[$n] +" -scale "+ ($scale*1.5) +" -colour "+ $spineColourR +" "+ $spineColourG +" "+ $spineColourB +" 0.65" )`;
+			$controllers[$n] = `zooBuildControl ( "spine_"+$n+"FKControl" ) ( "-orient 1 -align %p -type "+ $type +" -axis "+ $axis +" -place "+ $spines[$n] +" -offset -5fwd -scale "+ ($scale*1.5) +" -colour "+ $spineColourR +" "+ $spineColourG +" "+ $spineColourB +" 0.65" )`;
 			$controlSpaces[$n] = zooGetElement_str(0,`listRelatives -p $controllers[$n]`);
 
 			string $parent = $rootGimbal;
@@ -127,7 +128,10 @@ global proc string[] zooCSTBuildPrimBasicSpine( string $prefix, string $root, st
 		string $spaceNodes[] = {};
 
 		if( `size $parents` ) $baseParents = `zooAddArray_str $baseParents $parents`;
-		if( $spaceswitching ) $spaceNodes = `zooBuildSpaceSwitch $controllers[0] $controlSpaces[0] $baseParents { "root", "world" } "-mo"`;
+		if( $spaceswitching ) {
+			$spaceNodes = `zooBuildSpaceSwitch $controllers[0] $controlSpaces[0] $baseParents { "root", "world" } "-mo"`;
+			for( $obj in $controllers ) setObjMenuKillState $obj 1;
+			}
 		delete -icn ( $controlSpaces[0] + ".tx" );
 		delete -icn ( $controlSpaces[0] + ".ty" );
 		delete -icn ( $controlSpaces[0] + ".tz" );
@@ -185,6 +189,7 @@ global proc string[] zooCSTBuildPrimBasicSpine( string $prefix, string $root, st
 
 		zooSetObjMenuCmdName $rootControl "draw line of action" $cmdNum;
 		zooSetObjMenuCmdStr $rootControl $cmdStr $cmdNum;
+		for( $obj in {$rootControl} ) setObjMenuKillState $obj 1;
 
 
 	//------

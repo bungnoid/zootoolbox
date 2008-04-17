@@ -1,3 +1,4 @@
+//
 // Character Setup Toolkit
 //
 // Created by Hamish McKenzie zootoolbox@googlegroups.com
@@ -247,12 +248,11 @@ global proc zooCSTWindowFunctions( string $function, string $variable01 ) {
 		case "guessOpposing":
 			string $suffix = $variable01;
 			string $selObjs[] = `ls -sl`;
-			int $stringSize = `size $selObjs[0]`;
-			string $objSuffix = `substring $selObjs[0] ( $stringSize - 1 ) $stringSize`;
-			string $guessedName = `substring $selObjs[0] 1 ( $stringSize - 2 )`;
+			int $parity = `zooMatchHasParity $selObjs[0]`;
+			string $guessedName = `zooGetOppositePath $selObjs[0]`;
 
-			if( $objSuffix == "_L" && `objExists ( $guessedName +"_R" )` ) textField -e -tx ( $guessedName +"_R" ) ( "zooCSTText"+ $suffix );
-			if( $objSuffix == "_R" && `objExists ( $guessedName +"_L" )` ) textField -e -tx ( $guessedName +"_L" ) ( "zooCSTText"+ $suffix );
+			if( $parity == 1 && `objExists $guessedName` ) textField -e -tx $guessedName ( "zooCSTText"+ $suffix );
+			if( $parity == 2 && `objExists $guessedName` ) textField -e -tx $guessedName ( "zooCSTText"+ $suffix );
 			break;
 
 		case "addMPath":
@@ -408,7 +408,7 @@ global proc zooCSTWindowFunctions( string $function, string $variable01 ) {
 
 			if( $prefix == "" ) error "You must specify a prefix";
 			if( `checkBox -q -v zooCSTCheckHandL` ) {
-				string $wrist[] = `listRelatives -f -p $baseIndexL`;
+				string $wrist[] = `listRelatives -pa -p $baseIndexL`;
 				string $buildOpts = " -names ";
 				string $existing[] = {};
 				if( `objExists $baseIndexL` ) {
@@ -435,7 +435,7 @@ global proc zooCSTWindowFunctions( string $function, string $variable01 ) {
 				}
 
 			if( `checkBox -q -v zooCSTCheckHandR` ) {
-				string $wrist[] = `listRelatives -f -p $baseIndexR`;
+				string $wrist[] = `listRelatives -pa -p $baseIndexR`;
 				string $buildOpts = " -names ";
 				string $existing[] = {};
 				if( `objExists $baseIndexR` ) {
@@ -476,10 +476,14 @@ global proc zooCSTWindowFunctions( string $function, string $variable01 ) {
 
 			if( $prefix == "" ) error "You must specify a prefix";
 			if( `checkBox -q -v zooCSTCheckSubPrimL` && `objExists $upperL` && `objExists $midL` && `objExists $lowerL` ) {
-				zooCSTBuildIKFK $prefix l $upperL $midL $lowerL ( $options +" -scale "+ $scale );
+				$cmd = "zooCSTBuildIKFK "+ $prefix +" l "+ $upperL +" "+ $midL +" "+ $lowerL +" \""+ $options +" -scale "+ $scale +"\"";
+				eval($cmd);
+				echoRigElementCreationCommand $cmd;
 				}
 			if( `checkBox -q -v zooCSTCheckSubPrimR` && `objExists $upperR` && `objExists $midR` && `objExists $lowerR` ) {
-				zooCSTBuildIKFK $prefix r $upperR $midR $lowerR ( $options +" -scale "+ $scale );
+				$cmd = "zooCSTBuildIKFK "+ $prefix +" r "+ $upperR +" "+ $midR +" "+ $lowerR +" \""+ $options +" -scale "+ $scale +"\"";
+				eval($cmd);
+				echoRigElementCreationCommand $cmd;
 				}
 			break;
 
@@ -491,7 +495,9 @@ global proc zooCSTWindowFunctions( string $function, string $variable01 ) {
 			//int $colour = `colorIndexSliderGrp -q -v zooCSTColourSlider`;
 
 			if( $prefix == "" ) error "You must specify a prefix";
-			zooCSTBuildSplineIK $prefix $start $end ( $options +" -stretch "+ $stretch +" -scale "+ $scale );
+			string $cmd = "zooCSTBuildSplineIK "+ $prefix +" "+ $start +" "+ $end +" \""+ $options +" -stretch "+ $stretch +" -scale "+ $scale +"\"";
+			eval($cmd);
+			echoRigElementCreationCommand $cmd;
 			break;
 
 		case "createSubPrimPole":
@@ -502,9 +508,11 @@ global proc zooCSTWindowFunctions( string $function, string $variable01 ) {
 			string $options = `textField -q -tx zooCSTTextOptsSubPrimPole`;
 
 			if( $prefix == "" ) error "You must specify a prefix";
-			float $pos[] = `zooFindPolePosition ( $options +" -start "+ $start +" -mid "+ $mid +" -end "+ $end +" -scale "+ $scale )`;
-			string $control = `zooBuildControl ( $prefix +"_"+ $mid +"_pole" ) ( "-type "+ $type +" -scale "+ $scale )`;
-			move $pos[0] $pos[1] $pos[2] $control;
+			string $cmd = "{float $pos[] = `zooFindPolePosition \""+ $options +" -start "+ $start +" -mid "+ $mid +" -end "+ $end +" -scale "+ $scale +"\"`;\n";
+			$cmd += "string $control = `zooBuildControl \""+ $prefix +"_"+ $mid +"_pole\" \"-type "+ $type +" -scale "+ $scale +"\";\n";
+			$cmd += "move $pos[0] $pos[1] $pos[2] $control;}";
+			eval($cmd);
+			echoRigElementCreationCommand $cmd;
 			break;
 
 		case "createSubPrimMPath":
@@ -671,7 +679,11 @@ global proc zooCSTSpaceUIFunctions( string $function ) {
 			zooGetSpaceTargetsNames $obj $existingSpace {};
 			$spaces = `zooSubtractArray_str $spaces $existingSpace`;
 			$names = `zooIndexCrop_str $names ( "-"+ (size($spaces)) +":" )`;
-			for( $n=0; $n<`size $spaces`; $n++ ) zooAddSpaceSwitch $obj $parent $spaces[$n] $names[$n] "-mo";
+			for( $n=0; $n<`size $spaces`; $n++ ) {
+				string $cmd = "zooAddSpaceSwitch \""+ $obj +"\" \""+ $parent +"\" \""+ $spaces[$n] +"\" \""+ $names[$n] +"\" \"-mo\"";
+				eval($cmd);
+				echoRigElementCreationCommand $cmd;
+				}
 			break;
 		}
 	}
@@ -701,7 +713,10 @@ global proc zooCSTCtrlUIFunctions( string $function ) {
 			string $sel[] = `ls -sl -type transform -type joint`;
 			if( `objExists $sel[0]` ) nameField -e -o $sel[0] zooCSTNamePivotCtrl;
 			break;
-
+		case "-loadpar":
+			string $sel[] = `ls -sl -type transform -type joint`;
+			if( `objExists $sel[0]` ) nameField -e -o $sel[0] zooCSTNameParentCtrl;
+			break;
 		case "-loadali":
 			string $sel[] = `ls -sl -type transform -type joint`;
 			if( `objExists $sel[0]` ) nameField -e -o $sel[0] zooCSTNameAlignCtrl;
@@ -713,10 +728,12 @@ global proc zooCSTCtrlUIFunctions( string $function ) {
 			string $tgt = `nameField -q -o zooCSTNamePlaceCtrl`;
 			string $piv = `nameField -q -o zooCSTNamePivotCtrl`;
 			string $ali = `nameField -q -o zooCSTNameAlignCtrl`;
+			string $par = `nameField -q -o zooCSTNameParentCtrl`;
 			string $type = `textField -q -tx zooCSTTextCtrlType`;
 			string $axis = `radioCollection -q -sl zooCSTCtrlAxis`;
 			string $name = `match "[^|]+$" $tgt`;
 			string $colour = `textField -q -tx zooCSTTextCtrlColour`;
+			string $attrs[] = {"T","R","S","V"};
 			float $scale = `floatField -q -v zooCSTFloatScale`;
 			float $offsetUp = `floatField -q -v zooCSTFloatOffUp`;
 			float $offsetSide = `floatField -q -v zooCSTFloatOffSide`;
@@ -733,8 +750,37 @@ global proc zooCSTCtrlUIFunctions( string $function ) {
 			if( $useSelected ) $tgts = `ls -sl`;
 			else $tgts = {$tgt};
 			for( $obj in $tgts ) {
-				string $ctrl = `zooBuildControl $name ( "-type "+ $type +" -axis "+ $axis +" -place "+ $obj +" -placepivot "+ $piv +" -align "+ ($useSelected? "%p": $ali) +" -surface "+ $surface +" -orient "+ $orient +" -joint "+ $joint +" -colour "+ $colour +" -scale "+ $scale +" -offset "+ $offsetUp +"up "+ $offsetSide +"side "+ $offsetFwd +"fwd" )`;
-				if( $constrain ) if( `objExists $obj` ) parentConstraint -mo $ctrl $obj;
+				string $cmd = "zooBuildControl \""+ $name +"\" \"-type "+ $type +" -axis "+ $axis +" -surface "+ $surface +" -orient "+ $orient +" -joint "+ $joint +" -scale "+ $scale;
+
+				if( `objExists $obj` ) $cmd += " -place "+ $obj;
+				if( `objExists $piv` ) $cmd += " -placepivot "+ $piv;
+				if( `objExists $ali` ) $cmd += " -align "+ ($useSelected? "%p": $ali);
+				if( `objExists $par` ) $cmd += " -parent "+ $par;
+				if( $colour != "" ) $cmd += " -colour "+ $colour;
+				if( $offsetUp != 0 || $offsetSide != 0 || $offsetFwd != 0 ) {
+					$cmd += " -offset ";
+					if( $offsetUp != 0 ) $cmd += $offsetUp +"up ";
+					if( $offsetSide != 0 ) $cmd += $offsetSide +"side ";
+					if( $offsetFwd != 0 ) $cmd += $offsetFwd +"fwd ";
+					}
+
+				//get the attributes to lock and hide
+				string $hideStr = "";
+				string $lockStr = "";
+				for( $attr in $attrs ) {
+					int $hideVal = `checkBox -q -v ( "zooCSTCheckHide"+ $attr )`;
+					int $lockVal = `checkBox -q -v ( "zooCSTCheckLock"+ $attr )`;
+					if( $hideVal ) $hideStr += " "+ (tolower($attr));
+					if( $lockVal ) $lockStr += " "+ (tolower($attr));
+					}
+				if( $hideStr != "" ) $cmd += " -hide"+ $hideStr;
+				if( $lockStr != "" ) $cmd += " -lock"+ $lockStr;
+				if( $constrain ) $cmd += " -constrain 1";
+				$cmd += "\"";
+
+				//run the cmd
+				string $ctrl = eval($cmd);
+				echoRigElementCreationCommand $cmd;
 				}
 			break;
 		}

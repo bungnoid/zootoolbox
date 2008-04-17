@@ -191,25 +191,6 @@ global proc string[] zooGetInBTweenJoints( string $start, string $end ) {
 	}
 
 
-global proc zooReplaceShape( string $srcObj, string $tgtObj ) {
-	//source object is the source transform - ie the shape you want to use
-	//target object is the transform of the object you want the source's shape to be used for
-	string $dupeSrc = zooGetElement_str(0,`duplicate -rc $srcObj`);
-	string $srcShapes[] = `listRelatives -pa -s $dupeSrc`;
-	string $tgtShapes[] = `listRelatives -pa -s $tgtObj`;
-	string $cs[] = `listRelatives -pa -type transform $dupeSrc`;
-
-	for( $c in $cs ) if( `objExists $c` ) delete $c;
-	if( `size $tgtShapes` ) delete $tgtShapes;
-	zooAttrState "-attrs t r s -k 1 -l 0" $dupeSrc;  //make sure all transform attributes are unlocked
-	delete `parentConstraint $tgtObj $dupeSrc`;
-	parent $dupeSrc $tgtObj;
-	makeIdentity -a 1 -t 1 -r 1 -s 1 $dupeSrc;
-	for( $shape in $srcShapes ) parent -add -s $shape $tgtObj;
-	delete $dupeSrc;
-	}
-
-
 //NOTE - the three arg defines the three joints to define the normal.  if empty
 //the normal is calculated from the first, mid and final joint in the list
 global proc zooOrientChainProperly( string $chain[], string $three[] ) {
@@ -303,6 +284,34 @@ global proc zooCSTUtilsRigVis( string $function ) {
 		setAttr -l 0 ( $obj + ".v" );
 		setAttr -l 1 ( $obj + ".v" ) $vis;
 		}
+	}
+
+
+global proc finalizeRigBuild( string $prefix ) {
+	string $infoNodes[] = `ls -type vstInfo`;
+	string $geoLayer = `createDisplayLayer -name "geo" -empty`;
+	string $ctrlsLayer = `createDisplayLayer -name "ctrls" -empty`;
+
+	editDisplayLayerMembers -noRecurse $geoLayer ( $infoNodes[0] );
+	editDisplayLayerMembers -noRecurse $ctrlsLayer `sets -q ( "all_ctrls" )`;
+	setAttr ( $geoLayer +".displayType" ) 2;
+	catchQuiet( parent("parts_grp",$infoNodes[0]) );
+	echoRigElementCreationCommand( "finalizeRigBuild \""+ $prefix +"\";" );
+	}
+
+
+//deals with echoing teh creation of a rig element to the appropriate places
+global proc echoRigElementCreationCommand( string $command ) {
+	if( `scrollField -q -ex rigBuildMacroOutput` ) {
+		string $existingText = `scrollField -q -tx rigBuildMacroOutput`;
+		//is the last character a ;?
+		$command = strip($command);
+		int $len = `size $command`;
+		if( `substring $command $len $len` != ";" ) $command += ";";
+		$existingText += $command +"\n";
+		scrollField -e -tx $existingText rigBuildMacroOutput;
+		}
+	print( $command +"\n" );
 	}
 
 

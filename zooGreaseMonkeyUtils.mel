@@ -1,5 +1,6 @@
 zooArrays_str;
 zooArrays_int;
+zooEazelUtils;
 zooFlags;
 zooRegister;
 zooUtils;
@@ -314,70 +315,15 @@ global proc string zooGetBoardFromKey( int $key ) {
 
 
 //------
-//provides an easy way of placing objects in a camera view based on screen
-//space instead of coordinates.  this command takes the following flags:
-//
-// -obj [str]				the object to place
-// -resX [int]				the x-resolution of the camera view - this is optional, and will default to whatever is set in the render globals if not specified
-// -resY [int]				same as the -resX flag but for the y-resolution
-// -aspect [float]		if you don't care what the image resolution is, simply specify the aspect ratio.  this is useful for when you want to work to a screen space smaller than your render area
-// -x [float]				the x position to place the object at
-// -y [float]				the y position to place the object at
-// -padding [float]		the padding from the edge of the screen border
-//
-//the object is placed in the camera view that has the eazel attached to it
+//see zooPlaceOnEazel in zooEazelUtils for details
 //------
 global proc zooPlaceInCameraSpace( string $optionStr ) {
 	string $temp[] = {};
-	string $rGlobals = zooGetElement_str(0,`ls -type renderGlobals`);
-	string $resNode = zooGetElement_str(0,`listConnections -d 0 ( $rGlobals +".resolution" )`);
 	string $obj	= "";
-	string $camera = `zooQueryMonkeySee`;
-	float $xPercent = 0;
-	float $yPercent = 0;
-	float $padding = 0;
-	int $coordmode = 1;
-	int $resX = `getAttr ( $resNode+".width")`;
-	int $resY = `getAttr ( $resNode+".height")`;
+	string $eazel = `zooGetEazel 1`;
 
 	$temp = `zooGetFlagArguments $optionStr obj`; if( `size $temp` ) $obj = $temp[0];
-	$temp = `zooGetFlagArguments $optionStr camera`; if( `size $temp` ) $camera = $temp[0];
-	$temp = `zooGetFlagArguments $optionStr x`; if( `size $temp` ) $xPercent = $temp[0];
-	$temp = `zooGetFlagArguments $optionStr y`; if( `size $temp` ) $yPercent = $temp[0];
-	$temp = `zooGetFlagArguments $optionStr resX`; if( `size $temp` ) $resX = $temp[0];
-	$temp = `zooGetFlagArguments $optionStr resY`; if( `size $temp` ) $resY = $temp[0];
-	float $pixAspect = $resX/(float)$resY;
-	$temp = `zooGetFlagArguments $optionStr aspect`; if( `size $temp` ) $pixAspect = $temp[0];
-	$temp = `zooGetFlagArguments $optionStr coordmode`; if( `size $temp` ) $coordmode = $temp[0];
-	$temp = `zooGetFlagArguments $optionStr padding`; if( `size $temp` ) $padding = $temp[0];
-
-	if( !`objExists $obj` ) return;
-	if( !`objExists $camera` ) return;
-	string $eazel = `zooGetEazel 1`;
-	string $tempObj = `group -em`;
-	string $camShape = $camera;
-	int $unitScale = 1;
-
-	if( `currentUnit -q -l` == "m" ) $unitScale = 100;
-	if( `nodeType $camShape` != "camera" ) $camShape = zooGetElement_str(0,`listRelatives -s $camera`);
-	if( `nodeType $camShape` != "camera" ) return;
-	parent -r $tempObj $eazel;
-	setAttr ( $tempObj +".tz" ) -2;
-	$xPercent += $padding*(($xPercent-0.5)/-0.5);
-	$yPercent += $padding*(($yPercent-0.5)/-0.5);
-	if( $coordmode == 1 ) {
-		$xPercent = ($xPercent*2)-1;
-		$yPercent = ($yPercent*2)-1;
-		}
-	$xPercent -= ( 0.5/$unitScale );
-	$yPercent -= ( 0.5/$unitScale );
-	$yPercent /= $pixAspect;
-	$yPercent *= -1;
-	setAttr ( $tempObj +".tx" ) ( $xPercent/$unitScale );
-	setAttr ( $tempObj +".ty" ) ( $yPercent/$unitScale );
-	float $pos[] = `xform -q -ws -rp $tempObj`;
-	delete $tempObj;
-	move -ws -a -rpr $pos[0] $pos[1] $pos[2] $obj;
+	zooPlaceOnEazel $eazel $obj $optionStr;
 	}
 
 
@@ -386,16 +332,7 @@ global proc zooPlaceInCameraSpace( string $optionStr ) {
 //------
 global proc string zooQueryMonkeySee() {
 	string $eazel = `zooGetEazel 0`;
-	if( !`objExists $eazel` ) return "";
-	string $temp = `group -em`;
-	string $constraint[] = `parentConstraint $temp $eazel`;
-
-	parentConstraint -rm $temp $eazel;
-	delete $temp;
-
-	string $targets[] = {};
-	if( `objExists $constraint[0]` ) $targets = `parentConstraint -q -tl $constraint[0]`;
-	return $targets[0];
+	return zooGetEazelCamera($eazel);
 	}
 
 
@@ -404,25 +341,7 @@ global proc string zooQueryMonkeySee() {
 //------
 global proc zooMonkeySee( string $camera ) {
 	string $eazel = `zooGetEazel 1`;
-	string $temp = `group -em`;
-
-	//this ensures there are no parent constraints on the eazel already
-	delete `parentConstraint $temp $eazel` $temp;
-
-	//delete any expressions on the scale attribute
-	string $conx[] = `listConnections -d 0 ( $eazel +".sx" )`;
-	for( $c in $conx ) if( `objExists $c` ) delete $c;
-
-	//now check to see if the camera exists - now that we're sure we've cleaned up any old camera constraint/expressions
-	if( !`objExists $camera` ) return;
-	parentConstraint $camera $eazel;
-	string $units = `currentUnit -q -l`;
-	float $unitFactor = 1;
-
-	//the below "magic numbers" are - 2.54 to convert inches to cm (aperture is in inches) and the 10 converts the local length from mm to cm
-	if( $units == "m" ) $unitFactor = 100;
-	string $cameraShape = zooGetElement_str(0,`listRelatives -s $camera`);
-	expression -s( "float $scaleFac = "+ $cameraShape +".cameraScale * "+ $cameraShape +".horizontalFilmAperture / "+ $cameraShape +".focalLength * "+ $cameraShape +".nearClipPlane * 2.54 * 10 * "+ $unitFactor +";\n"+ $eazel +".scaleX = $scaleFac;\n"+ $eazel +".scaleY = $scaleFac;\n"+ $eazel +".scaleZ = 1.001*"+ $cameraShape +".nearClipPlane;" ) -o $eazel -ae 0 -uc all;
+	zooSetEazelCamera $eazel $camera;
 	}
 
 
@@ -464,9 +383,9 @@ global proc string zooGetEazel( int $force ) {
 	if( `objExists $cons[0]` ) return $cons[0];
 	string $eazel = `group -em`;
 	$eazel = `rename $eazel "zooEazel"`;
-	//addAttr -at message -ln zooEazelCamera $eazel;
+	addAttr -at message -ln zooEazel $eazel;
 	connectAttr -f ( $eazel +".message" ) ( $monkey +".zooEazel" );
-	zooMonkeySee persp;
+	zooMonkeySee `zooGetCurrentCamera`;
 	return $eazel;
 	}
 

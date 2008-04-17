@@ -11,6 +11,7 @@ zooStrUtils;
 zooTips;
 zooUtils;
 
+string $g_initialMacroText = "// rig build macro creating using v"+ (zooCSTInfo("version")) +"\n// authored by: \""+ `getenv USER` +"\" on: "+ `about -cd` +"\n";
 
 {
 string $windowName = "zooCSTWindow";
@@ -192,7 +193,7 @@ window -mb 1 -title $windowTitle -width 520 -sizeable 1 $windowName;
 				string $eyeCreateBut = `button -l "create eyes primitive" -c( "zooCSTWindowFunctions createEyes \"*\"" )`;
 				string $eyeOptsLbl = `text -l "additional options:"`;
 				string $eyeOptsTex = `textField zooCSTTextOptsHead`;
-				string $headValidBut = `button -l "check flags" -c( "zooCSTWindowFunctions validate zooCSTTextOptsHead" )`;
+				// string $headValidBut = `button -l "check flags" -c( "zooCSTWindowFunctions validate zooCSTTextOptsHead" )`;
 				popupMenu -p $eyeOptsTex -pmc( "zooBuildFlagPopup zooCSTTextOptsHead { \"orient 0\", \"spaceswitching 0\", \"parents\", \"world\", \"root\", \"chest\", \"head\", \"eyeParents\", \"neck 0\" }" ) zooCSTTextOptsHeadPopup;
 			setParent ..;
 
@@ -262,7 +263,7 @@ window -mb 1 -title $windowTitle -width 520 -sizeable 1 $windowName;
 				string $armCreateBut = `button -l "create arm primitive" -c( "zooCSTWindowFunctions createArm \"*\"" )`;
 				string $armOptsLbl = `text -l "additional options:"`;
 				string $armOptsTex = `textField zooCSTTextOptsArms`;
-				string $armsValidBut = `button -l "check flags" -c( "zooCSTWindowFunctions validate zooCSTTextOptsArms" )`;
+				// string $armsValidBut = `button -l "check flags" -c( "zooCSTWindowFunctions validate zooCSTTextOptsArms" )`;
 				popupMenu -p $armOptsTex -pmc( "zooBuildFlagPopup zooCSTTextOptsArms { \"buildclav 0\", \"spaceswitching 0\", \"parents\", \"world\", \"root\", \"chest\", \"head\", \"fkType\", \"ikType\", \"poleType\", \"triggers 0\", \"invert 1\" }" ) zooCSTTextOptsArmsPopup;
 			setParent ..;
 
@@ -339,7 +340,7 @@ window -mb 1 -title $windowTitle -width 520 -sizeable 1 $windowName;
 				string $legCreateBut = `button -l "create leg primitive" -c( "zooCSTWindowFunctions createLeg \"*\"" )`;
 				string $legOptsLbl = `text -l "additional options:"`;
 				string $legOptsTex = `textField -tx "" zooCSTTextOptsLegs`;
-				string $legsValidBut = `button -l "check flags" -c( "zooCSTWindowFunctions validate zooCSTTextOptsLegs" )`;
+				// string $legsValidBut = `button -l "check flags" -c( "zooCSTWindowFunctions validate zooCSTTextOptsLegs" )`;
 				string $legInfoText = `text -l "the -fkCurve flag forces zooCST to create the fk controls as curve controls\n\nthis allows you to combine control geometry types - for more information\non other flags that work in zooCST, please read the \"Additional Flags\" help"`;
 				popupMenu -p $legOptsTex -pmc( "zooBuildFlagPopup zooCSTTextOptsLegs { \"spaceswitching 0\", \"parents\", \"world\", \"root\", \"chest\", \"head\", \"fkType\", \"ikType\", \"poleType\", \"triggers 0\", \"invert 1\", \"kneeMode 0\" }" ) zooCSTTextOptsLegsPopup;
 			setParent ..;
@@ -419,7 +420,7 @@ window -mb 1 -title $windowTitle -width 520 -sizeable 1 $windowName;
 				string $handGoBut = `button -l "build fingers" -c( "zooCSTWindowFunctions createHands \"*\"" )`;
 				string $handOptsLbl = `text -l "additional options:"`;
 				string $handOptsTex = `textField -tx "" zooCSTTextOptsHand`;
-				string $handValidBut = `button -l "check flags" -c( "zooCSTWindowFunctions validate zooCSTTextOptsHand" )`;
+				// string $handValidBut = `button -l "check flags" -c( "zooCSTWindowFunctions validate zooCSTTextOptsHand" )`;
 				popupMenu -p $handOptsTex -pmc( "zooBuildFlagPopup zooCSTTextOptsHand { \"axis x\", \"wrist\", \"control\", \"invert 1\", \"num\", \"name\" }" ) zooCSTTextOptsHandPopup;
 			setParent ..;
 
@@ -461,7 +462,7 @@ window -mb 1 -title $windowTitle -width 520 -sizeable 1 $windowName;
 						string $subPrimIkfkGoBut = `button -l "build IK/FK sub-primitive" -c( "zooCSTWindowFunctions createSubPrimIKFK \"*\"" )`;
 						string $subPrimIkfkOptsLbl = `text -l "additional options:"`;
 						string $subPrimIkfkOptsTex = `textField -tx "-cmds 1 " zooCSTTextOptsSubPrimIKFK`;
-						string $subPrimIkfkValidBut = `button -l "check flags" -c( "zooCSTWindowFunctions validate zooCSTTextOptsSubPrimIKFK" )`;
+						// string $subPrimIkfkValidBut = `button -l "check flags" -c( "zooCSTWindowFunctions validate zooCSTTextOptsSubPrimIKFK" )`;
 						popupMenu -p $subPrimIkfkOptsTex -pmc( "zooBuildFlagPopup zooCSTTextOptsSubPrimIKFK {\"-cmds 1\",\"asPrim 1\",\"id\",\"ikType\",\"fkType\",\"poleType\",\"triggers 0\"}" ) zooCSTTextOptsSubPrimIKFKPopup;
 					setParent ..;
 				setParent ..;
@@ -484,7 +485,7 @@ window -mb 1 -title $windowTitle -width 520 -sizeable 1 $windowName;
 						string $subPrimSplineIKGoBut = `button -l "build SplineIK sub-primitive" -c( "zooCSTWindowFunctions createSubPrimSplineIK \"*\"" )`;
 						string $subPrimSplineIKOptsLbl = `text -l "additional options:"`;
 						string $subPrimSplineIKOptsTex = `textField -tx "" zooCSTTextOptsSubPrimSplineIK`;
-						string $subPrimSplineIKValidBut = `button -l "check flags" -c( "zooCSTWindowFunctions validate zooCSTTextOptsSubPrimSplineIK" )`;
+						// string $subPrimSplineIKValidBut = `button -l "check flags" -c( "zooCSTWindowFunctions validate zooCSTTextOptsSubPrimSplineIK" )`;
 						popupMenu -p $subPrimSplineIKOptsTex -pmc( "zooBuildFlagPopup zooCSTTextOptsSubPrimSplineIK {\"axis x\",\"control\",\"buildcontrols 0\",\"bezier 0\"}" ) zooCSTTextOptsSubPrimSplineIKPopup;
 					setParent ..;
 				setParent ..;
@@ -540,6 +541,19 @@ window -mb 1 -title $windowTitle -width 520 -sizeable 1 $windowName;
 				string $ctrlAlign = `nameField zooCSTNameAlignCtrl`;
 				string $ctrlPivBut = `button -l "pivot to->" -width 70 -c( "zooCSTCtrlUIFunctions -loadpiv" )`;
 				string $ctrlPiv = `nameField zooCSTNamePivotCtrl`;
+
+				string $ctrlParentBut = `button -l "parent to->" -width 70 -c( "zooCSTCtrlUIFunctions -loadpar" )`;
+				string $ctrlParent = `nameField -width 200 zooCSTNameParentCtrl`;
+				string $ctrlHideAttrsLbl = `text -l "Hide Attrs"`;
+				string $hideT = `checkBox -l "t" zooCSTCheckHideT`;
+				string $hideR = `checkBox -l "r" zooCSTCheckHideR`;
+				string $hideS = `checkBox -l "s" -v 1 zooCSTCheckHideS`;
+				string $hideV = `checkBox -l "v" -v 1 zooCSTCheckHideV`;
+				string $ctrlLockAttrsLbl = `text -l "Lock Attrs"`;
+				string $lockT = `checkBox -l "t" zooCSTCheckLockT`;
+				string $lockR = `checkBox -l "r" zooCSTCheckLockR`;
+				string $lockS = `checkBox -l "s" -v 1 zooCSTCheckLockS`;
+				string $lockV = `checkBox -l "v" zooCSTCheckLockV`;
 
 				string $ctrlSubForm1 = `formLayout`;
 					string $ctrlLbl1 = `text -l "control type"`;
@@ -597,6 +611,13 @@ window -mb 1 -title $windowTitle -width 520 -sizeable 1 $windowName;
 			setParent ..;
 		setParent ..;
 
+		string $macroEchoFrame = `frameLayout -label "Rig Build Macro" -collapse 1 -collapsable 1 -labelAlign top -borderStyle etchedIn`;
+			string $macroEchoForm = `formLayout`;
+				string $output = `scrollField -ed 0 -tx $g_initialMacroText -height 120 rigBuildMacroOutput`;
+				popupMenu -p $output -b 3 -pmc( "buildMacroEchoMenu rigBuildMacroOutputPopup;" ) rigBuildMacroOutputPopup;
+				setParent ..;
+			setParent ..;
+
 		string $image = `image -width 300 -height 8 -backgroundColor ((float)96/255) ((float)100/255) ((float)146/255) -image(zooGetFileLocation(zooListEnv("XBMLANGPATH"),"zoo_sig","tga") +"zoo_sig.tga" )`;
 	setParent ..;
 
@@ -613,7 +634,12 @@ tabLayout -e
 	-tabLabel $spaceForm "Space Switching"
 	-tabLabel $ctrlForm "Create Control"
 	zooCSTSetupTabs;
-
+formLayout -e
+	-af $output "top" 0
+	-af $output "left" 0
+	-af $output "right" 0
+	-af $output "bottom" 0
+	$macroEchoForm;
 formLayout -e
 	-af $topForm "top" 0
 	-af $topForm "left" 0
@@ -623,7 +649,12 @@ formLayout -e
 	-ac $tabs "top" 0 $topForm
 	-af $tabs "left" 0
 	-af $tabs "right" 0
-	-ac $tabs "bottom" 2 $image
+	-ac $tabs "bottom" 5 $macroEchoFrame
+
+	-an $macroEchoFrame "top"
+	-af $macroEchoFrame "left" 0
+	-af $macroEchoFrame "right" 0
+	-ac $macroEchoFrame "bottom" 5 $image
 
 	-an $image "top"
 	-af $image "left" 0
@@ -736,18 +767,8 @@ formLayout -e
 
 	-ac $rootOptsTex "top" 0 $spineOpts
 	-ac $rootOptsTex "left" 0 $rootOptsLbl
-	-ac $rootOptsTex "right" 0 $rootValidBut
+	-af $rootOptsTex "right" 0
 	-an $rootOptsTex "bottom"
-
-	-ac $rootValidBut "top" 0 $spineOpts
-	-an $rootValidBut "left"
-	-af $rootValidBut "right" 0
-	-an $rootValidBut "bottom"
-
-	-ac $spineInfoLbl "top" 10 $rootValidBut
-	-ac $spineInfoLbl "left" 0 $rootOptsLbl
-	-an $spineInfoLbl "right"
-	-an $spineInfoLbl "bottom"
 	$spineForm;
 
 formLayout -e
@@ -848,13 +869,8 @@ formLayout -e
 
 	-ac $eyeOptsTex "top" 0 $eyeOpts
 	-ac $eyeOptsTex "left" 0 $eyeOptsLbl
-	-ac $eyeOptsTex "right" 0 $headValidBut
+	-af $eyeOptsTex "right" 0
 	-an $eyeOptsTex "bottom"
-
-	-ac $headValidBut "top" 0 $eyeOpts
-	-an $headValidBut "left"
-	-af $headValidBut "right" 0
-	-an $headValidBut "bottom"
 	$headForm;
 
 formLayout -e
@@ -955,13 +971,13 @@ formLayout -e
 
 	-ac $armOptsTex "top" 0 $armOpts
 	-ac $armOptsTex "left" 0 $armOptsLbl
-	-ac $armOptsTex "right" 0 $armsValidBut
+	-af $armOptsTex "right" 0
 	-an $armOptsTex "bottom"
 
-	-ac $armsValidBut "top" 0 $armOpts
-	-an $armsValidBut "left"
-	-af $armsValidBut "right" 0
-	-an $armsValidBut "bottom"
+	// -ac $armsValidBut "top" 0 $armOpts
+	// -an $armsValidBut "left"
+	// -af $armsValidBut "right" 0
+	// -an $armsValidBut "bottom"
 	$armForm;
 
 formLayout -e
@@ -1082,13 +1098,13 @@ formLayout -e
 
 	-ac $legOptsTex "top" 0 $legOpts
 	-ac $legOptsTex "left" 0 $legOptsLbl
-	-ac $legOptsTex "right" 0 $legsValidBut
+	-af $legOptsTex "right" 0
 	-an $legOptsTex "bottom"
 
-	-ac $legsValidBut "top" 0 $legOpts
-	-an $legsValidBut "left"
-	-af $legsValidBut "right" 0
-	-an $legsValidBut "bottom"
+	// -ac $legsValidBut "top" 0 $legOpts
+	// -an $legsValidBut "left"
+	// -af $legsValidBut "right" 0
+	// -an $legsValidBut "bottom"
 
 	-ac $legInfoText "top" 10 $legOptsTex
 	-ac $legInfoText "left" 0 $legOptsLbl
@@ -1279,13 +1295,13 @@ formLayout -e
 
 	-ac $handOptsTex "top" 0 $handGoBut
 	-ac $handOptsTex "left" 0 $handOptsLbl
-	-ac $handOptsTex "right" 0 $handValidBut
+	-af $handOptsTex "right" 0
 	-an $handOptsTex "bottom"
 
-	-ac $handValidBut "top" 0 $handGoBut
-	-an $handValidBut "left"
-	-af $handValidBut "right" 0
-	-an $handValidBut "bottom"
+	// -ac $handValidBut "top" 0 $handGoBut
+	// -an $handValidBut "left"
+	// -af $handValidBut "right" 0
+	// -an $handValidBut "bottom"
 	$handForm;
 
 formLayout -e
@@ -1388,13 +1404,13 @@ formLayout -e
 
 	-ac $subPrimIkfkOptsTex "top" 0 $subPrimIkfkGoBut
 	-ac $subPrimIkfkOptsTex "left" 0 $subPrimIkfkOptsLbl
-	-ac $subPrimIkfkOptsTex "right" 0 $subPrimIkfkValidBut
+	-af $subPrimIkfkOptsTex "right" 0
 	-an $subPrimIkfkOptsTex "bottom"
 
-	-ac $subPrimIkfkValidBut "top" 0 $subPrimIkfkGoBut
-	-an $subPrimIkfkValidBut "left"
-	-af $subPrimIkfkValidBut "right" 0
-	-an $subPrimIkfkValidBut "bottom"
+	// -ac $subPrimIkfkValidBut "top" 0 $subPrimIkfkGoBut
+	// -an $subPrimIkfkValidBut "left"
+	// -af $subPrimIkfkValidBut "right" 0
+	// -an $subPrimIkfkValidBut "bottom"
 	$subPrimIKFKForm;
 
 formLayout -e
@@ -1435,13 +1451,13 @@ formLayout -e
 
 	-ac $subPrimSplineIKOptsTex "top" 0 $subPrimSplineIKGoBut
 	-ac $subPrimSplineIKOptsTex "left" 5 $subPrimSplineIKOptsLbl
-	-ac $subPrimSplineIKOptsTex "right" 0 $subPrimSplineIKValidBut
+	-af $subPrimSplineIKOptsTex "right" 0
 	-an $subPrimSplineIKOptsTex "bottom"
 
-	-ac $subPrimSplineIKValidBut "top" 0 $subPrimSplineIKGoBut
-	-an $subPrimSplineIKValidBut "left"
-	-af $subPrimSplineIKValidBut "right" 0
-	-an $subPrimSplineIKValidBut "bottom"
+	// -ac $subPrimSplineIKValidBut "top" 0 $subPrimSplineIKGoBut
+	// -an $subPrimSplineIKValidBut "left"
+	// -af $subPrimSplineIKValidBut "right" 0
+	// -an $subPrimSplineIKValidBut "bottom"
 	$subPrimSplineIKForm;
 
 formLayout -e
@@ -1655,32 +1671,69 @@ formLayout -e
 	-af $ctrlPiv "right" 0
 	-an $ctrlPiv "bottom"
 
-	-ac $ctrlSubForm1 "top" 7 $ctrlPiv
+	-ac $ctrlParentBut "top" 0 $ctrlAlignBut
+	-af $ctrlParentBut "left" 0
+
+	-ac $ctrlParent "top" 0 $ctrlAlignBut
+	-ac $ctrlParent "left" 0 $ctrlParentBut
+	-ac $ctrlParent "right" 10 $ctrlHideAttrsLbl
+
+	-ac $ctrlHideAttrsLbl "top" 3 $ctrlAlignBut
+	-ac $ctrlHideAttrsLbl "right" 5 $hideT
+
+	-ac $hideT "top" 3 $ctrlAlignBut
+	-ac $hideT "right" 0 $hideR
+
+	-ac $hideR "top" 3 $ctrlAlignBut
+	-ac $hideR "right" 0 $hideS
+
+	-ac $hideS "top" 3 $ctrlAlignBut
+	-ac $hideS "right" 0 $hideV
+
+	-ac $hideV "top" 3 $ctrlAlignBut
+	-ac $hideV "right" 5 $ctrlLockAttrsLbl
+
+	-ac $ctrlLockAttrsLbl "top" 3 $ctrlAlignBut
+	-ac $ctrlLockAttrsLbl "right" 0 $lockT
+
+	-ac $lockT "top" 3 $ctrlAlignBut
+	-ac $lockT "right" 0 $lockR
+
+	-ac $lockR "top" 3 $ctrlAlignBut
+	-ac $lockR "right" 0 $lockS
+
+	-ac $lockS "top" 3 $ctrlAlignBut
+	-ac $lockS "right" 0 $lockV
+
+	-ac $lockV "top" 3 $ctrlAlignBut
+	-af $lockV "right" 0
+
+	-ac $ctrlSubForm1 "top" 7 $ctrlParentBut
 	-af $ctrlSubForm1 "left" 0
 	-ac $ctrlSubForm1 "right" 10 $ctrlAxisLbl
 	-an $ctrlSubForm1 "bottom"
 
-	-ac $ctrlAxisLbl "top" 10 $ctrlPiv
+	-ac $ctrlAxisLbl "top" 10 $ctrlParentBut
 	-an $ctrlAxisLbl "left"
 	-ac $ctrlAxisLbl "right" 5 $ctrlAxisX
 	-an $ctrlAxisLbl "bottom"
 
-	-ac $ctrlAxisX "top" 10 $ctrlPiv
+	-ac $ctrlAxisX "top" 10 $ctrlParentBut
 	-an $ctrlAxisX "left"
 	-ac $ctrlAxisX "right" 0 $ctrlAxisY
 	-an $ctrlAxisX "bottom"
 
-	-ac $ctrlAxisY "top" 10 $ctrlPiv
+	-ac $ctrlAxisY "top" 10 $ctrlParentBut
 	-an $ctrlAxisY "left"
 	-ac $ctrlAxisY "right" 0 $ctrlAxisZ
 	-an $ctrlAxisY "bottom"
 
-	-ac $ctrlAxisZ "top" 10 $ctrlPiv
+	-ac $ctrlAxisZ "top" 10 $ctrlParentBut
 	-an $ctrlAxisZ "left"
 	-ac $ctrlAxisZ "right" 0 $ctrlCheckNeg
 	-an $ctrlAxisZ "bottom"
 
-	-ac $ctrlCheckNeg "top" 10 $ctrlPiv
+	-ac $ctrlCheckNeg "top" 10 $ctrlParentBut
 	-an $ctrlCheckNeg "left"
 	-af $ctrlCheckNeg "right" 0
 	-an $ctrlCheckNeg "bottom"

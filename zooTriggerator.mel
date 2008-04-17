@@ -30,6 +30,10 @@ global proc zooTriggerator() {
 		menu -l "Camera";
 			menuItem -l "Use Camera..." -sm 1 -pmc "zooTrigListCameras zooTrigUIPopupCams" zooTrigUIPopupCams;
 			setParent -m ..;
+			menuItem -l "Add Instance to Camera..." -sm 1 -pmc "zooTrigMenuAddInstance zooTrigUIPopupInstanceAdd" zooTrigUIPopupInstanceAdd;
+			setParent -m ..;
+			menuItem -l "Remove From Camera..." -sm 1 -pmc "zooTrigMenuRemInstance zooTrigUIPopupInstanceRem" zooTrigUIPopupInstanceRem;
+			setParent -m ..;
 			menuItem -l "Build Widescreen Mask..." -sm 1;
 			menuItem -l "1.333  4/3" -c "zooAddCameraMask `zooQueryMonkeySee` 1.333";
 			menuItem -l "1.556  14/9" -c "zooAddCameraMask `zooQueryMonkeySee` (14.0/9)";
@@ -234,18 +238,38 @@ global proc zooTriggerator() {
 	}
 
 
+global proc zooTrigMenuAddInstance( string $parent ) {
+	menu -e -dai $parent;
+	setParent -m $parent;
+
+	string $cameraTransforms[] = listRelatives("-pa","-p",`ls -type camera`);
+
+	for( $camera in $cameraTransforms ) {
+		string $existing[] = `zooListEazels $camera`;
+		menuItem -l $camera -cb `size $existing` -c( "zooInstanceEazel "+ $camera +";" );
+		}
+	}
+
+
+global proc zooTrigMenuRemInstance( string $parent ) {
+	menu -e -dai $parent;
+	setParent -m $parent;
+
+	string $cameraTransforms[] = listRelatives("-pa","-p",`ls -type camera`);
+
+	for( $camera in $cameraTransforms ) {
+		string $existing[] = `zooListEazels $camera`;
+		menuItem -l $camera -cb `size $existing` -c( "delete `zooListEazels "+ $camera +"`;" );
+		}
+	}
+
+
 global proc zooTrigListCameras( string $parent ) {
 	menu -e -dai $parent;
 	setParent -m $parent;
 
-	string $cameraShapes[] = `ls -type camera`;
-	string $cameraTransforms[] = {};
+	string $cameraTransforms[] = listRelatives("-pa","-p",`ls -type camera`);
 	string $current = `zooQueryMonkeySee`;
-
-	for( $cam in $cameraShapes ) {
-		string $parent[] = `listRelatives -p $cam`;
-		$cameraTransforms[( `size $cameraTransforms` )] = $parent[0];
-		}
 
 	for( $cam in $cameraTransforms ) menuItem -l $cam -cb( $cam==$current ) -c( "zooMonkeySee "+ $cam +";" );
 	if( `size $cam` ) menuItem -d 1;
@@ -518,12 +542,8 @@ global proc zooTriggeratorFunctions( string $function ) {
 			string $trigger = `nameField -q -o $UITrigger`;
 			string $sel[] = `textScrollList -q -si $UIConnects`;
 
-			print $trigger;
-			print $sel;
-			for( $a in $sel ) {
-				zooRemoveConnect $trigger $a;
-				textScrollList -e -ri $a $UIConnects;
-				}
+			for( $a in $sel ) zooRemoveConnect $trigger $a;
+			zooTriggeratorFunctions -updateConnects;
 			if( !size(`zooGetConnects $trigger`)) zooTrigSetCmd $trigger "";
 			break;
 		case "-exportFolder":
