@@ -97,7 +97,7 @@ global proc string[] zooListTools( string $type ) {
 	string $riggingTools[] = { "zooAutoSave","zooTriggered","zooCST","zooBoltOnIK",
 		"zooBodgeK","zooHeavy","zooNameSpacey","zooRemind","zooRenamer",
 		"zooSurgeon","zooWeightSave","zooTriggerator","zooReblender" };
-	string $otherTools[] = { "p4menu","zooAutoSave","zooChangeLog","zooAssets",
+	string $otherTools[] = { "p4menu","zooAutoSave","zooChangeLog",
 		"zooNameSpacey","zooRemind","zooRenamer","zooToggleUI","zooPanelCycler" };
 	string $hotkeys[] = { "zooTangentWks","zooCam","zooSetMenu","zooSetkey","zooAlign",
 		"toggle_shading","toggle_lights","toggle_texturing","zooHeavy","zooFitTimeline" };

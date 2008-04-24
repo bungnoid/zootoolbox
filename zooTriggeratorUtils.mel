@@ -13,7 +13,7 @@ zooUtils;
 global proc string[] zooListTriggeratorShapes() {
 	string $shapes[] = `zooListAllPresets zooTriggerator shape {} 0`;
 	string $baseShapes[] = {};
-	string $otherShapes[] = `getFileList -fld (zooGetScriptLocation("zooTriggerator")); -fs "*.shape"`;
+	string $otherShapes[] = `getFileList -fld (zooGetScriptLocation("zooTriggerator")) -fs "*.shape"`;
 
 	if( `about -nt` ) {
 		string $vistaPath = zooResolvePath("%USERPROFILE%/Documents/");

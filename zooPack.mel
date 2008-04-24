@@ -15,10 +15,10 @@ global proc zooToolBoxPack() {
 
 	$scripts[( `size $scripts` )] = "zooToolBox";
 	for( $script in $scripts ) zooZipScriptTo $script ( "-path "+ $dest +" -scriptPath scripts/ -iconPath prefs/icons/" );
-	if( `filetest -r ( $dest +"zooToolBox.rar" )`) sysFile -delete ( $dest +"zooToolBox.rar" );
+	if( `filetest -r ( $dest +"zooToolBox.7z" )`) sysFile -delete ( $dest +"zooToolBox.7z" );
 	chdir `toNativePath $dest`;
-	string $rarCmd = "rar a -r -m5 zooToolBox.rar *.*";
-	print "executing rar command:\n";
+	string $rarCmd = "7z a -r -m9 zooToolBox.7z *.*";
+	print ( "executing zip command in "+ $dest +":\n" );
 	print $rarCmd;
 	string $res = `system $rarCmd`;
 	//print $res;

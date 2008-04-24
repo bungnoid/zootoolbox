@@ -86,8 +86,8 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 	//the fk and ik arm spaces are oriented using zooAlign instead of building them as oriented controls - this is because
 	//oriented controls are joints and thus can't be hidden without hiding all children
 	//------
-    // NOTE: Added the zooAlign code back to eliminate the right side orientation flipping problems
-    zooAlign ( "-src "+ $wrist +" -tgt "+ $ikArmSpace );
+		// NOTE: Added the zooAlign code back to eliminate the right side orientation flipping problems
+		zooAlign ( "-src "+ $wrist +" -tgt "+ $ikArmSpace );
 		zooAlign ( "-src "+ $bicep +" -tgt "+ $fkArmSpace );
 		parent $driverUpper $fkArmSpace;
 		parent $driverMid $driverUpper;
