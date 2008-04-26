@@ -246,7 +246,7 @@ global proc string zooBuildControl( string $name, string $optionStr ) {
 		parent $geo[0] $obj;
 		makeIdentity -a 1 -t 1 -r 1 -s 1 $geo[0];
 		parent -w $geo[0];
-		zooReplaceShape $geo[0] $obj;
+		zooReplaceShape $geo[0] $obj 1;
 		delete $geo[0];
 
 		//when selected, turn the mesh display off, and only highlight edges

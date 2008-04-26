@@ -48,7 +48,7 @@ window -mb 1 -title $windowTitle -width 520 -sizeable 1 $windowName;
 		menuItem -l "Author Pickwalking" -ann "lets you setup pickwalking directions for your character's rig" -c( "zooPickwalkAuthor;" );
 		menuItem -d 1;
 		menuItem -l "Build Proxy Primitives" -ann "select all the skinned mesh objects that comprise your character" -c( "zooCSTWindowFunctions createProxy \"*\"" );
-		menuItem -l "Replace Shape" -ann "select the source object, then the target - this will replace the shape nodes on the target object with those from the source object" -c( "{zooCSTUtils; string $sel[] = `ls -sl`; zooReplaceShape $sel[0] $sel[1]; }" );
+		menuItem -l "Replace Shape" -ann "select the source object, then the target - this will replace the shape nodes on the target object with those from the source object" -c( "{zooCSTUtils; string $sel[] = `ls -sl`; zooReplaceShape $sel[0] $sel[1] 0; }" );
 		menuItem -l "Extract Mesh From Joint" -ann "select some joints, then run this - an object containing the faces that the selected joints deform gets created" -c( "{zooSurgeonUtils; zooArrays_str; string $js[] = `ls -type joint -sl`; string $jStr = `zooArrayToStr_str $js \" \"`; zooExtractJointMesh ( \"-joints \"+ $jStr +\" -expand 0.01\" ); }" );
 		menuItem -l "Open zooSurgeon (to create proxies)" -c( "zooSurgeon;" );
 		menuItem -d 1;

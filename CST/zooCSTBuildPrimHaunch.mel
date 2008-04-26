@@ -253,7 +253,7 @@ global proc string[] zooCSTRebuildPrimHaunch( string $primitive ) {
 	string $newControls[] = `zooCSTBuildPrimHaunch $prefix $parity $inputs[0] $inputs[1] $inputs[2] $inputs[3] $optionStr`;
 
 	//parent the shape nodes of the original controls to the transforms of the new controls
-	if( $useExisting ) for( $n=0; $n<`size $newControls`; $n++ ) zooReplaceShape $dupes[$n] $newControls[$n];
+	if( $useExisting ) for( $n=0; $n<`size $newControls`; $n++ ) zooReplaceShape $dupes[$n] $newControls[$n] 0;
 
 	delete $dupes;
 	return $newControls;

@@ -242,7 +242,7 @@ global proc string[] zooCSTRebuildPrimIKSpine( string $primitive ) {
 	string $newControls[] = `zooCSTBuildPrimIKSpine $prefix $inputs[0] $inputs[1] $inputs[2] $optionStr`;
 
 	//parent the shape nodes of the original controls to the transforms of the new controls
-	if( $useExisting ) for( $n=0; $n<`size $newControls`; $n++ ) zooReplaceShape $dupes[$n] $newControls[$n];
+	if( $useExisting ) for( $n=0; $n<`size $newControls`; $n++ ) zooReplaceShape $dupes[$n] $newControls[$n] 0;
 
 	delete $dupes;
 	return $newControls;

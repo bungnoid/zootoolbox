@@ -64,7 +64,7 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 
 
 	//------
-	//build the objects
+	//build the fk objects
 	//------
 		string $ikArmSpace = `zooBuildControl ( "ik_limbSpace"+ $id ) ( "-type null -align %p -place "+ $wrist )`;
 		string $fkArmSpace = `zooBuildControl ( "fk_limbSpace"+ $id ) ( "-type null -align %p -place "+ $bicep )`;
@@ -454,4 +454,3 @@ controller names are returned.  the $controller variable is the object attribs a
 
 
 //zoo.end
-//macaroniKazoo ©2007

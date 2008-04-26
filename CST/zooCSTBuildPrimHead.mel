@@ -232,7 +232,7 @@ global proc string[] zooCSTRebuildPrimHead( string $primitive ) {
 	string $newControls[] = `zooCSTBuildPrimHead $prefix $inputs[0] $optionStr`;
 
 	//parent the shape nodes of the original controls to the transforms of the new controls
-	if( $useExisting ) for( $n=0; $n<`size $newControls`; $n++ ) zooReplaceShape $dupes[$n] $newControls[$n];
+	if( $useExisting ) for( $n=0; $n<`size $newControls`; $n++ ) zooReplaceShape $dupes[$n] $newControls[$n] 0;
 
 	delete $dupes;
 	return $newControls;

@@ -137,7 +137,7 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 			$rootPos = `rename $rootPos ( "elbow_pos"+ $id )`;
 			delete `parentConstraint $elbowControl $rootPos`;
 			parent $rootPos $worldControl;
-			pointConstraint -mo $rootControl $rootPos;
+			if( `objExists $rootControl` ) pointConstraint -mo $rootControl $rootPos;
 			$spaceNodes1 = `zooBuildSpaceSwitch $elbowControl $elbowControlSpace { $chestControl, $rootControl, $rootPos } { "chest", "root", "root pos only" } "-mo"`;
 			for( $obj in {$armControl,$elbowControl,$clavControl} ) setObjMenuKillState $obj 1;
 			for( $obj in $fkControls ) setObjMenuKillState $obj 1;
@@ -301,7 +301,7 @@ global proc string[] zooCSTRebuildPrimArm( string $primitive ) {
 	string $newControls[] = `zooCSTBuildPrimArm $prefix $parity $inputs[0] $inputs[1] $inputs[2] $optionStr`;
 
 	//parent the shape nodes of the original controls to the transforms of the new controls
-	if( $useExisting ) for( $n=0; $n<`size $newControls`; $n++ ) zooReplaceShape $dupes[$n] $newControls[$n];
+	if( $useExisting ) for( $n=0; $n<`size $newControls`; $n++ ) zooReplaceShape $dupes[$n] $newControls[$n] 0;
 
 	delete $dupes;
 	return $newControls;
@@ -335,4 +335,3 @@ NOTE: the script will automatically discover any twist joints that lie between p
 
 
 //zoo.end
-//macaroniKazoo ©2007

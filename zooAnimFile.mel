@@ -576,7 +576,9 @@ global proc float[] zooZnmKeyTimeBounds( string $filepath ) {
 		}
 
 	$times =`sort $times`;
-	float $keyBounds[] = { $times[0],(zooGetElement_float(-1,$times))};
+	float $end = zooGetElement_float(-1,$times);
+	float $keyBounds[] = { $times[0],$end};
+
 	return $keyBounds;
 	}
 
