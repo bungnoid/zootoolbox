@@ -300,7 +300,12 @@ global proc float[] zooGetMirroredXform( string $obj, string $optionStr ) {
 	string $objMir = `group -em`;
 	string $aimLoc = `group -em`;
 	string $upLoc = `group -em`;
+	string $toDelete[] = {$objMir,$mirGrp};
 
+	if( !`objExists $mirrorRef` ) {
+		$mirrorRef = `group -em`;
+		$toDelete[`size $toDelete`] = $mirrorRef;
+		}
 	if( `objExists $parent` ) parent $mirGrp $parent;
 	parent $aimLoc $objMir;
 	parent $upLoc $objMir;
@@ -313,6 +318,7 @@ global proc float[] zooGetMirroredXform( string $obj, string $optionStr ) {
 	for( $a in {$mirGrp,$objMir,$aimLoc,$upLoc}) setAttr( $a +".displayHandle" ) 1;
 
 	string $objMirRot = `group -em`;
+	$toDelete[`size $toDelete`] = $objMirRot;
 	zooAlignFast $objMir $objMirRot 0 0;
 	aimConstraint -aim $aimv[0] $aimv[1] $aimv[2] -u $upv[0] $upv[1] $upv[2] -wut object -wuo $upLoc $aimLoc $objMirRot;
 
@@ -320,9 +326,7 @@ global proc float[] zooGetMirroredXform( string $obj, string $optionStr ) {
 	float $rForm[] = `xform -q -a -ws -ro $objMirRot`;
 	float $xform[] = `zooAddArray_float $tForm $rForm`;
 
-	delete $objMirRot;
-	delete $objMir;
-	delete $mirGrp;
+	delete $toDelete;
 
 	return $xform;
 	}
