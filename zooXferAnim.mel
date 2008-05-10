@@ -30,6 +30,7 @@ zooStrUtils;
 zooTips;
 zooUtils;
 zooXferAnimUtils;
+eval("source zooAnimFile;");
 
 
 global proc zooXferAnim() {
