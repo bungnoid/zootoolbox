@@ -3,6 +3,7 @@ from utils import *
 import maya.cmds as cmd
 import pickle,time,datetime
 
+
 TOOL_VERSION = 1
 DEFAULT_PATH = resolvePath('%TEMP%/temp_skin.weights')
 class VertSkinWeight(Vector):
@@ -34,12 +35,13 @@ def saveWeights( geos, filepath=DEFAULT_PATH ):
 	geoAndData = {}
 	skinPercent = cmd.skinPercent
 	xform = cmd.xform
+
+	joints = {}
+	weightData = []
 	for geo in geos:
 		verts = cmd.ls(cmd.polyListComponentConversion(geo,toVertex=True),fl=True)
-		weightData = []
 		skinCluster = cmd.ls(cmd.listHistory(geo),type='skinCluster')[0]
 		id = 0
-		joints = {}
 		for vert in verts:
 			jointList = skinPercent(skinCluster,vert,ib=1e-4,q=True,transform=None)
 			weightList = skinPercent(skinCluster,vert,ib=1e-4,q=True,value=True)
@@ -56,15 +58,12 @@ def saveWeights( geos, filepath=DEFAULT_PATH ):
 			weightData.append(vertData)
 			id += 1
 
-		#generate joint hierarchy data - so if joints are missing on load we can find the best match
-		jointHierarchies = {}
-		for j in joints.keys():
-			jointHierarchies[j] = getAllParents(j)
+	#generate joint hierarchy data - so if joints are missing on load we can find the best match
+	jointHierarchies = {}
+	for j in joints.keys():
+		jointHierarchies[j] = getAllParents(j)
 
-		#so save the geoname and the corresponding weight data out to a file
-		geoAndData[geo] = (joints,jointHierarchies,weightData)
-
-	toWrite = miscData,geoAndData
+	toWrite = miscData,joints,jointHierarchies,weightData
 
 	tmp = file(filepath,'w')
 	pickle.dump(toWrite,tmp)
@@ -141,7 +140,7 @@ def loadWeights( geos=None, filepath=DEFAULT_PATH, usePosition=True, tolerance=1
 	matching more, but...  the majority of weight loading time at this stage is spent by maya
 	actually applying skin weights, not the positional searching'''
 	start = time.clock()
-	miscData,geoAndData = loadData(filepath)
+	miscData,joints,jointHierarchies,weightData = loadData(filepath)
 
 
 	#the miscData contains a dictionary with a bunch of data stored from when the weights was saved - do some
@@ -173,52 +172,47 @@ def loadWeights( geos=None, filepath=DEFAULT_PATH, usePosition=True, tolerance=1
 	clock = time.clock
 
 
+	#sort the weightData by ascending x values so we can search faster
+	weightData = sortByIdx(weightData)
+
+	#are all the joints in the scene?
+	missingJoints = set()
+	for j in joints.keys():
+		if not cmd.objExists(j):
+			#see if the joint with the same leaf name exists in the scene
+			idxA = j.rfind(':')
+			idxB = j.rfind('|')
+			idx = max(idxA,idxB)
+			if idx != -1:
+				leafName = j[idx:]
+				search = cmd.ls('%s*'%leafName,r=True)
+				if len(search):
+					joints[j] = search[0]
+					continue
+
+			#otherwise, see if the parent at save time is present, and use it instead
+			dealtWith = False
+			for n,jp in enumerate(jointHierarchies[j]):
+				if n > 2: break
+				if jp in joints and cmd.objExists(jp):
+					joints[j] = jp
+					dealtWith = True
+					break
+
+			if dealtWith: continue
+			missingJoints.add(j)
+
+	#now remove them from the list
+	[joints.pop(j) for j in missingJoints]
+	for key,value in joints.iteritems():
+		if key != value:
+			print '%s remapped to %s'%(key,value)
+	
 	numItems = len(geoVertDict)
 	curItem = 1
 	mayaTime = 0 #records the amount of time spent performing maya cmds...
 	progressWindow(title='loading weights from file %d items'%numItems)
 	for geo,verts in geoVertDict.iteritems():
-		try:
-			joints,jointHierarchies,weightData = geoAndData[geo]
-		except KeyError:
-			continue
-
-		#sort the weightData by ascending x values so we can search faster
-		weightData = sortByIdx(weightData)
-
-		#are all the joints in the scene?
-		missingJoints = set()
-		for j in joints.keys():
-			if not cmd.objExists(j):
-				#see if the joint with the same leaf name exists in the scene
-				idxA = j.rfind(':')
-				idxB = j.rfind('|')
-				idx = max(idxA,idxB)
-				if idx != -1:
-					leafName = j[idx:]
-					search = cmd.ls('%s*'%leafName,r=True)
-					if len(search):
-						joints[j] = search[0]
-						continue
-
-				#otherwise, see if the parent at save time is present, and use it instead
-				dealtWith = False
-				for n,jp in enumerate(jointHierarchies[j]):
-					if n > 2: break
-					if jp in joints and cmd.objExists(jp):
-						joints[j] = jp
-						dealtWith = True
-						break
-
-				if dealtWith: continue
-				missingJoints.add(j)
-
-		#now remove them from the list
-		[joints.pop(j) for j in missingJoints]
-		for key,value in joints.iteritems():
-			if key != value:
-				print '%s remapped to %s'%(key,value)
-
 		#do we have a skinCluster on the geo already?  if not, build one
 		skinCluster = cmd.ls(cmd.listHistory(geo),type='skinCluster')
 		if not skinCluster:
