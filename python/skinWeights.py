@@ -32,6 +32,8 @@ def saveWeights( geos, filepath=DEFAULT_PATH ):
 				'date':datetime.date.today()}
 
 	geoAndData = {}
+	skinPercent = cmd.skinPercent
+	xform = cmd.xform
 	for geo in geos:
 		verts = cmd.ls(cmd.polyListComponentConversion(geo,toVertex=True),fl=True)
 		weightData = []
@@ -39,8 +41,8 @@ def saveWeights( geos, filepath=DEFAULT_PATH ):
 		id = 0
 		joints = {}
 		for vert in verts:
-			jointList = cmd.skinPercent(skinCluster,vert,ib=1e-4,q=True,transform=None)
-			weightList = cmd.skinPercent(skinCluster,vert,ib=1e-4,q=True,value=True)
+			jointList = skinPercent(skinCluster,vert,ib=1e-4,q=True,transform=None)
+			weightList = skinPercent(skinCluster,vert,ib=1e-4,q=True,value=True)
 
 			#so this is kinda dumb - but using a dict here we can easily remap on restore if joint names
 			#are different by storing the dict's value as the joint to use, and the key as the joint that
@@ -48,7 +50,7 @@ def saveWeights( geos, filepath=DEFAULT_PATH ):
 			for j in jointList:
 				joints[j] = j
 
-			pos = cmd.xform(vert,q=True,ws=True,t=True)
+			pos = xform(vert,q=True,ws=True,t=True)
 			vertData = VertSkinWeight(pos)
 			vertData.populate(id,jointList,weightList)
 			weightData.append(vertData)
@@ -197,7 +199,6 @@ def loadWeights( geos=None, filepath=DEFAULT_PATH, usePosition=True, tolerance=1
 					search = cmd.ls('%s*'%leafName,r=True)
 					if len(search):
 						joints[j] = search[0]
-						#print 'missing joint %s - but found joint with same leaf name %s so using it instead...'%(j,search[0])
 						continue
 
 				#otherwise, see if the parent at save time is present, and use it instead
@@ -207,20 +208,16 @@ def loadWeights( geos=None, filepath=DEFAULT_PATH, usePosition=True, tolerance=1
 					if jp in joints and cmd.objExists(jp):
 						joints[j] = jp
 						dealtWith = True
-						#print 'missing joint %s - but it was parented to %s when weights were saved - using it instead'%(j,jp)
 						break
 
 				if dealtWith: continue
 				missingJoints.add(j)
-				#print 'missing joint %s - verts weighted to this joint will be re-normalised'%j
 
 		#now remove them from the list
-		print missingJoints
 		[joints.pop(j) for j in missingJoints]
 		for key,value in joints.iteritems():
 			if key != value:
 				print '%s remapped to %s'%(key,value)
-		print joints
 
 		#do we have a skinCluster on the geo already?  if not, build one
 		skinCluster = cmd.ls(cmd.listHistory(geo),type='skinCluster')
