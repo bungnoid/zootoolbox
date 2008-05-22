@@ -107,62 +107,11 @@ global proc string zooPopulateCmdStr( string $trigger, string $cmdStr, string $o
 //creating customised character menus as used in the zooCharMenu script
 //------
 global proc string zooPopulateCmdStrRaw( string $trigger, string $cmdStr, string $optionalStrings[] ) {
-	string $objectList[] = `zooGetConnects $trigger`;
-	string $connectsArrayStr = "{\""+ `zooArrayToStr_str $objectList "\",\""` +"\"}";
-	int $connectSlots[] = `zooGetAllTriggerSlots $trigger`;
-	int $numCts = `size $objectList`;
-	int $numOpt = `size $optionalStrings`;
+	string $optionalAsStr = "[r'''"+ `zooArrayToStr_str $optionalStrings "''',r'''"` +"''']";
+	python( "import vMaya.triggered as triggered;" );
+	string $cmd = python( "triggered.Trigger('"+ $trigger +"').resolve(r'''"+ $cmdStr +"''',"+ $optionalAsStr +")" );
 
-	//make the trigger the first object in the array - %0 can refer to it
-	//NOTE this is done after the string representation of the connects array has
-	//been build quite deliberately - the connects array shouldn't include the
-	//trigger itself as that would make working with the connects list awkward
-	$objectList = `zooAddArray_str { $trigger } $objectList`;
-	$connectSlots = `zooAddArray_int { 0 } $connectSlots`;
-
-	//the # symbol is used to refer to the trigger itself - so sub the name of the
-	//trigger into the command
-	while( `match "#+" $cmdStr` != "" ) $cmdStr = `substitute "#+" $cmdStr $trigger`;
-
-	//the @ symbol can be used by to refer to an array range of connects
-	string $matchStr = "(@[0-9]+,-*[0-9]+)";
-	string $match = `match $matchStr $cmdStr`;
-	while( $match != "" ) {
-		int $start = `match "[0-9]+" $match`;  //get the first number
-		int $end = `match "-*[0-9]+$" $match`;  //get the second number
-
-		if( $end<0 ) $end += $numCts+1;  //if end is negative, then start from the end of the array
-		$end++;  //add one because the zeroth elt in the connects array is actually connect number 1
-		string $connectsStr = "{\""+ `zooArrayToStr_str (zooIndexCrop_str($objectList,($start +":"+ $end))) "\",\""` +"\"}";
-		$cmdStr = `substitute $match $cmdStr $connectsStr`;  //substitute the current match for the actual data
-		$match = `match $matchStr $cmdStr`;  //look for any more symbols
-		}
-
-	//the @ symbol refers to the array of all connects
-	while( `match "@+" $cmdStr` != "" ) $cmdStr = `substitute "@+" $cmdStr $connectsArrayStr`;
-
-	//the % symbol allows the user to work on a single target object.  the object
-	//is handled as a string, as it is a single object only
-	//NOTE %0 refers to the trigger itself
-	while( `match "%[0-9]+" $cmdStr` != "" ) {
-		string $custom = `match "%[0-9]+" $cmdStr`;
-		int $targetNum = `substring $custom 2 (size($custom))`;
-		int $idx = `zooGetIdxOfElement_int $connectSlots $targetNum`;
-
-		if( $idx < 0 ) $cmdStr = `substitute $custom $cmdStr "*invalidConnect*"`;
-		else $cmdStr = `substitute $custom $cmdStr $objectList[$idx]`;
-		}
-
-	//the %opt3% string allows the user to specify an optional list of components to pass in
-	while( `match "%opt[0-9]+%" $cmdStr` != "" ) {
-		string $custom = `match "%opt[0-9]+%" $cmdStr`;
-		int $targetNum = `substring $custom 5 (size($custom)-1)`;
-
-		if( $numOpt > $targetNum ) $cmdStr = `substitute $custom $cmdStr $optionalStrings[$targetNum]`;
-		else $cmdStr = `substitute $custom $cmdStr "*invalidOptional*"`;
-		}
-
-	return $cmdStr;
+	return $cmd;
 	}
 
 
