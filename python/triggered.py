@@ -17,6 +17,12 @@ class Trigger(object):
 		new.setMenuInfo(slot,name,cmdStr)
 
 		return new
+	@classmethod
+	def CreateTrigger( cls, object, cmdStr='//blank' ):
+		new = cls(object)
+		new.setCmd(cmdStr)
+
+		return new
 	def __getitem__( self, item ):
 		#returns the connect at index item
 		slotPrefix = 'zooTrig'
@@ -44,11 +50,11 @@ class Trigger(object):
 			if resolve: return self.resolve(cmdStr,optionals)
 			return cmdStr
 		return None
-	def setCmd( self, object, cmdStr='//blank' ):
+	def setCmd( self, cmdStr ):
 		#creates the triggered cmd
 		cmdAttr = "zooTrigCmd0"
 		if not objExists( "%s.%s" % ( self.obj, cmdAttr ) ): cmd.addAttr(self.obj, ln=cmdAttr, dt="string")
-		if cmdStr == "":
+		if cmdStr is None or cmdStr == '':
 			cmd.deleteAttr(self.obj, at=cmdAttr)
 			return
 
@@ -293,7 +299,15 @@ class Trigger(object):
 	def cacheConnects( self ):
 		pass
 	def validateConnects( self ):
-		pass
+		slotPrefix = 'zooTrig'
+
+		for connect,slot in self.connects():
+			attrpath = '%s.%s%d' % ( self.obj, slotPrefix, slot )
+			objPath = cmd.connectionInfo(attrpath, sfd=True)
+			if not cmd.objExists( objPath ):
+				#get the cached connect and attach it
+				#self.connect(zooAddConnectTo $trigger $connect $slot;
+				pass
 	def setKillState( self, state ):
 		attr = 'zooObjMenuDie'
 		attrpath = '%s.%s' % ( self.obj, attr )
