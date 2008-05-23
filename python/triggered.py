@@ -11,6 +11,12 @@ class Trigger(object):
 	def __init__( self, object ):
 		#self.obj = longname(object)
 		self.obj = object
+	@classmethod
+	def CreateMenu( cls, object, name='<empty>', cmdStr='//blank', slot=None ):
+		new = cls(object)
+		new.setMenuInfo(slot,name,cmdStr)
+
+		return new
 	def __getitem__( self, item ):
 		#returns the connect at index item
 		slotPrefix = 'zooTrig'
@@ -24,13 +30,13 @@ class Trigger(object):
 			return objPath.split('.')[0]
 		return None
 	def __len__( self ):
-		#returns the number of connects
-		pass
+		#iterator that returns connectObj,connectIdx
+		return len(self.connects())
 	def iterConnects( self ):
-		pass
+		return iter( self.connects() )
 	def iterMenus( self ):
-		#iterator that returns name,cmd
-		pass
+		#iterator that returns slot,name,cmd
+		return iter( self.listMenus() )
 	def getCmd( self, resolve=False, optionals=[] ):
 		attrPath = '%s.zooTrigCmd0'
 		if objExists( attrPath  ):
@@ -52,9 +58,9 @@ class Trigger(object):
 		idx = cmdInfo.find('^')
 		if resolve: return self.resolve(cmdInfo[idx+1:])
 		return cmdInfo[idx+1:]
-	def setMenuCmd( self, slot, cmd ):
-		newCmdInfo = '%s^%s' % ( self.getMenuName(slot), cmd  )
-		cmd.setAttr( "%s.zooCmd%d" % ( self.obj, slot ), newCmdInfo )
+	def setMenuCmd( self, slot, cmdStr ):
+		newCmdInfo = '%s^%s' % ( self.getMenuName(slot), cmdStr )
+		cmd.setAttr( "%s.zooCmd%d" % ( self.obj, slot ), newCmdInfo, type='string' )
 	def setMenuInfo( self, slot=None, name='<empty>', cmd='//blank' ):
 		cmd.setAttr( "%s.zooCmd%d" % ( self.obj, slot ), '%s^%s' % ( name, cmd ) )
 	def getMenuName( self, slot ):
@@ -79,12 +85,19 @@ class Trigger(object):
 			try: slot = attr[prefixSize:]
 			except IndexError: continue
 
-			if attr.startswith(slotPrefix) and slot.isdigit(): slots.append( int(slot) )
+			if attr.startswith(slotPrefix) and slot.isdigit():
+				menuData = cmd.getAttr('%s.%s' % (self.obj,attr))
+				idx = menuData.find('^')
+				menuName = menuData[:idx]
+				menuCmd = menuData[idx+1:]
+				slots.append( ( int(slot), menuName, menuCmd ) )
+
 		slots.sort()
 
 		return slots
 	def connects( self ):
-		connects = [self.obj]
+		'''returns a list of tuples with the format: (connectName,connectIdx)'''
+		connects = [(self.obj,0)]
 		attrs = cmd.listAttr(self.obj, ud=True)
 		slotPrefix = 'zooTrig'
 		prefixSize = len(slotPrefix)
@@ -104,27 +117,42 @@ class Trigger(object):
 					cacheAttrName = "%s.%s%d%s" % ( self.obj, slotPrefix, slot, "cache" )
 
 					#append the object name to the connects list
-					if objExists(objPath): connects.append( objPath.split('.')[0] )
+					if objExists(objPath): connects.append( (objPath.split('.')[0],slot) )
 
 					#if there is no connect, then check to see if there is a name cache, and query it
 					elif objExists( cacheAttrName ):
 						cacheName = cmd.getAttr( cacheAttrName )
 						if objExists( cacheName ):
-							self.append( cacheName, slot )  #add the object to the connect slot
+							self.connect( cacheName, slot )  #add the object to the connect slot
 							connects.append( cacheName )
 		except TypeError: pass
 
 		return connects
-	@classmethod
-	def CreateMenu( cls, object, name='<empty>', cmdStr='//blank', slot=None ):
-		new = cls(object)
-		new.setMenuInfo(slot,name,cmdStr)
+	def listAllConnectSlots( self, connects=None ):
+		'''returns a non-spare list of connects - unlike the connects method output, this is just a list of names.  slots
+		that have no connect attached to them have empty strings as their value'''
+		if connects is None: connects = self.connects()
 
-		return new
+		#build the non-sparse connects list -first we need to find the largest connect idx, and then build a non-sparse list
+		connectsDict = {}
+		biggest = connects[0][1]
+		for name,idx in connects:
+			connectsDict[idx] = name
+			biggest = max(biggest,idx)
+
+		newConnects = [''] * (biggest+1)
+		print connects, biggest
+		for name,idx in connects:
+			newConnects[idx] = name
+
+		return newConnects
 	def resolve( self, cmd, optionals=[] ):
 		'''returns a resolved cmd string.  the cmd string can be either passed in, or if you specify the slot number
 		the the cmd string will be taken as the given slot's menu command'''
-		connects = self.connects()
+		connects = self.listAllConnectSlots()
+
+		#if the connects list is empty, early out
+		if not connects: return cmd
 
 		#resolve # tokens - these represent self
 		cmd = cmd.replace('#',self.obj)
@@ -150,8 +178,8 @@ class Trigger(object):
 		connectRE = compile('(%)(-*[0-9]+)')
 		def connectRep( matchobj ):
 			char,idx = matchobj.groups()
-			try: return connects[ int(idx) ]
-			except IndexError: return "<invalid connect>"
+			return connects[ int(idx) ]
+			#except IndexError: return "<invalid connect>"
 
 		cmd = connectRE.sub(connectRep,cmd)
 
@@ -165,6 +193,24 @@ class Trigger(object):
 		cmd = optionalRE.sub(optionalRep,cmd)
 
 		return cmd
+	def unresolve( self, cmdStr, optionals=[] ):
+		'''given a cmdStr this method will go through it looking to resolve any names into connect tokens.  it only looks for single cmd tokens
+		and optionals - it doesn't attempt to unresolve arrays'''
+		connects = self.connects()
+
+		for connect,idx in connects:
+			idx = '%'+ str(idx)
+			connectRE = re.compile( '[^a-zA-Z_|]+%s[^a-zA-Z0-9_|]+' % connect )
+			cmdStr = connectRE.sub(idx,cmdStr)
+
+		return cmdStr
+	def collapseMenuCmd( self, slot ):
+		'''resolves a menu item's command string and writes it back to the menu item - this is most useful when connects are being re-shuffled
+		and you don't want to have to re-write command strings.  there is the counter function - uncollapseMenuCmd that undoes the results'''
+		self.setMenuCmd(slot, self.getMenuCmd(slot,True) )
+	def uncollapseMenuCmd( self, slot ):
+		print self.unresolve( self.getMenuCmd(slot) )
+		#self.setMenuCmd(slot, self.unresolve( self.getMenuCmd(slot) ) )
 	def eval( self, cmdStr, optionals=[] ):
 		return mel.eval( self.resolve(cmdStr,optionals) )
 	def evalCmd( self ):
@@ -188,7 +234,7 @@ class Trigger(object):
 					slots.append( int(slot) )
 			except IndexError: pass
 		return slots
-	def append( self, object, slot=None ):
+	def connect( self, object, slot=None ):
 		if not objExists(object): return -1
 
 		#get the long name of the objects - this ensures when we get a long name for either, we know we're still dealing with the correct objects
@@ -225,6 +271,22 @@ class Trigger(object):
 		pass
 	def nextSlot( self ):
 		pass
+	def getConnectSlots( self, object ):
+		'''returns the slots an object is connected to - if the object isn't connected to any, an empty list is returned'''
+		attrPrefix = 'zooTrig'
+		prefixSize = len(attrPrefix)
+		connections = cmd.listConnections("%s.msg" % object, s=False, p=True )
+		slots = []
+
+		for n,con in enumerate(connections):
+			try:
+				attr = con.split('.')[-1]
+				slot = attr[prefixSize:]
+				if attr.startswith(attrPrefix) and slot.isdigit():
+					slots.append( int(slot) )
+			except IndexError: continue
+
+		return slots
 	def cacheConnect( self, slot ):
 		#caches the objectname of a slot connection
 		pass
@@ -248,8 +310,25 @@ class Trigger(object):
 	killState = property(getKillState,setKillState)
 
 
-def writeSetAttrCmd( trigger, slots ):
-	return
+def writeSetAttrCmd( trigger, objs ):
+	cmdLines = []
+	trigger = Trigger(trigger)
+
+	for obj in objs:
+		attrs = cmd.listAttr(obj, k=True, s=True, v=True, m=True)
+		objSlot = trigger.getConnectSlots(obj)
+		slots = trigger.getConnectSlots(obj)
+
+		if len(slots): objStr = "%"+ str(slots[0])
+
+		for a in attrs:
+			attrType = cmd.getAttr( "%s.%s"%(obj,a), type=True )
+			if attrType.lower() == "double":
+				attrVal = cmd.getAttr( "%s.%s" % (obj,a) )
+				cmdLines.append( "setAttr %s.%s %0.5f;" % ( objStr, a, attrVal ) )
+			else: cmdLines.append( "setAttr %s.%s %s;" % ( objStr, a, cmd.getAttr( "%s.%s"%(obj,a) ) ) )
+
+	return '\n'.join( cmdLines )
 
 
 def listTriggers():
@@ -261,7 +340,7 @@ def listTriggers():
 	try:
 		for obj in allObjects:
 			if objExists( '%s.%s' % ( obj, attr ) ):
-				triggers.append( obj )
+				triggers.connect( obj )
 	except TypeError: pass
 
 	return triggers
