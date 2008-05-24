@@ -1,48 +1,56 @@
 import vMaya.api as api
 import maya.cmds as cmd
-import re
+import re, time
 
 mel = api.mel
 melecho = api.melecho
 objExists = cmd.objExists
+INVALID = '<invalid connect>'
 
 class Trigger(object):
 	'''provides an interface to a trigger item'''
 	def __init__( self, object ):
-		#self.obj = longname(object)
-		self.obj = object
-	@classmethod
-	def CreateMenu( cls, object, name='<empty>', cmdStr='//blank', slot=None ):
-		new = cls(object)
-		new.setMenuInfo(slot,name,cmdStr)
-
-		return new
+		self.obj = longname(object)
 	@classmethod
 	def CreateTrigger( cls, object, cmdStr='//blank' ):
 		new = cls(object)
 		new.setCmd(cmdStr)
 
 		return new
-	def __getitem__( self, item ):
-		#returns the connect at index item
+	@classmethod
+	def CreateMenu( cls, object, name='<empty>', cmdStr='//blank', slot=None ):
+		new = cls(object)
+		new.setMenuInfo(slot,name,cmdStr)
+
+		return new
+	def __getitem__( self, slot ):
+		'''returns the connect at index <slot>'''
+		if slot == 0: return self.obj
+
 		slotPrefix = 'zooTrig'
 		attrPath = "%s.zooTrig%d" % ( self.obj, slot )
-		if objExists(attrPath):
+		try:
 			objPath = cmd.connectionInfo( attrPath, sfd=True )
-			return objPath.split('.')[0]
-		attrPathCached = "%s.zooTrig%d%s" % ( self.obj, slotPrefix, slot, "cache" )
-		if objExists(attrPathCached):
-			objPath = cmd.connectionInfo( attrPathCached, sfd=True )
-			return objPath.split('.')[0]
-		return None
+			if objPath: return objPath.split('.')[0]
+		except TypeError:
+			#in this case there is no attribute - so pass and look to the connect cache
+			pass
+
+		attrPathCached = "%scache" % attrPath
+		try:
+			obj = cmd.getAttr( attrPathCached )
+			if cmd.objExists(obj): return obj
+		except TypeError: pass
+
+		raise IndexError('no such connect exists')
 	def __len__( self ):
-		#iterator that returns connectObj,connectIdx
 		return len(self.connects())
 	def iterConnects( self ):
-		return iter( self.connects() )
-	def iterMenus( self ):
-		#iterator that returns slot,name,cmd
-		return iter( self.listMenus() )
+		'''iterator that returns connectObj,connectIdx'''
+		return iter( self.connects()[1:] )
+	def iterMenus( self, resolve=False ):
+		'''iterator that returns slot,name,cmd'''
+		return iter( self.listMenus(resolve) )
 	def getCmd( self, resolve=False, optionals=[] ):
 		attrPath = '%s.zooTrigCmd0'
 		if objExists( attrPath  ):
@@ -72,6 +80,7 @@ class Trigger(object):
 	def getMenuName( self, slot ):
 		cmdInfo = cmd.getAttr( "%s.zooCmd%d" % ( self.obj, slot ) )
 		idx = cmdInfo.find('^')
+
 		return cmdInfo[:idx]
 	def setMenuName( self, slot, name ):
 		newCmdInfo = '%s^%s' % ( name, self.getMenuCmd(slot) )
@@ -81,7 +90,7 @@ class Trigger(object):
 		idx = cmdInfo.find('^')
 		if resolve: return cmdInfo[:idx],self.resolve(cmdInfo[idx+1:])
 		return cmdInfo[:idx],cmdInfo[idx+1:]
-	def listMenus( self ):
+	def listMenus( self, resolve=False ):
 		attrs = cmd.listAttr(self.obj,ud=True)
 		slotPrefix = 'zooCmd'
 		prefixSize = len(slotPrefix)
@@ -96,6 +105,7 @@ class Trigger(object):
 				idx = menuData.find('^')
 				menuName = menuData[:idx]
 				menuCmd = menuData[idx+1:]
+				if resolve: menuCmd = self.resolve(menuCmd)
 				slots.append( ( int(slot), menuName, menuCmd ) )
 
 		slots.sort()
@@ -120,48 +130,45 @@ class Trigger(object):
 
 					#now that we've determined its a triggered attribute, trace the connect if it exists
 					objPath = cmd.connectionInfo( "%s.%s" % ( self.obj, attr ), sfd=True )
+
+					#append the object name to the connects list and early out
+					if objExists(objPath):
+						connects.append( (objPath.split('.')[0],slot) )
+						continue
+
+					#if there is no connect, then check to see if there is a name cache, and query it - no need to
+					#check for its existence as we're already in a try block and catching the appropriate exception
+					#should the attribute not exist...
 					cacheAttrName = "%s.%s%d%s" % ( self.obj, slotPrefix, slot, "cache" )
-
-					#append the object name to the connects list
-					if objExists(objPath): connects.append( (objPath.split('.')[0],slot) )
-
-					#if there is no connect, then check to see if there is a name cache, and query it
-					elif objExists( cacheAttrName ):
-						cacheName = cmd.getAttr( cacheAttrName )
-						if objExists( cacheName ):
-							self.connect( cacheName, slot )  #add the object to the connect slot
-							connects.append( cacheName )
+					cacheName = cmd.getAttr( cacheAttrName )
+					if objExists( cacheName ):
+						self.connect( cacheName, slot )  #add the object to the connect slot
+						connects.append( cacheName )
 		except TypeError: pass
 
 		return connects
-	def listAllConnectSlots( self, connects=None ):
+	def listAllConnectSlots( self, connects=None, emptyValue=None ):
 		'''returns a non-spare list of connects - unlike the connects method output, this is just a list of names.  slots
-		that have no connect attached to them have empty strings as their value'''
+		that have no connect attached to them have <emptyValue> as their value'''
 		if connects is None: connects = self.connects()
 
 		#build the non-sparse connects list -first we need to find the largest connect idx, and then build a non-sparse list
-		connectsDict = {}
-		biggest = connects[0][1]
-		for name,idx in connects:
-			connectsDict[idx] = name
-			biggest = max(biggest,idx)
-
-		newConnects = [''] * (biggest+1)
-		print connects, biggest
+		biggest = max( [c[1] for c in connects] ) + 1
+		newConnects = [emptyValue]*biggest
 		for name,idx in connects:
 			newConnects[idx] = name
 
 		return newConnects
-	def resolve( self, cmd, optionals=[] ):
+	def resolve( self, cmdStr, optionals=[] ):
 		'''returns a resolved cmd string.  the cmd string can be either passed in, or if you specify the slot number
 		the the cmd string will be taken as the given slot's menu command'''
-		connects = self.listAllConnectSlots()
+		connects = self.listAllConnectSlots(emptyValue=INVALID)
 
 		#if the connects list is empty, early out
-		if not connects: return cmd
+		if not connects: return cmdStr
 
 		#resolve # tokens - these represent self
-		cmd = cmd.replace('#',self.obj)
+		cmdStr = cmdStr.replace('#',self.obj)
 
 		#resolve ranged connect array tokens:  @<start>,<end> - these represent what is essentially a list slice - although they're end value inclusive unlike python slices...
 		compile = re.compile
@@ -174,31 +181,30 @@ class Trigger(object):
 			try: return '{ "%s" }' % '","'.join( connects[start:end] )
 			except IndexError: return "<invalid range: %s,%s>" % (start,end)
 
-		cmd = arrayRE.sub(arraySubRep,cmd)
+		cmdStr = arrayRE.sub(arraySubRep,cmdStr)
 
 		#resolve all connect array tokens:  @ - these are represent a mel array for the entire connects array excluding self
 		allConnectsArray = '{ "%s" }' % '","'.join( connects[1:] )
-		cmd = cmd.replace('@',allConnectsArray)
+		cmdStr = cmdStr.replace('@',allConnectsArray)
 
 		#resolve all single connect tokens:  %<x> - these represent single connects
 		connectRE = compile('(%)(-*[0-9]+)')
 		def connectRep( matchobj ):
 			char,idx = matchobj.groups()
 			return connects[ int(idx) ]
-			#except IndexError: return "<invalid connect>"
 
-		cmd = connectRE.sub(connectRep,cmd)
+		cmdStr = connectRE.sub(connectRep,cmdStr)
 
-		#finally resolve %opt<x>%
+		#finally resolve any optional arg list tokens:  %opt<x>%
 		optionalRE = compile('(\%opt)(-*[0-9]+)(\%)')
 		def optionalRep( matchobj ):
 			charA,idx,charB = matchobj.groups()
 			try: return optionals[ int(idx) ]
 			except IndexError: return "<invalid optional>"
 
-		cmd = optionalRE.sub(optionalRep,cmd)
+		cmdStr = optionalRE.sub(optionalRep,cmdStr)
 
-		return cmd
+		return cmdStr
 	def unresolve( self, cmdStr, optionals=[] ):
 		'''given a cmdStr this method will go through it looking to resolve any names into connect tokens.  it only looks for single cmd tokens
 		and optionals - it doesn't attempt to unresolve arrays'''
@@ -210,6 +216,67 @@ class Trigger(object):
 			cmdStr = connectRE.sub(idx,cmdStr)
 
 		return cmdStr
+	def replaceConnectToken( self, cmdStr, searchConnect, replaceConnect ):
+		'''returns a resolved cmd string.  the cmd string can be either passed in, or if you specify the slot number
+		the the cmd string will be taken as the given slot's menu command'''
+		connects = self.listAllConnectSlots()
+
+		#perform some early out tests
+		if not connects: return cmdStr
+		if searchConnect == replaceConnect: return cmdStr
+
+		#build the search and replace tokens - in the case that the replaceConnect is actually a string object, then just use it directly
+		searchToken = '#' if searchConnect == 0 else '%'+ str(searchConnect)
+		replaceToken = '#' if replaceConnect == 0 else '%'+ str(replaceConnect)
+		if isinstance(replaceConnect,basestring): replaceToken = replaceConnect
+
+		#build the regex to find the search data
+		connectRE = re.compile( '(%s)([^0-9])' % searchToken )
+		def tokenRep( matchobj ):
+			connectToken,trailingChar = matchobj.groups()
+			return '%s%s' % ( replaceToken, trailingChar )
+
+		cmdStr = connectRE.sub(tokenRep,cmdStr)
+
+		return cmdStr
+	def replaceConnectInCmd( self, searchConnect, replaceConnect ):
+		return self.replaceConnectToken( self.getCmd(slot), searchConnect, replaceConnect )
+	def replaceConnectInMenuCmd( self, slot, searchConnect, replaceConnect ):
+		return self.replaceConnectToken( self.getMenuCmd(slot), searchConnect, replaceConnect )
+	def replaceConnectInMenuCmds( self, searchConnect, replaceConnect ):
+		for connect,slot in self.connects:
+			self.replaceConnectToken( self.getMenuCmd(slot), searchConnect, replaceConnect )
+	def scrub( self, cmdStr ):
+		#so build the set of missing connects
+		missingSlots = set( [idx for idx,val in enumerate(self.listAllConnectSlots(emptyValue=None)) if val is None] )
+
+		#early out if we can
+		if not missingSlots: return cmdStr
+
+		#otherwise iterate over the list of slots and remove any line that has that slot token in it
+		for slot in missingSlots:
+			missingRE = re.compile(r'''^(.*)(%-*'''+ str(slot) +')([^0-9].*)$\n',re.MULTILINE)
+			cmdStr = missingRE.sub('',cmdStr)
+
+		def replaceSubArray( matchObj ):
+			junk1,start,end,junk2 = matchObj.groups()
+			start = int(start)
+			end = int(end)
+			if end<0: end = start+end
+			else: end += 1
+			subArrayNums = set(range(start,end))
+			common = subArrayNums.intersection( missingSlots )
+			if common: return ''
+			return matchObj.string[matchObj.start():matchObj.end()]
+
+		subArrayRE = re.compile('^(.*@)([0-9]+),(-*[0-9]+)([^0-9].*)$\n',re.MULTILINE)
+		cmdStr = subArrayRE.sub(replaceSubArray,cmdStr)
+
+		return cmdStr
+	def scrubCmd( self, slot ):
+		self.setCmd( self.scrub( self.getCmd() ))
+	def scrubMenuCmd( self, slot ):
+		self.setMenuCmd(slot, self.scrub( self.getMenuCmd(slot) ))
 	def collapseMenuCmd( self, slot ):
 		'''resolves a menu item's command string and writes it back to the menu item - this is most useful when connects are being re-shuffled
 		and you don't want to have to re-write command strings.  there is the counter function - uncollapseMenuCmd that undoes the results'''
@@ -220,9 +287,27 @@ class Trigger(object):
 	def eval( self, cmdStr, optionals=[] ):
 		return mel.eval( self.resolve(cmdStr,optionals) )
 	def evalCmd( self ):
-		self.eval( self.getCmd() )
+		return self.eval( self.getCmd() )
 	def evalMenu( self, slot ):
-		self.eval( self.getMenuCmd(slot) )
+		return self.eval( self.getMenuCmd(slot) )
+	def evalCareful( self, cmdStr, optionals=[] ):
+		'''so this does an eval on a line by line basis, catching errors as they happen - its most useful for
+		when you have large cmdStrs with only a small number of errors'''
+		start = time.clock()
+		lines = cmdStr.split('\n')
+		evalMethod = mel.eval
+		validLines = []
+
+		for line in lines:
+			try:
+				cmd.select(cl=True)  #selection is cleared so any missing connects don't work on selection instead of specified objects
+				resolvedLine = self.resolve(line,optionals)
+				evalMethod(resolvedLine)
+			except RuntimeError: continue
+			validLines.append( line )
+		end = time.clock()
+		print 'time taken', end-start, 'seconds'
+		return '\n'.join(validLines)
 	def isConnected( self, object ):
 		#return a list of the slot indicies <object> is connected to
 		if not objExists(object): return []
@@ -232,51 +317,85 @@ class Trigger(object):
 		connections = cmd.listConnections("%s.msg"%object, s=False, p=True)
 
 		slots = []
-		for con in connections:
-			try:
-				attr = con.split('.')
-				slot = attr[prefixSize:]
-				if attr[-1].startswith('zooTrig') and slot.isdigit():
-					slots.append( int(slot) )
-			except IndexError: pass
+		try:
+			#this stupid try is to catch the cases where there are no connections and maya stupidly returns None...  thanks alias!
+			for con in connections:
+				try:
+					attr = con.split('.')
+					slot = attr[prefixSize:]
+					if attr[-1].startswith('zooTrig') and slot.isdigit():
+						slots.append( int(slot) )
+				except IndexError: pass
+		except TypeError: pass
+
 		return slots
 	def connect( self, object, slot=None ):
-		if not objExists(object): return -1
-
+		'''performs the actual connection of an object to a connect slot'''
 		#get the long name of the objects - this ensures when we get a long name for either, we know we're still dealing with the correct objects
-		object = longname(object)
+		try: object = longname(object)
+		except TypeError: return -1
 
 		#if the user is trying to connect the trigger to itself, return zero which is the reserved slot for the trigger
 		if self.obj == object: return 0
+		if slot <= 0: return 0
+		elif slot is None: slot = self.nextSlot()
 
 		#make sure the connect isn't already connected - if it is, return the slot number
 		existingSlots = self.isConnected(object)
-		if len(existingSlots): return existingSlots
+		if existingSlots: return existingSlots
 
 		conPrefix = 'zooTrig'
 		prefixSize = len(conPrefix)
 
-		if slot <= 0: return 0
-		elif slot is None: slot = self.nextSlot()
-
 		slotPath = "%s.%s%d" % (self.obj, conPrefix, slot )
 		if not objExists( slotPath ):
 			cmd.addAttr(self.obj,ln= "%s%d" % (slotPrefix, slot ), at='message')
+
 		cmd.connectAttr( "%s.msg" % object, slotPath, f=True )
 		self.cacheConnect(slot)
 
 		return slot
+	def disconnect( self, object=None, slot=None ):
+		'''removes either the specified object from all slots, or disconnects the object at the specified slot'''
+		if object is not None and self.isConnected(object):
+			#this is the object case
+			slots = self.getConnectSlots(object)
+			for slot in slots: cmd.deleteAttr( '%s.zooTrig%d' % ( self.obj, slot ))
+		elif slot is not None:
+			cmd.deleteAttr( '%s.zooTrig%d' % ( self.obj, slot ))
 	def removeCmd( self, removeConnects=False ):
-		pass
+		'''removes the triggered cmd from self - can optionally remove all the connects as well'''
+		try:
+			#catches the case where there is no trigger cmd...  faster than a object existence test
+			cmd.deleteAttr( '%s.zooTrigCmd0' % self.obj )
+			if removeConnects:
+				for connect,slot in self.connects():
+					self.disconnect(slot=slot)
+		except TypeError: pass
 	def removeMenu( self, slot, removeConnects=False ):
-		pass
+		'''removes a given menu slot - if removeConnects is True, all connects will be removed ONLY if there are no other menu cmds'''
+		attrpath = '%s.zooCmd%d' % ( self.obj, slot )
+		try:
+			cmd.deleteAttr( '%s.zooCmd%d' % ( self.obj, slot ))
+			if removeConnects and not self.listMenus():
+				for connect,slot in self.connects():
+					self.disconnect(slot=slot)
+		except TypeError: pass
 	def removeAll( self, removeConnects=False ):
-		pass
-	def listSlots( self, haveConnections=True ):
-		#lists all slot indicies - if haveConnections is true it will list only slots with connected objects
-		pass
+		'''removes all triggered data from self'''
+		self.removeCmd(removeConnects)
+		for idx,name,cmd in self.listMenus():
+			self.removeMenu(idx)
 	def nextSlot( self ):
-		pass
+		'''returns the first available slot index'''
+		slots = self.listAllConnectSlots()
+		unused = [con for con,obj in enumerate(slots) if obj == '']
+		next = 1
+
+		if unused: return unused[0]
+		elif slots: return len(slots)
+
+		return next
 	def getConnectSlots( self, object ):
 		'''returns the slots an object is connected to - if the object isn't connected to any, an empty list is returned'''
 		attrPrefix = 'zooTrig'
@@ -294,21 +413,34 @@ class Trigger(object):
 
 		return slots
 	def cacheConnect( self, slot ):
-		#caches the objectname of a slot connection
-		pass
-	def cacheConnects( self ):
-		pass
+		'''caches the objectname of a slot connection'''
+		try: connectName = self[slot]
+		except IndexError: return None
+
+		slotPrefix = 'zooTrig'
+		cacheAttrName = '%s%d%cache' % ( slotPrefix, slot )
+		cacheAttrPath = '%s.%s' % ( self.obj, cacheAttrName )
+
+		if not cmd.objExists(cacheAttrPath): addAttr(self.obj, ln=cacheAttrName, dt='string')
+		cmd.setAttr( cacheAttrPath, connectName, type='string')
 	def validateConnects( self ):
+		'''connects maintain a cache which "remembers" the last object that was plugged into them.  this method will
+		run over all connects and for those unconnected ones, it will look for the object that it USED to be connected to
+		and connect it, and for those that ARE connected, it will make sure the cache is valid.  the cache can become
+		invalid if a connected object's name changes after it was connected'''
 		slotPrefix = 'zooTrig'
 
-		for connect,slot in self.connects():
+		for connect,slot in self.iterConnects():
 			attrpath = '%s.%s%d' % ( self.obj, slotPrefix, slot )
 			objPath = cmd.connectionInfo(attrpath, sfd=True)
 			if not cmd.objExists( objPath ):
 				#get the cached connect and attach it
-				#self.connect(zooAddConnectTo $trigger $connect $slot;
-				pass
+				cachedValue = cmd.getAttr('%scache' % attrpath)
+				if cmd.objExists(cachedValue):
+					self.connect(cachedValue,slot)
 	def setKillState( self, state ):
+		'''so the kill state tells the objMenu build script to stop after its build all menu items listed on the object - this method
+		provides an interface to enabling/disabling that setting'''
 		attr = 'zooObjMenuDie'
 		attrpath = '%s.%s' % ( self.obj, attr )
 		if state:
@@ -320,6 +452,7 @@ class Trigger(object):
 	def getKillState( self ):
 		attrpath = "%s.zooObjMenuDie" % self.obj
 		if objExists( attrpath ): return bool( cmd.getAttr(attrpath) )
+
 		return False
 	killState = property(getKillState,setKillState)
 
@@ -393,5 +526,10 @@ def setTriggeredState( state=True ):
 
 
 def longname( object ):
-	longname = cmd.ls(object,long=True)
-	return longname[0]
+	try:
+		longname = cmd.ls(object,long=True)
+		return longname[0]
+	except IndexError: raise TypeError
+
+
+#end

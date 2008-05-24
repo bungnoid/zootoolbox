@@ -80,7 +80,8 @@ global proc zooBuildTrigConnectsPopup( string $parent ) {
 	if( $high == 1 ) $lbl = "slot number "+ $slot;
 	menuItem -en $sel -l "add selected to connects" -c( "zooTriggeredWindowFunctions -addConnect;" );
 	menuItem -en $sel -l "add as specific connect..." -c( "zooTriggeredWindowFunctions -addCustomConnect;" );
-	menuItem -en( $sel==1 && $high==1 ) -l "replace connect with selected" -c( "zooTriggeredWindowFunctions -replaceConnect;" );
+	menuItem -en( $sel==1 && $high==1 ) -l "replace connect with selected" -ann "replaces the highlighted connect with either the selected object OR a user specified string" -c( "zooTriggeredWindowFunctions -replaceConnect;" );
+	menuItem -l "replace connect and fix cmds" -ann "" -c( "zooTriggeredWindowFunctions -replaceConnect" );
 	menuItem -en $high -l "disconnect highlighted" -c( "zooTriggeredWindowFunctions -removeConnect;" );
 	menuItem -d 1;
 	menuItem -en $sel -l "highlight selected" -c( "zooTriggeredWindowFunctions -highlightSelConnects;" );
@@ -124,6 +125,7 @@ global proc zooBuildTrigPresetPopup( string $parent ) {
 
 	menuItem -d 1;
 	menuItem -en $enableMenu -l "highlight connects used in cmd" -c( "zooTriggeredWindowFunctions -highlightUsedConnects" );
+	menuItem -en $enableMenu -l "scrub cmd" -ann "will remove any lines that contain references to connects that don't exist" -c( "zooTriggeredWindowFunctions -scrubCmd" );
 	}
 
 
@@ -276,6 +278,12 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			textScrollList -e -da zooTriggeredScrollTargets;
 			for( $obj in $usedObjs ) textScrollList -e -si $obj zooTriggeredScrollTargets;
 			break;
+		case "-scrubCmd":
+			python("import vMaya.triggered as triggered");
+			if( $cmdViewMode ) python("triggered.Trigger('"+ $trigger +"').scrubMenuCmd("+ $slot +")");
+			else python("triggered.Trigger('"+ $trigger +"').scrubCmd()");
+			zooTriggeredWindowFunctions -updateCmd;
+			break;
 		case "-selectTrigger":
 			select `textScrollList -q -si zooTriggeredScrollObjects`;
 			break;
@@ -333,12 +341,23 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			break;
 		case "-replaceConnect":
 			if( !`objExists $trigger` ) break;
+			python("import vMaya.triggered as triggered");
 			string $sel[] = `ls -sl`;
 			string $connects[] = `textScrollList -q -si zooTriggeredScrollTargets`;
-			int $slot = zooGetElement_int(0,`zooGetConnectSlots $trigger $connects[0]`);
+			int $connect = zooGetElement_int(0,`zooGetConnectSlots $trigger $connects[0]`);
+			string $ans = `promptDialog -t "replace connect with..." -m( "type an object name or arbitrary string to replace connect "+ $slot +" with" ) -tx $sel[0] -b "OK" -b "Cancel" -db "OK"`;
 
-			zooAddConnectTo $trigger $sel[0] $slot;
+			if( $ans != "OK" ) return;
+
+			string $obj = `promptDialog -q -tx`;
+			print( $obj +"\n" );
+			if( `objExists $obj` ) zooAddConnectTo $trigger $obj $connect;
+			else {
+				if( $cmdViewMode ) python("triggered.Trigger('"+ $trigger +"').replaceConnectInMenuCmd("+ $slot +","+ $connect +",'"+ $obj +"')");
+				else python("triggered.Trigger('"+ $trigger +"').replaceConnectInCmd("+ $connect +",'"+ $obj +"')");
+				}
 			zooTriggeredWindowFunctions -updateConnects;
+			zooTriggeredWindowFunctions -updateCmd;
 			break;
 		case "-removeConnect":
 			if( !`objExists $trigger` ) break;
