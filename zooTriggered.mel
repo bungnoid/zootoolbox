@@ -147,6 +147,9 @@ global proc zooBuildTrigCmdPopup( string $parent ) {
 	menuItem -en $enable -d 1;
 	menuItem -l "poses to sliders" -c( "select "+ $obj +"; zooPosesToSliders \"\";" );
 	menuItem -l "poses to sliders (preserve)" -c( "select "+ $obj +"; zooPosesToSliders \"-preserve 1\";" );
+	menuItem -d 1;
+	menuItem -l "scrub this cmd" -c( "python(\"import vMaya.triggered as triggered; triggered.Trigger('"+ $obj +"').scrubMenuCmd("+ $slot +");\"); zooTriggeredWindowFunctions -updateCmd;" );
+	menuItem -l "scrub all cmds" -c( "python(\"import vMaya.triggered as triggered; triggered.Trigger('"+ $obj +"').scrubMenuCmds();\"); zooTriggeredWindowFunctions -updateCmd;" );
 	}
 
 

@@ -50,9 +50,9 @@ class Trigger(object):
 		return iter( self.connects()[1:] )
 	def iterMenus( self, resolve=False ):
 		'''iterator that returns slot,name,cmd'''
-		return iter( self.listMenus(resolve) )
+		return iter( self.menus(resolve) )
 	def getCmd( self, resolve=False, optionals=[] ):
-		attrPath = '%s.zooTrigCmd0'
+		attrPath = '%s.zooTrigCmd0' % self.obj
 		if objExists( attrPath  ):
 			cmdStr = cmd.getAttr(attrPath)
 			if resolve: return self.resolve(cmdStr,optionals)
@@ -90,7 +90,7 @@ class Trigger(object):
 		idx = cmdInfo.find('^')
 		if resolve: return cmdInfo[:idx],self.resolve(cmdInfo[idx+1:])
 		return cmdInfo[:idx],cmdInfo[idx+1:]
-	def listMenus( self, resolve=False ):
+	def menus( self, resolve=False ):
 		attrs = cmd.listAttr(self.obj,ud=True)
 		slotPrefix = 'zooCmd'
 		prefixSize = len(slotPrefix)
@@ -248,7 +248,25 @@ class Trigger(object):
 			self.replaceConnectToken( self.getMenuCmd(slot), searchConnect, replaceConnect )
 	def scrub( self, cmdStr ):
 		#so build the set of missing connects
-		missingSlots = set( [idx for idx,val in enumerate(self.listAllConnectSlots(emptyValue=None)) if val is None] )
+		allSlots = self.listAllConnectSlots(emptyValue=None)
+		missingSlots = set( [idx for idx,val in enumerate(allSlots) if val is None] )
+
+		#now build the list of connect tokens used in the cmd and compare it with the connects
+		#that are valid - in the situation where there are connects in the cmdStr that don't
+		#exist on the trigger, we want to scrub these
+		singleRE = re.compile('%([0-9]+)')
+		subArrayRE = re.compile('@([0-9]+),(-*[0-9]+)')
+
+		nonexistantSlots = set( map(int, singleRE.findall(cmdStr)) )
+		for start,end in subArrayRE.findall(cmdStr):
+			start = int(start)
+			end = int(end)
+			if end < 0: end += len(allSlots)
+			else: end += 1
+			[nonexistantSlots.add(slot) for slot in xrange( start, end )]
+
+		[nonexistantSlots.discard( slot ) for slot,connect in enumerate(allSlots)]
+		missingSlots = missingSlots.union( nonexistantSlots )  #now add the nonexistantSlots to the missingSlots
 
 		#early out if we can
 		if not missingSlots: return cmdStr
@@ -273,10 +291,12 @@ class Trigger(object):
 		cmdStr = subArrayRE.sub(replaceSubArray,cmdStr)
 
 		return cmdStr
-	def scrubCmd( self, slot ):
+	def scrubCmd( self ):
 		self.setCmd( self.scrub( self.getCmd() ))
 	def scrubMenuCmd( self, slot ):
 		self.setMenuCmd(slot, self.scrub( self.getMenuCmd(slot) ))
+	def scrubMenuCmds( self ):
+		for slot,name,cmdStr in self.menus(): self.scrubMenuCmd(slot)
 	def collapseMenuCmd( self, slot ):
 		'''resolves a menu item's command string and writes it back to the menu item - this is most useful when connects are being re-shuffled
 		and you don't want to have to re-write command strings.  there is the counter function - uncollapseMenuCmd that undoes the results'''
@@ -377,14 +397,14 @@ class Trigger(object):
 		attrpath = '%s.zooCmd%d' % ( self.obj, slot )
 		try:
 			cmd.deleteAttr( '%s.zooCmd%d' % ( self.obj, slot ))
-			if removeConnects and not self.listMenus():
+			if removeConnects and not self.menus():
 				for connect,slot in self.connects():
 					self.disconnect(slot=slot)
 		except TypeError: pass
 	def removeAll( self, removeConnects=False ):
 		'''removes all triggered data from self'''
 		self.removeCmd(removeConnects)
-		for idx,name,cmd in self.listMenus():
+		for idx,name,cmd in self.menus():
 			self.removeMenu(idx)
 	def nextSlot( self ):
 		'''returns the first available slot index'''
