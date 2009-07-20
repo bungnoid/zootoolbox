@@ -29,6 +29,7 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 		int $spaceswitching = 1;
 		int $pickwalking = 1;
 		int $stretch = 0;
+		int $allPurpose = 1;
 
 		$optionTemp = `zooGetFlagArguments $optionStr root`; if( `size $optionTemp` ) $rootFlag = $optionTemp[0];
 		$optionTemp = `zooGetFlagArguments $optionStr chest`; if( `size $optionTemp` ) $chestFlag = $optionTemp[0];
@@ -41,6 +42,13 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 		$optionTemp = `zooGetFlagArguments $optionStr scale`; if( `size $optionTemp` ) $scale = $optionTemp[0];
 		$optionTemp = `zooGetFlagArguments $optionStr stretch`; if( `size $optionTemp` ) $stretch = $optionTemp[0];
 		$optionTemp = `zooGetFlagArguments $optionStr parents`; if( `size $optionTemp` ) $parents = $optionTemp;
+		$optionTemp = `zooGetFlagArguments $optionStr allPurpose`; if( `size $optionTemp` ) $allPurpose = $optionTemp[0];
+
+
+	//------
+	//
+	//------
+	python("import rigger; rigger.getWristToWorldRotation('"+ $wrist +"', True)");
 
 
 	//------
@@ -122,14 +130,25 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 	//------
 		string $spaceNodes1[] = {};
 		string $spaceNodes2[] = {};
-
 		if( `objExists $clavControl` ) parent $fkArmSpace $clavControl;
 		else if( `objExists $chestControl` ) parent $fkArmSpace $chestControl;
 		else if( `objExists $rootControl` ) parent $fkArmSpace $rootControl;
+
 		if( $spaceswitching ) {
 			string $armControlParents[] = { $worldControl, $rootControl, $chestControl, $clavControl, $headControl };
+			string $armControlParentLabels[] = { "world", "root", "chest", "clavicle", "head" };
+
+			if( $allPurpose ) {
+				string $allPurposeObj = zooGetElement_str(0, spaceLocator());
+				$armControlParents[ `size $armControlParents` ] = $allPurposeObj;
+				$armControlParentLabels[ `size $armControlParentLabels` ] = "all purpose locator";
+
+				$allPurposeObj = rename($allPurposeObj, "all_purpose_loc"+ $suffix);
+				parent $allPurposeObj $worldControl;
+				}
+
 			if( `size $parents` ) $armControlParents = `zooAddArray_str $armControlParents $parents`;
-			$spaceNodes1 = `zooBuildSpaceSwitch $armControl $ikArmSpace $armControlParents { "world", "root", "chest", "clavicle", "head" } "-mo"`;
+			$spaceNodes1 = `zooBuildSpaceSwitch $armControl $ikArmSpace $armControlParents $armControlParentLabels "-mo"`;
 			$spaceNodes2 = `zooBuildSpaceSwitch $driverBicep $fkArmSpace { $clavControl, $chestControl, $rootControl, $worldControl } { "clavicle", "chest", "root", "world" } "-mo"`;
 
 			//and for elbows
@@ -139,14 +158,22 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 			parent $rootPos $worldControl;
 			if( `objExists $rootControl` ) pointConstraint -mo $rootControl $rootPos;
 			$spaceNodes1 = `zooBuildSpaceSwitch $elbowControl $elbowControlSpace { $chestControl, $rootControl, $rootPos } { "chest", "root", "root pos only" } "-mo"`;
-			for( $obj in {$armControl,$elbowControl,$clavControl} ) setObjMenuKillState $obj 1;
+			if ( `objExists $clavControl` )for ( $obj in {$clavControl} ) setObjMenuKillState $obj 1;
+			for( $obj in {$armControl,$elbowControl} ) setObjMenuKillState $obj 1;
 			for( $obj in $fkControls ) setObjMenuKillState $obj 1;
 			}
+		
+		setAttr -lock false  ( $fkArmSpace +".tx" );
+		setAttr -lock false  ( $fkArmSpace +".ty" );
+		setAttr -lock false  ( $fkArmSpace +".tz" );
 
 		delete -icn ( $fkArmSpace +".tx" );
 		delete -icn ( $fkArmSpace +".ty" );
 		delete -icn ( $fkArmSpace +".tz" );
-
+		
+		setAttr -lock true  ( $fkArmSpace +".tx" );
+		setAttr -lock true  ( $fkArmSpace +".ty" );
+		setAttr -lock true  ( $fkArmSpace +".tz" );
 
 	//------
 	//build pickwalking if required
@@ -155,15 +182,15 @@ global proc string[] zooCSTBuildPrimArm( string $prefix, string $parity, string 
 			zooPickwalk "-load";
 			string $parityName = "left";
 			if( $parity == "r" ) $parityName = "right";
-			zooSetPickwalkObj $clavControl $chestControl "-dir up -reciprocal 0";
-			zooSetPickwalkObj $clavControl $fkControls[0] "-dir down -reciprocal 1";
+			if ( `objExists $clavControl` ) zooSetPickwalkObj $clavControl $chestControl "-dir up -reciprocal 0";
+			if ( `objExists $clavControl` ) zooSetPickwalkObj $clavControl $fkControls[0] "-dir down -reciprocal 1";
 			zooSetPickwalkObj $fkControls[0] $fkControls[1] "-dir down -reciprocal 1";
 			zooSetPickwalkObj $fkControls[1] $fkControls[2] "-dir down -reciprocal 1";
 			zooSetPickwalkObj $fkControls[2] $armControl "-dir left -reciprocal 1";
 			zooSetPickwalkObj $fkControls[2] $armControl "-dir right -reciprocal 1";
 			zooSetPickwalkObj $armControl $elbowControl "-dir up -reciprocal 1";
 			zooSetPickwalkObj $armControl $elbowControl "-dir down -reciprocal 1";
-			zooSetPickwalkObj $chestControl $clavControl ( "-dir "+ $parityName+ " -reciprocal 0" );
+			if ( `objExists $clavControl` ) zooSetPickwalkObj $chestControl $clavControl ( "-dir "+ $parityName+ " -reciprocal 0" );
 			}
 
 

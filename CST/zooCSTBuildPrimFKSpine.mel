@@ -56,8 +56,8 @@ global proc string[] zooCSTBuildPrimFKSpine( string $prefix, string $root, strin
 		string $rootGimbal = $roots[3];
 
 		parent $rootSpace $worldControl;
-		parentConstraint -mo $rootControl $root;
 		if( `objExists $hipsControl` ) parentConstraint -mo $hipsControl $hips;
+		else parentConstraint -mo $rootControl $root;
 
 
 	//------
@@ -147,12 +147,28 @@ global proc string[] zooCSTBuildPrimFKSpine( string $prefix, string $root, strin
 	//we do this so the controls aren't position parented to the space objects - specifying -st x etc in the parent constraint flag options doesnt work
 	//as maya stuffs up when applying multiple parent constraints each with the -st flags specified
 	//------
+	
+		setAttr -lock false  ( $baseSpace +".tx" );
+		setAttr -lock false  ( $baseSpace +".ty" );
+		setAttr -lock false  ( $baseSpace +".tz" );
+		setAttr -lock false  ( $chestSpace +".tx" );
+		setAttr -lock false  ( $chestSpace +".ty" );
+		setAttr -lock false  ( $chestSpace +".tz" );
+				
+	
 		delete -icn ( $baseSpace +".tx" );
 		delete -icn ( $baseSpace +".ty" );
 		delete -icn ( $baseSpace +".tz" );
 		delete -icn ( $chestSpace +".tx" );
 		delete -icn ( $chestSpace +".ty" );
 		delete -icn ( $chestSpace +".tz" );
+
+		setAttr -lock true  ( $baseSpace +".tx" ); 
+		setAttr -lock true  ( $baseSpace +".ty" ); 
+		setAttr -lock true  ( $baseSpace +".tz" ); 
+		setAttr -lock true  ( $chestSpace +".tx" );
+		setAttr -lock true  ( $chestSpace +".ty" );
+		setAttr -lock true  ( $chestSpace +".tz" );
 
 
 	//------

@@ -547,6 +547,18 @@ global proc zooBuildFlagPopup( string $textFieldName, string $flags[] ) {
 	menuItem -l "clear all" -c( "textField -e -tx \"\" "+ $textFieldName );
 	}
 
+global proc string getShortName( string $name ) {
+	if( $name != "" ) return zooGetElement_str(0, ls($name));
+	return "";
+	}
+
+
+global proc string queryNameField( string $nameField ) {
+	string $val = `nameField -q -o $nameField`;
+	if( $val != "" ) return zooGetElement_str(0, ls($val));
+	return "";
+	}
+
 
 global proc zooCSTSpaceUIFunctions( string $function ) {
 	zooCSTUtils;
@@ -680,11 +692,28 @@ global proc zooCSTSpaceUIFunctions( string $function ) {
 			$spaces = `zooSubtractArray_str $spaces $existingSpace`;
 			$names = `zooIndexCrop_str $names ( "-"+ (size($spaces)) +":" )`;
 			for( $n=0; $n<`size $spaces`; $n++ ) {
-				string $cmd = "zooAddSpaceSwitch \""+ $obj +"\" \""+ $parent +"\" \""+ $spaces[$n] +"\" \""+ $names[$n] +"\" \"-mo\"";
+				string $cmd = "zooAddSpaceSwitch \""+ getShortName($obj) +"\" \""+ getShortName($parent) +"\" \""+ getShortName($spaces[$n]) +"\" \""+ $names[$n] +"\" \"-mo\"";
 				eval($cmd);
 				echoRigElementCreationCommand $cmd;
 				}
 			break;
+		}
+	}
+
+
+global proc zooCSTBuildNamesMenu( string $popup ) {
+	menu -e -dai $popup;
+	setParent -m $popup;
+
+	string $withName[] = `zooListAllWithBrand name`;
+	string $names[] = {};
+	for( $o in $withName ) {
+		$names[ `size $names` ] = `zooQueryBrand $o name`;
+		}
+	$names = stringArrayRemoveDuplicates( $names );
+
+	for( $n in $names ) {
+		menuItem -l $n -c( "textField -e -tx \""+ $n +"\" zooCSTTextPrefix;" );
 		}
 	}
 
@@ -725,10 +754,14 @@ global proc zooCSTCtrlUIFunctions( string $function ) {
 		case "-buildOnSelected":
 			$useSelected = 1;
 		case "-build":
-			string $tgt = `nameField -q -o zooCSTNamePlaceCtrl`;
-			string $piv = `nameField -q -o zooCSTNamePivotCtrl`;
-			string $ali = `nameField -q -o zooCSTNameAlignCtrl`;
-			string $par = `nameField -q -o zooCSTNameParentCtrl`;
+			string $prefix = `textField -q -tx zooCSTTextPrefix`;
+			string $qss = zooGetElement_str( 0, `zooGetBrandedWith "qss" $prefix` );
+			if( $prefix == "" ) error "You must specify a prefix";
+
+			string $tgt = `queryNameField zooCSTNamePlaceCtrl`;
+			string $piv = `queryNameField zooCSTNamePivotCtrl`;
+			string $ali = `queryNameField zooCSTNameAlignCtrl`;
+			string $par = `queryNameField zooCSTNameParentCtrl`;
 			string $type = `textField -q -tx zooCSTTextCtrlType`;
 			string $axis = `radioCollection -q -sl zooCSTCtrlAxis`;
 			string $name = `match "[^|]+$" $tgt`;
@@ -738,23 +771,29 @@ global proc zooCSTCtrlUIFunctions( string $function ) {
 			float $offsetUp = `floatField -q -v zooCSTFloatOffUp`;
 			float $offsetSide = `floatField -q -v zooCSTFloatOffSide`;
 			float $offsetFwd = `floatField -q -v zooCSTFloatOffFwd`;
+			float $sizeX = `floatField -q -v zooCSTFloatSizeX`;
+			float $sizeY = `floatField -q -v zooCSTFloatSizeY`;
+			float $sizeZ = `floatField -q -v zooCSTFloatSizeZ`;
 			int $curve = `checkBox -q -v zooCSTCheckCurve`;
 			int $surface = `checkBox -q -v zooCSTCheckSurface`;
 			int $constrain = `checkBox -q -v zooCSTCheckConstrain`;
 			int $orient = `checkBox -q -v zooCSTCheckOriented`;
 			int $joint = `checkBox -q -v zooCSTCheckJoint`;
+			int $basePivot = `checkBox -q -v zooCSTCheckBasePivot`;
 
-			if( $name != "" ) $name += "_ctrl";
+			if( $name != "" ) $name = zooStripAllNamespaces( $name ) +"_ctrl";
 			if( $colour == "none" ) $colour = "";
 			if( `checkBox -q -v zooCSTCheckNeg` ) $axis = "_"+ $axis;
 			if( $useSelected ) $tgts = `ls -sl`;
 			else $tgts = {$tgt};
 			for( $obj in $tgts ) {
-				string $cmd = "zooBuildControl \""+ $name +"\" \"-type "+ $type +" -axis "+ $axis +" -surface "+ $surface +" -orient "+ $orient +" -joint "+ $joint +" -scale "+ $scale;
+				if( $name == "" ) $name = zooStripAllNamespaces( $obj ) +"_ctrl";
+				string $cmd = "zooBuildControl \""+ $name +"\" \"-type "+ $type +" -axis "+ $axis +" -size "+ $sizeX +" "+ $sizeY +" "+ $sizeZ +" -surface "+ $surface +" -orient "+ $orient +" -joint "+ $joint +" -qss "+ $qss +" -scale "+ $scale;
 
+				if( $basePivot ) $cmd += " -pivot base ";
 				if( `objExists $obj` ) $cmd += " -place "+ $obj;
 				if( `objExists $piv` ) $cmd += " -placepivot "+ $piv;
-				if( `objExists $ali` ) $cmd += " -align "+ ($useSelected? "%p": $ali);
+				if( `objExists $ali` || $useSelected ) $cmd += " -align "+ ($useSelected? "%p": $ali);
 				if( `objExists $par` ) $cmd += " -parent "+ $par;
 				if( $colour != "" ) $cmd += " -colour "+ $colour;
 				if( $offsetUp != 0 || $offsetSide != 0 || $offsetFwd != 0 ) {

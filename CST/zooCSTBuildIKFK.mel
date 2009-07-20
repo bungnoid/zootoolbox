@@ -18,15 +18,15 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 		string $suffix = ( $parity == "r" )?"_R":"_L";
 		string $temp[] = {};
 		string $id = "";
-		string $ikType = "cube";
-		string $fkType = "cube";
+		string $ikType = "skingeometry";
+		string $fkType = "skingeometry";
 		string $poleType = "sphere";
 		string $bicepTwists[] = `zooGetInBTweenJoints $bicep $elbow`;
 		string $wristTwists[] = `zooGetInBTweenJoints $elbow $wrist`;
 		string $twistUpObj = zooGetElement_str(0,`listRelatives -f -p $bicep`);
-		string $colour = $parity=="r"? "red 0.65": "green 0.65";
+		string $colour = $parity=="r"? "red 0.92": "green 0.92";
 		float $scale = 1.;
-		int $alignEnd = 1;
+		int $alignEnd = 0;
 		int $cmds = 0;
 		int $asPrim = 0;
 		int $offsetDir = $parity=="r"? -1: 1;
@@ -64,12 +64,35 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 
 
 	//------
+	//determine broken hierarchy twist joints
+	//------
+		string $bicepUseJoints[] = {};
+		string $elbowUseJoints[] = {};
+
+		$bicepUseJoints = listRelatives( $bicep );
+		$elbowUseJoints = listRelatives( $elbow );
+
+		int $idx = zooGetIdxOfElement_str( $bicepUseJoints, $elbow );
+		$bicepUseJoints = zooRemoveArrayIdx_str( $bicepUseJoints, $idx );
+		$bicepUseJoints = zooAddArray_str( $bicepUseJoints, `listRelatives -pa -ad $bicepUseJoints` );
+		$bicepUseJoints = zooAddArray_str( {$bicep}, $bicepUseJoints );
+
+		int $idx = zooGetIdxOfElement_str( $elbowUseJoints, $wrist );
+		$elbowUseJoints = zooRemoveArrayIdx_str( $elbowUseJoints, $idx );
+		$elbowUseJoints = zooAddArray_str( $elbowUseJoints, `listRelatives -pa -ad $elbowUseJoints` );
+		$elbowUseJoints = zooAddArray_str( {$elbow}, $elbowUseJoints );
+
+		string $bicepUseJointsStr = zooArrayToStr_str( $bicepUseJoints, " " );
+		string $elbowUseJointsStr = zooArrayToStr_str( $elbowUseJoints, " " );
+
+
+	//------
 	//build the fk objects
 	//------
 		string $ikArmSpace = `zooBuildControl ( "ik_limbSpace"+ $id ) ( "-type null -align %p -place "+ $wrist )`;
 		string $fkArmSpace = `zooBuildControl ( "fk_limbSpace"+ $id ) ( "-type null -align %p -place "+ $bicep )`;
-		string $driverUpper = `zooBuildControl ( "fk_limbUpperControl"+ $id ) ( "-type "+ $fkType +" -useJoints "+ $bicep +" "+ (zooArrayToStr_str($bicepTwists," ")) +" -align %p -place "+ $bicep +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
-		string $driverMid = `zooBuildControl ( "fk_limbMiddleControl"+ $id ) ( "-type "+ $fkType +" -useJoints "+ $elbow +" "+ (zooArrayToStr_str($wristTwists," ")) +" -align %p -place "+ $elbow +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
+		string $driverUpper = `zooBuildControl ( "fk_limbUpperControl"+ $id ) ( "-type "+ $fkType +" -useJoints "+ $bicepUseJointsStr +" "+ (zooArrayToStr_str($bicepTwists," ")) +" -align %p -place "+ $bicep +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
+		string $driverMid = `zooBuildControl ( "fk_limbMiddleControl"+ $id ) ( "-type "+ $fkType +" -useJoints "+ $elbowUseJointsStr +" "+ (zooArrayToStr_str($wristTwists," ")) +" -align %p -place "+ $elbow +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
 		string $driverLower = "";
 		if( $alignEnd ) $driverLower = `zooBuildControl ( "limbEndControl"+ $id ) ( "-type "+ $fkType +" -align %p -place "+ $wrist +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
 		else $driverLower = `zooBuildControl ( "limbEndControl"+ $id ) ( "-type "+ $fkType +" -place "+ $wrist +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
@@ -79,16 +102,12 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 
 		parent $wristOrientOffset $wristOrient;
 		parent $wristOrient $partsControl;
-		delete `parentConstraint $wrist $wristOrientOffset`;
 
 
 	//------
 	//the fk and ik arm spaces are oriented using zooAlign instead of building them as oriented controls - this is because
 	//oriented controls are joints and thus can't be hidden without hiding all children
 	//------
-		// NOTE: Added the zooAlign code back to eliminate the right side orientation flipping problems
-		zooAlign ( "-src "+ $wrist +" -tgt "+ $ikArmSpace );
-		zooAlign ( "-src "+ $bicep +" -tgt "+ $fkArmSpace );
 		parent $driverUpper $fkArmSpace;
 		parent $driverMid $driverUpper;
 		parent $driverLower $driverMid;
@@ -122,12 +141,24 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 	//build the IK handle
 	//------
 		string $limbControl = zooGetElement_str(0,`ikHandle -fs 1 -sj $driverUpper -ee $driverLower -solver ikRPsolver`);
-		string $limbControlObject = `zooBuildControl ( "limbControl"+ $id ) ( "-type "+ $ikType +" -place "+ $wrist +" -align %p -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
+		string $limbControlObject = `zooBuildControl ( "limbControl"+ $id ) ( "-type "+ $ikType +" -place "+ $wrist +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
 		string $limbControlOrient = `zooCSTOrient2Obj $wrist $limbControl`;
 
+		//if the control object has no shape node, create a default shape - there is no point having an ik control with no visual representation
+		string $shapes[] = `listRelatives -pa -s $limbControlObject`;
+		if( !`size $shapes` ) $limbControlObject = `zooBuildControl ( "limbControl"+ $id ) ( "-place "+ $wrist +" -joint 1 -scale "+ $scale +" -colour "+ $colour )`;
+
+		poleVectorConstraint $poleControl $limbControl;
+		if( !$alignEnd ) {
+			setAttr ( $limbControlOrient +".r" ) 0 0 0;  //if we're not aligning to the end - remove any rotation
+			setAttr ( $wristOrientOffset +".r" ) 0 0 0;
+			zooAlignFast $limbControlOrient $driverLower 0 0;
+			makeIdentity -a 1 -t 1 $driverLower;
+			}
 		parent $limbControlOrient $ikArmSpace;
 		setAttr ( $limbControl +".snapEnable" ) 0;
-		for( $s in `listRelatives -f -s $limbControlObject` ) parent -add -s $s $limbControl;
+		string $shapeChildren[] = `listRelatives -f -s $limbControlObject`;
+		if( `size $shapeChildren` ) for( $s in `listRelatives -f -s $limbControlObject` ) parent -add -s $s $limbControl;
 
 		//transfer the selection trigger command if there is one...
 		string $cmd = `zooTrigGetCmd $limbControlObject`;
@@ -140,13 +171,11 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 	//setup constraints to drive the original joints
 	//------
 		xform -p 1 -rotateOrder `zooCSTGetRo x` $limbControl;
-		delete `parentConstraint $wrist $wristOrientOffset`;
 		string $orgArmConstraints[] = {};
 		$orgArmConstraints = zooAddArray_str($orgArmConstraints,`parentConstraint $driverMid $elbow`);
-		$orgArmConstraints = zooAddArray_str($orgArmConstraints,`orientConstraint $wristOrientOffset $wrist`);
-		string $wristSpaceOrient = zooGetElement_str(0,`parentConstraint -mo $limbControl $wristOrient`);
-		$orgArmConstraints = zooAddArray_str($orgArmConstraints,`parentConstraint -mo $driverLower $wristOrient`);
-		$orgArmConstraints = zooAddArray_str($orgArmConstraints,`poleVectorConstraint $poleControl $limbControl`);
+		$orgArmConstraints = zooAddArray_str($orgArmConstraints,`orientConstraint -mo $wristOrientOffset $wrist`);
+		string $wristSpaceOrient = zooGetElement_str(0,`parentConstraint -mo $limbControl $driverLower $wristOrient`);
+		$orgArmConstraints[`size $orgArmConstraints`] = $wristSpaceOrient;
 
 
 	//------

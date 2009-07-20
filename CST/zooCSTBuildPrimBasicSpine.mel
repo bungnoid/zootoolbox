@@ -63,7 +63,6 @@ global proc string[] zooCSTBuildPrimBasicSpine( string $prefix, string $root, st
 				orientConstraint -mo $hipsControl $root;
 				}
 			else {
-				parentConstraint -mo $rootControl $root;
 				parentConstraint -mo $hipsControl $hips;
 				}
 			}
@@ -132,17 +131,38 @@ global proc string[] zooCSTBuildPrimBasicSpine( string $prefix, string $root, st
 			$spaceNodes = `zooBuildSpaceSwitch $controllers[0] $controlSpaces[0] $baseParents { "root", "world" } "-mo"`;
 			for( $obj in $controllers ) setObjMenuKillState $obj 1;
 			}
+		
+		setAttr -lock false  ( $controlSpaces[0] +".tx" );
+		setAttr -lock false  ( $controlSpaces[0] +".ty" );
+		setAttr -lock false  ( $controlSpaces[0] +".tz" );
+			
 		delete -icn ( $controlSpaces[0] + ".tx" );
 		delete -icn ( $controlSpaces[0] + ".ty" );
 		delete -icn ( $controlSpaces[0] + ".tz" );
+		
+		setAttr -lock true  ( $controlSpaces[0] +".tx" );
+		setAttr -lock true  ( $controlSpaces[0] +".ty" );
+		setAttr -lock true  ( $controlSpaces[0] +".tz" );
+		
 		for( $n=1; $n<`size $controllers`; $n++ ) {
 			string $controlParents[] = { $controllers[( $n-1 )], $rootGimbal, $worldControl };
 			if( `size $parents` ) $controlParents = `zooAddArray_str $controlParents $parents`;
 			if( $spaceswitching ) $spaceNodes = zooAddArray_str(`zooBuildSpaceSwitch $controllers[$n] $controlSpaces[$n] $controlParents { "previous", "root", "world" } "-mo"`,$spaceNodes);
+			
+			setAttr -lock false  ( $controlSpaces[$n] +".tx" );
+			setAttr -lock false  ( $controlSpaces[$n] +".ty" );
+			setAttr -lock false  ( $controlSpaces[$n] +".tz" );
+			
 			delete -icn ( $controlSpaces[$n] + ".tx" );
 			delete -icn ( $controlSpaces[$n] + ".ty" );
 			delete -icn ( $controlSpaces[$n] + ".tz" );
+			
+			setAttr -lock true  ( $controlSpaces[$n] +".tx" );
+			setAttr -lock true  ( $controlSpaces[$n] +".ty" );
+			setAttr -lock true  ( $controlSpaces[$n] +".tz" );
+			
 			}
+			
 		if( $spaceswitching && `size $parents` ) {
 			string $rootParents[] = `zooAddArray_str { $worldControl } $parents`;
 			$spaceNodes = zooAddArray_str(`zooBuildSpaceSwitch $rootControl $rootSpace $rootParents { "world" } "-mo"`,$spaceNodes);
@@ -166,9 +186,15 @@ global proc string[] zooCSTBuildPrimBasicSpine( string $prefix, string $root, st
 			float $cur = `getAttr $axisName`;
 
 			setAttr -l 0 $axisName;
+			
+			setAttr -lock false  ( $rootControl +".stretch" );
+
 			setDrivenKeyframe -cd( $rootControl +".stretch" ) -dv 1 $axisName;
 			setDrivenKeyframe -cd( $rootControl +".stretch" ) -dv 0.5 -v( $cur/2 ) $axisName;
 			setDrivenKeyframe -cd( $rootControl +".stretch" ) -dv 2 -v( $cur*2 ) $axisName;
+	
+			setAttr -lock true  ( $rootControl +".stretch" );
+		
 			}
 
 

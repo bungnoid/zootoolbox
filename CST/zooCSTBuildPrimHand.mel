@@ -136,14 +136,18 @@ global proc string[] zooCSTBuildPrimHand( string $prefix, string $parity, string
 			//------
 			string $name = $names[$n];
 			string $base = $bases[$n];
-			string $joints[] = `listRelatives -ad -type transform -type joint -pa $base`;
+			string $joints[] = { $base };
 			string $baseTwistAxis = `zooCSTJointDirection $base`;
 
-			$joints = `zooAddArray_str $joints { $base }`;
-			$joints = `zooReverseArray_str $joints`;
+			if( !$num ) $num = 100;
+			for( $i=1; $i < $num; $i++ ) {
+				string $children[] = `listRelatives -type transform -type joint -pa $joints[ $i-1 ]`;
+				if( !size( $children ) ) break;
+				$joints[ $i ] = $children[ 0 ];
+				}
 
-			if( !$num ) $num = `size $joints`;  //if $num is zero, then its implied that all child joints of the base joint are finger joints
-			if( `size $joints` < $num ) $num = `size $joints`;
+			$num = `size $joints`;
+
 
 			//------
 			//build the controls

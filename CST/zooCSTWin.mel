@@ -566,20 +566,30 @@ window -mb 1 -title $windowTitle -width 520 -sizeable 1 $windowName;
 				string $ctrlOrient = `checkBox -l "oriented" -v 0 zooCSTCheckOriented`;
 				string $ctrlCurve = `checkBox -l "build curve" -v 1 zooCSTCheckCurve`;
 				string $ctrlSurface = `checkBox -l "build surface" -v 1 zooCSTCheckSurface`;
+				string $ctrlBasePivot = `checkBox -l "pivot to base" -v 0 zooCSTCheckBasePivot`;
 
-				string $ctrlLbl2 = `text -l "offset up:"`;
-				string $ctrlLbl3 = `text -l "offset side:"`;
+				string $ctrlLbl2 = `text -l "offset side:"`;
+				string $ctrlLbl3 = `text -l "offset up:"`;
 				string $ctrlLbl4 = `text -l "offset forward:"`;
 
-				string $ctrlOffUp = `floatField zooCSTFloatOffUp`;
 				string $ctrlOffSide = `floatField zooCSTFloatOffSide`;
+				string $ctrlOffUp = `floatField zooCSTFloatOffUp`;
 				string $ctrlOffFwd = `floatField zooCSTFloatOffFwd`;
+
+				string $ctrlLbl5 = `text -l "width (x):"`;
+				string $ctrlLbl6 = `text -l "height (y):"`;
+				string $ctrlLbl7 = `text -l "length (z):"`;
+
+				string $ctrlSizeX = `floatField -v 1 zooCSTFloatSizeX`;
+				string $ctrlSizeY = `floatField -v 1 zooCSTFloatSizeY`;
+				string $ctrlSizeZ = `floatField -v 1 zooCSTFloatSizeZ`;
 
 				string $ctrlGoBut = `button -l "build control" -c( "zooCSTCtrlUIFunctions -build" )`;
 				string $ctrlSelGoBut = `button -l "build controls on selected" -c( "zooCSTCtrlUIFunctions -buildOnSelected" )`;
 				popupMenu -p $ctrlShape zooCSTPopCtrlTypes;
 				popupMenu -p $ctrlAlignBut -pmc( "nameField -e -o \"\" zooCSTNameAlignCtrl" );
 				popupMenu -p $ctrlPivBut -pmc( "nameField -e -o \"\" zooCSTNamePivotCtrl" );
+				popupMenu -p $ctrlParentBut -pmc( "nameField -e -o \"\" zooCSTNameParentCtrl" );
 
 				string $subPrimFramePole = `frameLayout -label "Place Pole Vector" -collapse 1 -collapsable 1 -labelAlign top -borderStyle "etchedIn"`;
 					string $subPrimPoleForm = `formLayout zooCSTFormSubPrimPole`;
@@ -1760,6 +1770,11 @@ formLayout -e
 	-an $ctrlSurface "right"
 	-an $ctrlSurface "bottom"
 
+	-ac $ctrlBasePivot "top" 5 $ctrlSubForm1
+	-ac $ctrlBasePivot "left" 5 $ctrlSurface
+	-an $ctrlBasePivot "right"
+	-an $ctrlBasePivot "bottom"
+
 	-ac $ctrlLbl2 "top" 2 $ctrlJoint
 	-af $ctrlLbl2 "left" 0
 	-an $ctrlLbl2 "right"
@@ -1775,27 +1790,57 @@ formLayout -e
 	-an $ctrlLbl4 "right"
 	-an $ctrlLbl4 "bottom"
 
-	-ac $ctrlOffUp "top" 2 $ctrlLbl2
-	-af $ctrlOffUp "left" 0
-	-ap $ctrlOffUp "right" 0 33
-	-an $ctrlOffUp "bottom"
-
 	-ac $ctrlOffSide "top" 2 $ctrlLbl2
-	-ap $ctrlOffSide "left" 0 33
-	-ap $ctrlOffSide "right" 0 67
+	-af $ctrlOffSide "left" 0
+	-ap $ctrlOffSide "right" 0 33
 	-an $ctrlOffSide "bottom"
+
+	-ac $ctrlOffUp "top" 2 $ctrlLbl2
+	-ap $ctrlOffUp "left" 0 33
+	-ap $ctrlOffUp "right" 0 67
+	-an $ctrlOffUp "bottom"
 
 	-ac $ctrlOffFwd "top" 2 $ctrlLbl2
 	-ap $ctrlOffFwd "left" 0 67
 	-af $ctrlOffFwd "right" 0
 	-an $ctrlOffFwd "bottom"
 
-	-ac $ctrlGoBut "top" 0 $ctrlOffUp
+	-ac $ctrlLbl5 "top" 2 $ctrlOffSide
+	-af $ctrlLbl5 "left" 0
+	-an $ctrlLbl5 "right"
+	-an $ctrlLbl5 "bottom"
+
+	-ac $ctrlLbl6 "top" 2 $ctrlOffSide
+	-ap $ctrlLbl6 "left" 0 33
+	-an $ctrlLbl6 "right"
+	-an $ctrlLbl6 "bottom"
+
+	-ac $ctrlLbl7 "top" 2 $ctrlOffSide
+	-ap $ctrlLbl7 "left" 0 67
+	-an $ctrlLbl7 "right"
+	-an $ctrlLbl7 "bottom"
+
+	-ac $ctrlSizeX "top" 2 $ctrlLbl5
+	-af $ctrlSizeX "left" 0
+	-ap $ctrlSizeX "right" 0 33
+	-an $ctrlSizeX "bottom"
+
+	-ac $ctrlSizeY "top" 2 $ctrlLbl5
+	-ap $ctrlSizeY "left" 0 33
+	-ap $ctrlSizeY "right" 0 67
+	-an $ctrlSizeY "bottom"
+
+	-ac $ctrlSizeZ "top" 2 $ctrlLbl5
+	-ap $ctrlSizeZ "left" 0 67
+	-af $ctrlSizeZ "right" 0
+	-an $ctrlSizeZ "bottom"
+
+	-ac $ctrlGoBut "top" 0 $ctrlSizeX
 	-af $ctrlGoBut "left" 0
 	-ap $ctrlGoBut "right" 0 50
 	-an $ctrlGoBut "bottom"
 
-	-ac $ctrlSelGoBut "top" 0 $ctrlOffUp
+	-ac $ctrlSelGoBut "top" 0 $ctrlSizeX
 	-ap $ctrlSelGoBut "left" 0 50
 	-af $ctrlSelGoBut "right" 0
 	-an $ctrlSelGoBut "bottom"

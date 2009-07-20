@@ -1,5 +1,6 @@
 zooArrays_str;
 zooAttrUtils;
+zooAssetsUtils;
 zooBrandTools;
 zooCSTUtils;
 zooFlags;
@@ -29,6 +30,7 @@ global proc string[] zooCSTBuildWorld( string $prefix, string $optionStr ) {
 	string $parts = zooGetElement_str( 0,`zooGetBrandedWith "parts" $prefix` );
 	string $masterqss = zooGetElement_str( 0,`zooGetBrandedWith "masterqss" $prefix` );
 	string $qss = zooGetElement_str( 0,`zooGetBrandedWith "qss" $prefix` );
+	string $infoNode = zooGetElement_str( 0,`zooGetBrandedWith "export" $prefix` );
 	int $alreadyBuilt = 0;
 
 	if( `objExists $world` ) $alreadyBuilt = 1;
@@ -39,8 +41,18 @@ global proc string[] zooCSTBuildWorld( string $prefix, string $optionStr ) {
 
 		$world = `zooBuildControl world ( "-type hex -surface 0 -scale "+ (2.5*$scale))`;
 		$parts = `group -empty`;
-		$qss = `sets -empty -text "gCharacterSet" -n ( $prefix +"_body_ctrls" )`;
-		$masterqss = `sets -empty -text "gCharacterSet" -n ( $prefix +"_all_ctrls" )`;
+		$qss = `sets -empty -text "gCharacterSet" -n "body_ctrls"`;
+		$masterqss = `sets -empty -text "gCharacterSet" -n "all_ctrls"`;
+
+		//discover the info node - when building the rig, the info should already exist as it belongs in the model
+		//which it is assumed, is referenced by the rig (ie the current scene)
+		string $infoNodes[] = `ls -type vstInfo`;
+		if( !`size $infoNodes` ) warning "cannot find an appropriate node to set the main node to be the default exportRelative object";
+		else {
+			$infoNode = $infoNodes[0];
+			parent $parts $infoNode;
+			python("exportManagerCore.ExportComponent.SetDefault('exportRelative', '"+ $world +"', '"+ $infoNode +"')");
+			}
 
 		sets -add $masterqss $qss;
 		$world = `rename $world "main"`;
@@ -52,6 +64,7 @@ global proc string[] zooCSTBuildWorld( string $prefix, string $optionStr ) {
 		setAttr -l 1 -type "string" ( $world +".rigAuthor" ) $rigAuthor;
 		setAttr -l 1 -type "string" ( $world +".setupWithVersion" ) $setupVersion;
 		setAttr -l 1 -type "string" ( $world +".date" ) $date;
+		addAttr -ln smdModelSourceLocation -dt "string" $world;
 		connectAttr -f ( $world +".s" ) ( $parts +".s" );
 
 		//add right items to the world controller
@@ -79,9 +92,10 @@ global proc string[] zooCSTBuildWorld( string $prefix, string $optionStr ) {
 		zooBrandObject parts $prefix $parts;
 		zooBrandObject masterqss $prefix $masterqss;
 		zooBrandObject qss $prefix $qss;
+		zooBrandObject export $prefix $infoNode;
 		}
 
-	return { $world, $parts, $masterqss, $qss };
+	return { $world, $parts, $masterqss, $qss, $infoNode };
 	}
 
 

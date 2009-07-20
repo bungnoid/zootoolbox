@@ -20,12 +20,13 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 		string $parents[] = {};
 		string $rootFlag = "";
 		string $hipsFlag = "";
-		string $ikType = "cube";
-		string $colour = $parity=="r"? "red 0.65": "green 0.65";
+		string $ikType = "skingeometry";
+		string $colour = $parity=="r"? "red 0.92": "green 0.92";
 		float $scale = 1;
 		int $spaceswitching = 1;
 		int $pickwalking = 1;
 		int $stretch = 0;
+		int $allPurpose = 0;
 
 		$optionTemp = `zooGetFlagArguments $optionStr root`; if( `size $optionTemp` ) $rootFlag = $optionTemp[0];
 		$optionTemp = `zooGetFlagArguments $optionStr ikType`; if( `size $optionTemp` ) $ikType = $optionTemp[0];
@@ -36,6 +37,7 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 		$optionTemp = `zooGetFlagArguments $optionStr colour`; if( `size $optionTemp` ) $colour = `zooArrayToStr_str $optionTemp " "`;
 		$optionTemp = `zooGetFlagArguments $optionStr scale`; if( `size $optionTemp` ) $scale = $optionTemp[0];
 		$optionTemp = `zooGetFlagArguments $optionStr parents`; if( `size $optionTemp` ) $parents = $optionTemp;
+		$optionTemp = `zooGetFlagArguments $optionStr allPurpose`; if( `size $optionTemp` ) $allPurpose = $optionTemp[0];
 
 
 	//------
@@ -91,13 +93,13 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 	//------
 	//build the objects to control the foot
 	//------
+		float $footCtrlRot[] = python("import rigger; rigger.getAnkleToWorldRotation('"+ $ankle +"', 'z', True)");
 		string $legControlSpace = `zooBuildControl ( "legSpace"+ $suffix ) ( "-type null -place "+ $ankle )`;
 		string $legControl = `zooBuildControl ( "legControl"+ $suffix ) ( "-type "+ $ikType +" -place "+ $ankle +" -scale "+ $scale +" -colour "+ $colour )`;
 		string $toeRoll;
 		string $heelRoll = `zooBuildControl ( "heel_roll_piv"+ $suffix ) ( "-type null -place "+ $ankle +" -scale "+ $scale +" -offset -0.5fwd" )`;
 		string $footControlSpace = `zooBuildControl ( "foot_controlSpace"+ $suffix ) ( "-type null -place "+ $ankle )`;
 		string $footRollControl = `zooBuildControl ( "leg_roll_piv"+ $suffix ) ( "-type null -place "+ $toe )`;
-		string $toeOrient = `zooBuildControl ( "leg_toe_orient_piv"+ $suffix ) ( "-type null -place "+ $toe )`;
 		string $footBankL = `zooBuildControl ( "leg_bank_in_piv"+ $suffix ) ( "-type null -place "+ $toe +" -scale "+ $scale +" -offset "+($parity=="r"?1:-1)+"side" )`;
 		string $footBankR = `zooBuildControl ( "leg_bank_out_piv"+ $suffix ) ( "-type null -place "+ $toe +" -scale "+ $scale +" -offset "+($parity=="r"?-1:1)+"side" )`;
 		string $constraints[] = {};  //holds all constraints created by the script
@@ -107,6 +109,7 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 		else $toeRoll = `zooBuildControl ( "leg_toe_roll_piv"+ $suffix ) ( "-type null -place "+ $toe +" -scale "+ $scale +" -offset 1fwd" )`;
 		select $heelRoll;  //stupid move command doesn't support object naming when specifying a single axis move, so we must selec the object first
 		move -rpr -y 0;
+
 		//move pivots to the ground
 		eval( "move -a -y 0 0 0 "+ $footBankL +".rotatePivot "+ $footBankL +".scalePivot;" );
 		eval( "move -a -y 0 0 0 "+ $footBankR +".rotatePivot "+ $footBankR +".scalePivot;" );
@@ -123,7 +126,6 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 		parent $footBankL $toeRoll;
 		parent $footBankR $footBankL;
 		parent $footRollControl $footBankR;
-		parent $toeOrient $footBankR;
 		makeIdentity -apply 1 -t 1 -r 1 $heelRoll;
 
 
@@ -132,13 +134,17 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 	//------
 		parent $legIKOrient $footRollControl;
 		parent $footControlSpace $legControl;
-		zooAddArray_str $constraints `orientConstraint -mo $toeOrient $toe`;
 
 		delete `listConnections -d 0 ( $ankle +".rx" )`;
 		parent $legControlSpace $worldControl;
 		parent $legControl $legControlSpace;
 		makeIdentity -apply 1 -t 1 -r 1 $legControl;
+		rotate -a -ws 0 (-1 * $footCtrlRot[1]) 0 $legControl;
 		orientConstraint -mo $legIK $ankle;
+
+		string $toeOrient = `zooBuildControl ( "leg_toe_orient_piv"+ $suffix ) ( "-type null -place "+ $toe )`;
+		parent $toeOrient $footBankR;
+		zooAddArray_str $constraints `orientConstraint -mo $toeOrient $toe`;
 
 
 	//------
@@ -150,10 +156,18 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 		delete `parentConstraint $kneeControl $kneePos`;
 		parent $kneePos $worldControl;
 		pointConstraint -mo $rootControl $kneePos;
-		if( $spaceswitching ) $spaceNodes = zooAddArray_str(`zooBuildSpaceSwitch $kneeControl $kneeControlSpace { $legControl, $rootControl, $kneePos } { "leg", "root", "root pos only" } "-mo "`,$spaceNodes);
 
+		float $posThigh[] = `xform -q -ws -rp $thigh`;
+		float $posAnkle[] = `xform -q -ws -rp $ankle`;
+		float $newPos[3] = {};
+		$newPos[0] = $posThigh[0] + (($posAnkle[0] - $posThigh[0]) / 2);
+		$newPos[1] = $posThigh[1] - (($posThigh[1] - $posAnkle[1]) / 2);
+		$newPos[2] = abs($posThigh[1] - $posAnkle[1]);
+		move -a -ws -rpr $newPos[0] $newPos[1] $newPos[2] $kneeControlSpace;  //move the knee control so its inline with the leg
+		rotate -p $posThigh[0] $posThigh[1] $posThigh[2] 0 (-1 * $footCtrlRot[1]) 0 $kneeControlSpace;
 		zooAttrState "-attrs t r s v -k 0 -l 1" $kneePos;
 		makeIdentity -apply 1 -t 1 $kneeControl;
+		if( $spaceswitching ) $spaceNodes = zooAddArray_str(`zooBuildSpaceSwitch $kneeControl $kneeControlSpace { $legControl, $rootControl, $kneePos, $worldControl } { "leg", "root", "root pos only", "world" } "-mo "`,$spaceNodes);
 
 
 	//------
@@ -222,17 +236,36 @@ global proc string[] zooCSTBuildPrimLeg( string $prefix, string $parity, string 
 	//build space switching expressions
 	//------
 		string $legControlParents[] = { $worldControl, $rootControl, $hipsControl };
+		string $legControlParentLabels[] = { "world", "root", "hips" };
+
 		if( `objExists $hipsControl` ) parent $fkLegSpace $hipsControl;
 		else parent $fkLegSpace $rootControl;
+
+		if( $allPurpose ) {
+			string $allPurposeObj = zooGetElement_str(0, spaceLocator());
+			$legControlParents[ `size $legControlParents` ] = $allPurpose;
+			$legControlParentLabels[ `size $legControlParentLabels` ] = "all purpose";
+
+			$allPurposeObj = rename($allPurposeObj, "all_purpose_loc"+ $suffix);
+			parent $allPurposeObj $worldControl;
+			}
+
 		if( `size $parents` ) zooAddArray_str $legControlParents $parents;
-		if( $spaceswitching ) zooAddArray_str $spaceNodes `zooBuildSpaceSwitch $legControl $legControlSpace $legControlParents { "world", "root", "hips" } "-mo"`;
+		if( $spaceswitching ) zooAddArray_str $spaceNodes `zooBuildSpaceSwitch $legControl $legControlSpace $legControlParents $legControlParentLabels "-mo"`;
 		if( $spaceswitching ) zooAddArray_str $spaceNodes `zooBuildSpaceSwitch $driverThigh $fkLegSpace { $hipsControl, $rootControl, $worldControl } { "hips", "root", "world" } "-mo"`;
+
+		setAttr -lock false  ( $fkLegSpace + ".tx" ); 
+		setAttr -lock false  ( $fkLegSpace + ".ty" ); 
+		setAttr -lock false  ( $fkLegSpace + ".tz" ); 
 
 		delete -icn ( $fkLegSpace +".tx" );
 		delete -icn ( $fkLegSpace +".ty" );
 		delete -icn ( $fkLegSpace +".tz" );
 
-
+		setAttr -lock true  ( $fkLegSpace + ".tx" ); 
+		setAttr -lock true  ( $fkLegSpace + ".ty" ); 
+		setAttr -lock true  ( $fkLegSpace + ".tz" ); 
+		
 	//------
 	//build pickwalking if required
 	//------
