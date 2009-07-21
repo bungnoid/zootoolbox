@@ -324,6 +324,7 @@ global proc zooXferAnimWindowFunctions( string $function, string $variable01 ) {
 		case "loadFile":  //this will load the list of objects from a .znm file as if they were source objects
 			string $previousFile = ( `optionVar -ex zooAnimFileExportFile` )?`optionVar -q zooAnimFileExportFile`:"";
 			string $filename = ( $variable01=="n" )? `fileDialog -directoryMask ( $previousFile +"/*.znm" )`: $variable01;
+			if( $filename == "" ) break;
 			string $importObjs[] = `zooAnimFileGetObjs $filename`;
 			string $fileHeader[] = `zooReadAnimFileHeader $filename`;
 			string $temp[] = {};
@@ -621,7 +622,7 @@ global proc zooSaveXferMapping( string $name, string $locale, string $optionStr 
 
 	//$temp = `zooGetFlagArguments $optionStr `; if( `size $temp` ) ;
 
-	string $mappingStr = "-version "+ `zooXferAnimInfo version` +" "+ $optionStr +"\n";
+	string $mappingStr = ". -version "+ `zooXferAnimInfo version` +" "+ $optionStr +"\n";
 	string $srcs[] = `textScrollList -q -ai zooXferAnimScrollSrcPaths`;
 	string $tgts[] = `textScrollList -q -ai zooXferAnimScrollSrcsTgts`;
 	int $num = `size $srcs`;
