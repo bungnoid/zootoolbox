@@ -17,9 +17,11 @@ except AttributeError: pass
 from cacheDecorators import *
 from qcTools import getMdlFromQc
 from filesystem import *
-import names, traceback, datetime, maya.utils, assetTools, utils, filesystem
+import maya.utils
+import names, utils, filesystem
+import traceback, datetime
 from vectors import *
-
+import __future__
 Callback = utils.Callback
 
 
@@ -113,7 +115,33 @@ def getRotateDelta( src, tgt, other=None ):
 	tMat = OpenMaya.MTransformationMatrix(diffMat)
 	asEuler = tMat.rotation().inverse().asEulerRotation()
 	asEuler = map(OpenMaya.MAngle, (asEuler.x, asEuler.y, asEuler.z))
-	asEuler = [a.asDegrees() for a in asEuler]
+	asEuler = tuple( a.asDegrees() for a in asEuler )
+
+	return asEuler
+
+
+def getRotateDelta__( srcJoint, tgtJoint, jointControl ):
+	'''
+	srcJoint should be the joint to which we want to align the rigged skeleton
+	tgtJoint is the joint on the rigged skeleton which is driven by the jointControl
+	'''
+	mat_j1 = getMDagPath( srcJoint ).inclusiveMatrix()
+	mat_j2 = getMDagPath( tgtJoint ).inclusiveMatrix()
+
+	#generate the matrix describing offset between src joint and the tgt joint (the one driven by the rig)
+	mat_o = mat_j2 * mat_j1.inverse()
+
+	#put into space of the control
+	rel_mat = mat_o.inverse() * getMDagPath( jointControl ).exclusiveMatrixInverse()
+
+	#now figure out the euler rotations for the offset
+	tMat = OpenMaya.MTransformationMatrix( rel_mat )
+	asEuler = tMat.rotation().asEulerRotation()
+	asEuler = map(OpenMaya.MAngle, (asEuler.x, asEuler.y, asEuler.z))
+	asEuler = tuple( a.asDegrees() for a in asEuler )
+
+	cmd.rotate( asEuler[ 0 ], asEuler[ 1 ], asEuler[ 2 ], jointControl, relative=True, os=True )
+	print asEuler[ 0 ], asEuler[ 1 ], asEuler[ 2 ]
 
 	return asEuler
 
@@ -162,6 +190,45 @@ def sceneChange():
 	change = P4Data( cmd.file(q=True, sn=True) ).getChange()
 	return change
 
+
+def iterNamespaces( namespace=':' ):
+	'''
+	iterates over all namespaces under and including the one given...  holy sH1t namespaces suck
+	b4lls in maya
+	'''
+	if namespace.endswith( ':' ):
+		namespace = namespace[ :-1 ]
+
+	namespaces = [ namespace ]
+	idx = 0
+
+	while True:
+		try:
+			curNS = namespaces[ idx ]
+		except IndexError: break
+
+		idx += 1
+
+		try:
+			cmd.namespace( set=curNS )
+		except RuntimeError: continue
+
+		subs = cmd.namespaceInfo( listOnlyNamespaces=True )
+		if subs is None:
+			continue
+
+		namespaces += subs
+
+	return iter( namespaces )
+
+
+def lsSelectedAnimLayers():
+	selected = []
+	for animLayer in cmd.ls( typ='animLayer' ):
+		if cmd.animLayer( animLayer, q=True, selected=True ):
+			selected.append( animLayer )
+
+	return selected
 
 
 inMainThread = maya.utils.executeInMainThreadWithResult
@@ -244,7 +311,13 @@ class CmdQueue(list):
 		if echo:
 			m = melecho
 
-		m.eval( ';'.join( self ) )
+		fp = Path.Temp()
+		f = open( fp, 'w' )
+		f.writelines( '%s;\n' % l for l in self )
+		f.close()
+		print fp
+
+		m.source( fp )
 
 
 def melPrint( strToPrint ):
@@ -373,19 +446,44 @@ def checkIfp4Edit( sceneName ):
 			sceneName.edit()
 
 
-#there are here to follow the convention specified in the assetTools writeExportDict method
+#there are here to follow the convention specified in the filesystem writeExportDict method
 kEXPORT_DICT_SCENE = 'scene'
 kEXPORT_DICT_APP_VERSION = 'app_version'
 def writeExportDict( toolName=None, toolVersion=None, **kwargs ):
 	'''
-	wraps the assetTools method of the same name - and populates the dict with maya
+	wraps the filesystem method of the same name - and populates the dict with maya
 	specific data
 	'''
-	d = assetTools.writeExportDict(toolName, toolVersion, **kwargs)
-	d[kEXPORT_DICT_SCENE] = cmd.file(q=True, sn=True)
-	d[kEXPORT_DICT_APP_VERSION] = cmd.about(version=True)
+	d = filesystem.writeExportDict( toolName, toolVersion, **kwargs )
+	d[ kEXPORT_DICT_SCENE ] = cmd.file( q=True, sn=True )
+	d[ kEXPORT_DICT_APP_VERSION ] = cmd.about( version=True )
 
 	return d
+
+
+def referenceFile( filepath, namespace, silent=False ):
+	filepath = Path( filepath )
+	cmd.file( filepath << '%VCONTENT%', r=True, prompt=silent, namespace=namespace )
+
+
+def openFile( filepath, silent=False ):
+	filepath = Path( filepath )
+	ext = filepath.getExtension().lower()
+	if ext == 'ma' or ext == 'mb':
+		mel.saveChanges( 'file -f -prompt %d -o "%s"' % (silent, filepath) )
+		mel.addRecentFile( filepath, 'mayaAscii' if Path( filepath ).hasExtension( 'ma' ) else 'mayaBinary' )
+	elif ext == 'smd':
+		mel.saveChanges( 'file -f -new' )
+		cmd.vstSmdIO( i=True, importSkeleton=True, filename=filepath )
+
+
+def importFile( filepath, silent=False ):
+	filepath = Path( filepath )
+	ext = filepath.getExtension().lower()
+	if ext == 'ma' or ext == 'mb':
+		cmd.file( filepath, i=True, prompt=silent, rpr='__', type='mayaAscii', pr=True, loadReferenceDepth='all' )
+	elif ext == 'smd':
+		cmd.vstSmdIO( i=True, importSkeleton=True, filename=filepath )
 
 
 class Name(object):
@@ -558,6 +656,9 @@ class Name(object):
 		toks = [ '%s:%s' % (namespace, tok) for tok in toks ]
 
 		return '|'.join( toks )
+	def getNamespace( self ):
+		idx = self.name.rfind( ':' ) + 1
+		return self.name[ :idx ]
 
 
 def longname( name ):
@@ -690,11 +791,19 @@ def addExploreToMenuItems( filepath ):
 		cmd.menuItem(en=False, l='File not specified')
 		return
 
+	#try to import the modelpipeline
+	mpEnabled = False
+	try:
+		from modelpipeline import Asset, ComponentInterface_common
+		mpEnabled = True
+	except: pass
+
+
 	xtn = filepath.getExtension().lower()
 	if xtn == 'qc':
-		mdlPath = getMdlFromQc(filepathResolved)
+		qcmdlPath = getMdlFromQc(filepathResolved)
 		try:
-			if mdlPath.exists:
+			if qcmdlPath.exists:
 				cmd.menuItem(l="Explore to .mdl", c=lambda x: mel.zooExploreTo( mdlPath ), ann='open an explorer window to the location of the .mdl file this .qc file compiles to')
 				cmd.menuItem(l="View .mdl in HLMV", c=lambda x: utils.spawnProcess('hlmv.bat "%s"' % mdlPath.resolve(), mdlPath.resolve().up()), ann='open the .mdl this .qc file compiles to in hlmv')
 				cmd.menuItem(d=True)
@@ -706,13 +815,22 @@ def addExploreToMenuItems( filepath ):
 				cmd.menuItem(d=True)
 		except AttributeError: pass
 
+	#make sure modelpipeline got imported properly before adding any modelpipeline menus...
+	elif mpEnabled:
+		if xtn == ComponentInterface_common.EXTENSION:
+			myAsset = Asset.FromComponentScript( filepath )
+			mdlPath = myAsset.getMdlPath()
+			try:
+				if mdlPath.exists:
+					cmd.menuItem(l="Explore to .mdl", c=lambda x: mel.zooExploreTo( mdlPath ), ann='open an explorer window to the location of the .mdl file this .qc file compiles to')
+					cmd.menuItem(l="View .mdl in HLMV", c=lambda x: utils.spawnProcess('hlmv.bat "%s"' % mdlPath.resolve(), mdlPath.resolve().up()), ann='open the .mdl this .qc file compiles to in hlmv')
+					cmd.menuItem(d=True)
+					cmd.menuItem( l="Open Asset Editor", c=lambda x: utils.spawnProcess('assetEditor %s %s' % ( myAsset.location(), myAsset.name() )), ann= 'open up the asset editor')
+			except AttributeError: pass
+
 	cmd.menuItem(l="Explore to location...", c=lambda x: mel.zooExploreTo( filepathResolved ), ann='open an explorer window to the location of this file/directory')
 	cmd.menuItem(l="CMD prompt to location...", c=lambda x: mel.zooCmdTo( filepathResolved ), ann='open a command prompt to the location of this directory')
 	cmd.menuItem(l="Perforce to location...", c=lambda x: mel.openp4At( filepathResolved ), ann='open p4win to the location of this file/directory')
-
-	#useP4V = cmd.optionVar(q='vUseP4V')
-	#cmd.menuItem(l='use P4V as GUI', cb=useP4V, c='cmd.optionVar(iv=("vUseP4V", %d))' % (not useP4V))
-	#cmd.setParent('..', m=True)
 
 
 def p4buildMenu( parent, file=None ):
@@ -929,6 +1047,68 @@ def d_progress( **dec_kwargs ):
 			return ret
 		return func
 	return dec
+
+
+_ANIM_LAYER_ATTRS = [ 'mute',
+					 'solo',
+					 'lock',
+					 'override',
+					 #'passthrough',
+					 'weight',
+					 'rotationInterpolateMode',
+					 'scaleInterpolateMode',
+					 #'parentMute',
+					 #'childsoloed',
+					 #'siblingSolo',
+					 #'outMute',
+					 'preferred',
+					 'selected',
+					 'collapse',
+					 'backgroundWeight' ]
+
+def d_restoreAnimLayers( f ):
+	'''
+	restores animation layer state -
+	'''
+
+	#if this excepts, just return the function as is - anim layers aren't supported by this version
+	try:
+		cmd.ls( typ='animLayer' )
+	except RuntimeError: return f
+
+	def func( *a, **kw ):
+		#store pre-function values
+		preDict = {}
+		selectedLayers = []
+		for l in cmd.ls( typ='animLayer' ):
+			preDict[ l ] = valueDict = {}
+			if cmd.animLayer( l, q=True, selected=True ):
+				selectedLayers.append( l )
+
+			for attr in _ANIM_LAYER_ATTRS:
+				valueDict[ attr ] = cmd.getAttr( '%s.%s' % (l, attr) )
+
+		#run the function
+		f( *a, **kw )
+
+		#restore selection and all layer attributes
+		for l, valueDict in preDict.iteritems():
+			for attr, value in valueDict.iteritems():
+				try: cmd.setAttr( '%s.%s' % (l, attr), value )
+				except RuntimeError: pass
+
+		for l in cmd.ls( typ='animLayer' ):
+			cmd.animLayer( l, e=True, selected=False )
+
+		for l in selectedLayers:
+			cmd.animLayer( l, e=True, selected=True )
+
+		cmd.animLayer( forceUIRefresh=True )
+
+	func.__name__ = f.__name__
+	func.__doc__ = f.__doc__
+
+	return func
 
 
 #end

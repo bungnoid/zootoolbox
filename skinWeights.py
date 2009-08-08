@@ -4,34 +4,13 @@ both by position and by index, and as such can be used to restore weights using 
 for this tool is found in zooSkinWeights
 '''
 
+from skinWeightsBase import *
 from api import melPrint
 import maya.cmds as cmd
 import api
 
 
-class SkinWeightException(Exception): pass
-class NoVertFound(Exception): pass
-
-
-class VertSkinWeight(Vector):
-	'''
-	extends Vector to store a vert's joint list, weightlist and id
-	'''
-	def populate( self, vertIdx, jointList, weightList ):
-		self.joints = jointList
-		self.weights = weightList
-		self.id = vertIdx
-
-
-class WeightSaveData(tuple):
-	def __init__( self, data ):
-		self.miscData, self.joints, self.jointHierarchies, self.weightData = data
-	def getUsedJoints( self ):
-		allJoints = set()
-		for jData in self.weightData:
-			allJoints |= set( jData.joints )
-
-		return allJoints
+VertSkinWeight = MayaVertSkinWeight
 
 
 def getAllParents( object ):
@@ -95,7 +74,7 @@ def saveWeights( geos, filepath=None, mode=kAPPEND ):
 			api.melWarning(msg)
 			#raise SkinWeightException(msg)
 
-		for id, vert in enumerate(verts):
+		for idx, vert in enumerate(verts):
 			jointList = skinPercent(skinCluster, vert, ib=1e-4, q=True, transform=None)
 			weightList = skinPercent(skinCluster, vert, ib=1e-4, q=True, value=True)
 			if jointList is None:
@@ -109,7 +88,7 @@ def saveWeights( geos, filepath=None, mode=kAPPEND ):
 
 			pos = xform(vert, q=True, ws=True, t=True)
 			vertData = VertSkinWeight( pos )
-			vertData.populate('%s.vtx[%d]' % (geo,id), jointList, weightList)
+			vertData.populate(geo, idx, jointList, weightList)
 			weightData.append(vertData)
 
 		#lastly, add an attribute to the object describing where the weight file exists
@@ -205,7 +184,7 @@ def findBestVector( theVector, vectors, tolerance=1e-6, doPreview=False ):
 			diff = curDiff
 
 	if doPreview:
-		cmd.select( best.id )
+		cmd.select( best.getVertName() )
 		print "skinning data"
 		for x in zip( best.joints, best.weights ): print x
 		raise Exception, 'preview mode'
@@ -230,10 +209,10 @@ def getDistanceWeightedVector( theVector, vectors, tolerance=1e-6, doPreview=Fal
 
 	joints, weights = regatherWeights( joints, weights )
 	newVec = VertSkinWeight( matching[ 0 ] )
-	newVec.populate( -1, joints, weights )
+	newVec.populate( None, -1, joints, weights )
 
 	if doPreview:
-		cmd.select( [ m.id for m in matching ] )
+		cmd.select( [ m.getVertName() for m in matching ] )
 		print "skinning data"
 		for x in zip( newVec.joints, newVec.weights ): print x
 		raise Exception, "in preview mode"
@@ -241,41 +220,8 @@ def getDistanceWeightedVector( theVector, vectors, tolerance=1e-6, doPreview=Fal
 	return newVec
 
 
-def searchForClosestVector( theVector, vectors, startTolerance=1e-6, doPreview=False ):
-	tolerance = startTolerance
-	while True:
-		matching = findMatchingVectors( theVector, vectors, tolerance )
-		try:
-			matching[ 0 ]
-			break
-		except IndexError: pass
-		tolerance += startTolerance
-
-	if doPreview:
-		cmd.select( cl=True )
-		for m in matching: cmd.select( m.id, add=True )
-		raise Exception, 'in preview mode'
-
-	joints = []
-	weights = []
-	for v in matching:
-		dist = ( v - theVector ).get_magnitude()
-		distanceBiasedWeight = abs(tolerance - dist) / tolerance
-		distanceBiasedWeight **= 3
-		joints += v.joints
-		weights += [ w * distanceBiasedWeight for w in v.weights ]
-
-	joints, weights = regatherWeights( joints, weights )
-	weights = renormalizeWeights( joints, weights, [] )
-
-	newVec = VertSkinWeight( matching[ 0 ] )
-	newVec.populate( -1, joints, weights )
-
-	return newVec
-
-
 @api.d_progress(t='initializing...', status='initializing...', isInterruptable=True)
-def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMult=None, swapParity=True, averageVerts=True, doPreview=False ):
+def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMult=None, swapParity=True, averageVerts=True, doPreview=False, meshNameRemapDict=None, jointNameRemapDict=None ):
 	'''
 	loads weights back on to a model given a file.  NOTE: the tolerance is an axis tolerance
 	NOT a distance tolerance.  ie each axis must fall within the value of the given vector to be
@@ -286,6 +232,12 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 	'''
 	reportUsageToAuthor()
 	start = time.clock()
+
+
+	#setup the mappings
+	VertSkinWeight.MESH_NAME_REMAP_DICT = meshNameRemapDict
+	VertSkinWeight.JOINT_NAME_REMAP_DICT = jointNameRemapDict
+
 
 	#cache heavily access method objects as locals...
 	skinPercent = cmd.skinPercent
@@ -326,6 +278,9 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 		progressWindow(e=True, title='loading weights from file %d items' % numItems)
 
 		miscData, joints, jointHierarchies, weightData = Path(filepath).unpickle()
+		if miscData[ api.kEXPORT_DICT_TOOL_VER ] != TOOL_VERSION:
+			api.melWarning( "WARNING: the file being loaded was stored from an older version (%d) of the tool - please re-generate the file.  Current version is %d." % (miscData[ api.kEXPORT_DICT_TOOL_VER ], TOOL_VERSION) )
+
 		for geo, items in objItemsDict.iteritems():
 			#the miscData contains a dictionary with a bunch of data stored from when the weights was saved - do some
 			#sanity checking to make sure we're not loading weights from some completely different source
@@ -363,7 +318,7 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 			verts = cmd.ls(cmd.polyListComponentConversion(items if items else geo, toVertex=True), fl=True)
 
 
-			#remap joint names in the saved file to joint names that are in the scene - there may be namespace differences...
+			#remap joint names in the saved file to joint names that are in the scene - they may be namespace differences...
 			missingJoints = set()
 			for j in joints.keys():
 				if not cmd.objExists(j):
@@ -377,6 +332,7 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 						if len(search):
 							joints[j] = search[0]
 
+
 			#now that we've remapped joint names, we go through the joints again and remap missing joints to their nearest parent
 			#joint in the scene - NOTE: this needs to be done after the name remap so that parent joint names have also been remapped
 			for j, jRemap in joints.iteritems():
@@ -388,7 +344,6 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 						if jp in joints: remappedJp = joints[jp]
 						if cmd.objExists(remappedJp):
 							joints[j] = remappedJp
-							#print 'using parent', j, jp, remappedJp
 							dealtWith = True
 							break
 
@@ -438,7 +393,7 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 						try:
 							#unpack data to locals
 							try:
-								id, jointList, weightList = vertData.id, vertData.joints, vertData.weights
+								jointList, weightList = vertData.joints, vertData.weights
 							except AttributeError: raise NoVertFound
 
 							try:
@@ -480,7 +435,7 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 
 							queue.append( 'skinPercent -tv %s %s %s' % (' -tv '.join( [ '%s %s' % t for t in jointsAndWeights ] ), skinCluster, vert) )
 							foundVertData = VertSkinWeight( pos )
-							foundVertData.populate( id, actualJointNames, weightList )
+							foundVertData.populate( vertData.mesh, vertData.idx, actualJointNames, weightList )
 							foundVerts.append( foundVertData )
 						except NoVertFound:
 							unfoundVerts.append( vert )
@@ -492,9 +447,7 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 					verts = unfoundVerts
 					if unfoundVerts:
 						if foundVerts:
-							for v in foundVerts:
-								idx = bisect.bisect( weightData, v )
-								weightData.insert( idx, v )
+							weightData = sortByIdx( foundVerts )
 						else:
 							print "### still unfound verts, but no new matches were made in previous iteration - giving up.  %d iterations performed" % iterationCount
 							break
@@ -516,13 +469,15 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 
 			#otherwise simply restore by id
 			else:
-				progressWindow(edit=True, status='searching by id: %s (%d/%d)' % (geo, curItem, numItems))
+				progressWindow(edit=True, status='searching by vert name: %s (%d/%d)' % (geo, curItem, numItems))
+				queue = api.CmdQueue()
 
-				#rearrange the weightData structure so its ordered by id
+				#rearrange the weightData structure so its ordered by vertex name
 				weightDataById = {}
-				[ weightDataById.setdefault(i.id, (i.joints, i.weights)) for i in weightData ]
+				[ weightDataById.setdefault(i.getVertName(), (i.joints, i.weights)) for i in weightData ]
+
 				for vert in verts:
-					progressWindow(edit=True, progress=cur/num*100.0)
+					progressWindow(edit=True, progress=cur / num * 100.0)
 					if progressWindow(q=True, isCancelled=True):
 						progressWindow(ep=True)
 						return
@@ -530,12 +485,13 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 					cur += 1
 					try:
 						jointList, weightList = weightDataById[vert]
-						jointsAndWeights = zip(jointList, weightList)
-						skinPercent(skinCluster, vert, tv=jointsAndWeights)
 					except KeyError:
 						#in this case, the vert doesn't exist in teh file...
 						print '### no point found for %s' % vert
 						continue
+					else:
+						jointsAndWeights = zip(jointList, weightList)
+						skinPercent(skinCluster, vert, tv=jointsAndWeights)
 
 			#remove unused influences from the skin cluster
 			cmd.skinCluster(skinCluster, edit=True, removeUnusedInfluence=True)
@@ -595,7 +551,7 @@ def printDataFromSelection( filepath=DEFAULT_PATH, tolerance=1e-4 ):
 		for vec, vertName in vecAndVert:
 			try:
 				vertData = findBestVector( vec, weightData, tolerance )
-				id, jointList, weightList = vertData.id, vertData.joints, vertData.weights
+				jointList, weightList = vertData.joints, vertData.weights
 				tmpStr = []
 				for items in zip( jointList, weightList ):
 					tmpStr.append( '(%s %0.3f)' % items )
