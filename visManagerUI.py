@@ -290,3 +290,6 @@ class ParentChooserUI(utils.Singleton):
 def load():
 	global ui
 	ui = VisManagerUI()
+
+
+#end

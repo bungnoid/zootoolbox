@@ -123,54 +123,6 @@ def setMod( newMod ):
 	os.environ['VGAME'] = os.path.join(os.environ['VGAME'],newMod)
 
 
-def findFullpath( relativePath, basePath=None, mod=None ):
-	'''
-    finds the fullpath to a "valve" relative path - ie a mod relative path.  the way
-    this works is a relative path can potentially be found in either the current mod,
-    or any of the inheriting mods, so this procedure will scan the appropriate paths
-    for the file specified
-    '''
-	searchPaths = getSearchPaths(mod)
-	basePath = resolvePath(basePath)
-
-	if os.path.isfile(basePath):
-		#if the basepath is a file, strip the filename and make sure we're dealing with a directory
-		basePath,filename = os.path.split(basePath)
-		basePath += '/'
-
-	#does it have an extension?  sometimes relative filepaths are given without extensions, so an extension heirarchy needs to be established
-	extns = ['qci','vrd','smd','dmx','tga','psd']
-
-	#first search VCONTENT
-	basePath = relativeToPath(basePath,'%VCONTENT%/')
-	basePathToks = basePath.split('/')
-	basePathMod = basePathToks[0]
-	basePath = '/'.join(basePathToks[1:]) #remove the first path as its the mod - we don't care about the originating mod...
-	if not searchPaths.count(basePathMod): searchPaths.append(basePathMod)
-	for path in searchPaths:
-		path = resolvePath(os.path.join('%VCONTENT%',path,basePath,relativePath))
-		if os.path.isfile(path): return path
-
-	#now search VGAME
-	basePath = relativeToPath(basePath,'%VGAME%/')
-	basePath = '/'.join(basePath.split('/')[1:])
-	for path in searchPaths:
-		path = resolvePath(os.path.join('%VGAME%',path,basePath,relativePath))
-		if os.path.isfile(path): return path
-
-	return None
-
-
-def getSearchPaths( whichMod=None ):
-	'''this will return a list of search paths for a given mod based on the gameinfo.txt file'''
-	if whichMod is None:
-		whichMod = mod()
-
-	searchPaths = map(str,gameInfo.getSearchPaths())
-
-	return searchPaths
-
-
 def convertPathToGame( path ):
 	return relativeToPath(path, os.environ['VGAME'])
 

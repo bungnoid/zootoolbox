@@ -487,7 +487,6 @@ def importFile( filepath, silent=False ):
 
 
 class Name(object):
-	@initCache
 	def __init__( self, name ):
 		self.name = str(name)
 		self._root = False
@@ -503,16 +502,13 @@ class Name(object):
 		return self.__class__(self.name+'|'+other)
 	#the | or + operator both concatenate path tokens
 	__or__ = __add__
-	@cacheValueWithArgs
 	def __getitem__( self, item ):
 		toks = self.split()
 		return toks[item]
-	@resetCache
 	def __setitem__( self, item, value ):
 		toks = self.split()
 		toks[item] = value
 		self.name = '|'.join(toks)
-	@cacheValueWithArgs
 	def __getslice__( self, a, b ):
 		toks = self.split()
 		newPath = '|'.join(toks[a:b])
@@ -525,7 +521,6 @@ class Name(object):
 		cmpStr = other
 		if isinstance(other,self.__class__): cmpStr = other.name
 		return self.name != cmpStr
-	@cacheValue
 	def __len__( self ):
 		return len(self.split())
 	def __contains__( self, item ):
@@ -551,7 +546,6 @@ class Name(object):
 		return self.__class__( short )
 	def copy( self ):
 		return self.__class__(self)
-	@cacheValue
 	def split( self ):
 		return map(self.__class__, [s for s in str(self.long() ).split('|') if s])
 	def up( self, levels=1 ):
@@ -564,7 +558,6 @@ class Name(object):
 		newPath = '|'.join(toks[:-levels])
 
 		return self.__class__(newPath)
-	@resetCache
 	def pop( self, levels=1 ):
 		'''NOTE: levels acts as the number of trailing path tokens to pop out of the list, NOT the index
 		of path token to pop - this is different from the pop implementation in lists'''
@@ -574,7 +567,6 @@ class Name(object):
 		self.name = '|'.join(toks[:-levels])
 
 		return toReturn
-	@resetCache
 	def append( self, item ):
 		'''acts just like a list append - adds the given item to the list of path tokens'''
 		if item is None: return self
@@ -583,7 +575,6 @@ class Name(object):
 		self.name = '|'.join(toks)
 
 		return self
-	@resetCache
 	def extend( self, items ):
 		'''just like list.extend() - this method will extend the token list by a given iterable'''
 		toks = self.split()
@@ -608,11 +599,9 @@ class Name(object):
 			id = name[ bracketIdx+1:-1 ]
 
 		return nameData[0], attr, id, idType
-	@resetCache
 	def lower( self ):
 		'''returns a str representation in lowercase of self'''
 		return self.name.lower()
-	@resetCache
 	def replace( self, search, replace ):
 		'''a simple search replace method'''
 		toks = self.split()
@@ -621,7 +610,6 @@ class Name(object):
 			toks[idx] = replace
 		except ValueError:
 			pass
-	@cacheValue
 	def _exists( self ):
 		return cmd.objExists( str(self) )
 	exists = property(_exists)
@@ -629,7 +617,6 @@ class Name(object):
 		try: cmd.delete( str(self) )
 		except TypeError: pass
 	remove = delete
-	@resetCache
 	def rename( self, newName ):
 		'''
 		the instance is modified in place

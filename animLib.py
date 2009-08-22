@@ -5,7 +5,7 @@ import names
 import api
 
 
-__author__ = 'hamish@valvesoftware.com'
+__author__ = 'mel@macaronikazoo.com'
 TOOL_NAME = 'animLib'
 kEXT = 'clip'
 VER = 3  #version

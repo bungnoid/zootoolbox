@@ -4,7 +4,7 @@ import bugReporterUI
 import xferAnimUI
 
 
-__author__ = 'hamish@valvesoftware.com'
+__author__ = 'mel@macaronikazoo.com'
 ui = None
 
 def d_restoreLibrarySelection(f):
@@ -39,11 +39,6 @@ class AnimLibUI(utils.Singleton):
 			cmd.windowPref(self.windowName, remove=True)
 
 		self.windowName = cmd.window(self.windowName, wh=(800,400), mb=True)
-
-		cmd.menu(l='Help', helpMenu=True)
-		cmd.menuItem(l="Help...", c=lambda x: cmd.showHelp('https://intranet.valvesoftware.com/wiki/index.php/Animation_Library', absolute=True))
-		cmd.menuItem(d=True)
-		bugReporterUI.addBugReporterMenuItems(TOOL_NAME, __author__)
 
 		self.UI_form = cmd.formLayout()
 

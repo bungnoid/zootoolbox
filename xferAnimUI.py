@@ -5,7 +5,7 @@ import api
 import animLib
 
 
-__author__ = 'hamish@valvesoftware.com'
+__author__ = 'mel@macaronikazoo.com'
 ui = None
 MelForm = baseMelUI.MelForm
 
@@ -78,14 +78,6 @@ class XferAnimForm(MelForm):
 			  ac=((self.UI_mapping, 'bottom', 0, self.UI_options),
 				  (self.UI_options, 'bottom', 0, UI_button)) )
 
-		#if mapping is not None:
-			#self.UI_mapping.setMapping( mapping )
-		#else:
-			#if srcs is not None:
-				#self.UI_mapping.addSrcItems( srcs )
-			#if tgts is not None:
-				#self.UI_mapping.addTgtItems( tgts )
-
 		self.on_update()  #set initial state
 	def isTraceMode( self, theMode ):
 		m = cmd.radioCollection( self.UI_radios, q=True, sl=True )
@@ -102,10 +94,6 @@ class XferAnimForm(MelForm):
 		delta = fileDict[ animLib.kEXPORT_DICT_CLIP_TYPE ] == animLib.kDELTA
 		world = fileDict.get( animLib.kEXPORT_DICT_WORLDSPACE, False )
 		nocreate = False
-
-		#$temp = `zooGetFlagArguments $fileHeader[3] nocreate`; if( `size $temp` ) $nocreate = $temp[0];
-		#$temp = `zooGetFlagArguments $fileHeader[3] additive`; if( `size $temp` ) $add = $temp[0];
-		#$temp = `zooGetFlagArguments $fileHeader[3] delta`; if( `size $temp` ) $add = $nocreate = $temp[0];
 
 		#populate the source objects from the file
 		self.UI_mapping.replaceSrcItems( fileDict[ animLib.kEXPORT_DICT_OBJECTS ] )
@@ -154,13 +142,6 @@ class XferAnimForm(MelForm):
 			else:
 				cmd.intField( self.UI_start, e=True, en=False )
 				cmd.intField( self.UI_end, e=True, en=False )
-	#def on_loadFile( self, *a ):
-		#string $previousFile = ( `optionVar -ex zooAnimFileExportFile` )?`optionVar -q zooAnimFileExportFile`:"";
-		#string $filename = ( $variable01=="n" )? `fileDialog -directoryMask ( $previousFile +"/*.znm" )`: $variable01;
-		#if( $filename == "" ) break;
-		#string $importObjs[] = `zooAnimFileGetObjs $filename`;
-		#string $fileHeader[] = `zooReadAnimFileHeader $filename`;
-		#self.setupFileUI()
 	def on_xfer( self, *a ):
 		mapping = self.UI_mapping.getMapping()
 		theSrcs = []
@@ -214,8 +195,6 @@ class XferAnimEditor(baseMelUI.BaseMelWindow):
 
 	DEFAULT_SIZE = 350, 450
 	DEFAULT_MENU = 'Help'
-
-	#FORCE_DEFAULT_SIZE = False
 
 	def __new__( cls, mapping=None, clipPreset=None ):
 		return baseMelUI.BaseMelWindow.__new__( cls )

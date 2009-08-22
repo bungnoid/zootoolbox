@@ -6,7 +6,7 @@ import api
 import presetsUI
 
 
-TOOL_NAME = 'valve'
+TOOL_NAME = 'zoo'
 TOOL_VER = 1
 EXT = 'mapping'
 ui = None

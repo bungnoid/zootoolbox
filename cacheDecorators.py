@@ -8,7 +8,6 @@ def d_initCache(f):
 		self._CACHE_ = {}
 		return f(*args, **kwargs)
 	return __init__
-initCache = d_initCache
 
 
 def d_cacheValue(f):
@@ -26,7 +25,6 @@ def d_cacheValue(f):
 			return f(*args, **kwargs)
 	cachedRetValFunc.func_name = fname
 	return cachedRetValFunc
-cacheValue = d_cacheValue
 
 
 def d_cacheValueWithArgs(f):
@@ -46,7 +44,6 @@ def d_cacheValueWithArgs(f):
 			return f(*args, **kwargs)
 	cachedRetValFunc.func_name = fname
 	return cachedRetValFunc
-cacheValueWithArgs = d_cacheValueWithArgs
 
 
 def d_resetCache(f):
@@ -61,7 +58,6 @@ def d_resetCache(f):
 			return retval
 	resetCacheFunc.func_name = fname
 	return resetCacheFunc
-resetCache = d_resetCache
 
 
 #end

@@ -1657,7 +1657,6 @@ def cleanEmptyChanges():
 			p4.run( 'change', '-d', change[ 'Change' ] )
 
 
-########### VALVE FILESYSTEM INTEGRATION ###########
 def removeLineComments( lines ):
 	'''
 	removes all line comments from a list of lines
@@ -1890,7 +1889,6 @@ class KeyValueFile( object ):
 	'''
 	self.data contains a list which holds all the top level Chunk objects
 	'''
-	@initCache
 	def __init__( self, filepath=None, lineParser=parseLine, chunkClass=Chunk, readCallback=None, supportsComments=True ):
 		'''
 		lineParser needs to return key,value
@@ -2085,9 +2083,6 @@ class KeyValueFile( object ):
 			filepath = Path(filepath)
 
 		filepath.write(str(self), doP4=doP4)
-	@resetCache
-	def resetCache( self ):
-		pass
 
 
 ########### PRESET DATA INTERFACES ###########
@@ -2096,7 +2091,7 @@ DEFAULT_XTN = 'preset'
 
 #define where the base directories are for presets
 kLOCAL_BASE_DIR = Path('%HOME%/presets/')
-kGLOBAL_BASE_DIR = Path('%VTOOLS%/presets')
+kGLOBAL_BASE_DIR = Path('%SHARED_NETWORK_LOCATION%/presets')
 
 class PresetException(Exception):
 	def __init__( self, *args ):
@@ -2108,21 +2103,18 @@ def getPresetDirs( locale, tool ):
 	returns the base directory for a given tool's preset files
 	'''
 	global kLOCAL_BASE_DIR, kGLOBAL_BASE_DIR
+
 	if locale == LOCAL:
-		localDir = kLOCAL_BASE_DIR
-		localDir += '.%s/' % tool
-		localDir.resolve().asdir()
+		localDir = kLOCAL_BASE_DIR / ('.%s/' % tool)
 		localDir.create()
+
 		return [localDir]
 
 	dirs = []
-	mods = gameInfo.getSearchMods()
-	for mod in mods:
-		globalDir = kGLOBAL_BASE_DIR/mod/('.'+ tool)
-		globalDir.resolve().asdir()
-		globalDir.create()
-		dirs.append(globalDir)
-	return dirs
+	globalDir = kGLOBAL_BASE_DIR / ('.%s/' % tool)
+	globalDir.create()
+
+	return [ globalDir ]
 
 
 def presetPath( locale, tool, presetName, ext=DEFAULT_XTN ):

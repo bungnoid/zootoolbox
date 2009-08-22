@@ -14,7 +14,7 @@ def SHOW_IN_UI():
 	MessageBox( 'Sorry, it seems an un-expected problem occurred.\nYour error has been reported.  Good Luck!', 'An Unhandled Exception Occurred', ICON_ERROR )
 
 
-DEFAULT_AUTHOR = 'hamish@valvesoftware.com'
+DEFAULT_AUTHOR = 'mel@macaronikazoo.com'
 
 def exceptionHandler( *args ):
 	'''
