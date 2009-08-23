@@ -1,16 +1,14 @@
-import re, socket, os, shutil, time
+import re
+import socket
+import os
+import shutil
+import time
+import threading
+import subprocess
+import new
 from cacheDecorators import *
 from filesystem import *
 from vmf import *
-
-
-#try to import the P4 module - this is potentially problematic because utils
-#contains a heap of common functionality, and as such is called by apps (such
-#as modo) that use non mainline python versions.  P4 is a binary module, so
-#this may fail in such cases
-try:
-	import perforce
-except ImportError: pass
 
 
 class UniverseSet:
@@ -117,66 +115,6 @@ def addSubPathsToSearch():
 	sys.path.extend(allSubDirs)
 
 
-def setMod( newMod ):
-	'''sets the current mod, and all that that implies'''
-	os.environ['VMOD'] = newMod
-	os.environ['VGAME'] = os.path.join(os.environ['VGAME'],newMod)
-
-
-def convertPathToGame( path ):
-	return relativeToPath(path, os.environ['VGAME'])
-
-
-def convertPathToContent( path ):
-	return relativeToPath(path, os.environ['VCONTENT'])
-
-
-def convertPathToMod( path, mod=None ):
-	'''
-    will change the mod of a given path to another - this makes the assumptions that the path
-    is located under the perforce tree and follows the form:
-    somePath/game or content/modname/more path info/
-
-    where somePath is an arbitrary path to the perforce tree root (and is accurately reflected in
-    the VGAME or VCONTENT env variable) which is immediately followed by the game or content
-    branch token
-    '''
-	if mod is None: mod = os.environ['VMOD']
-
-	path = cleanPath(path).lower()
-	gRoot = resolvePath('%VGAME%/..').lower()
-	cRoot = resolvePath('%VCONTENT%/..').lower()
-	root = gRoot
-
-	if path.startswith(gRoot):
-		path = path.replace(gRoot,'')
-	elif path.startswith(cRoot):
-		path = path.replace(cRoot,'')
-		root = cRoot
-
-	if path[0] == '/': path = path[1:]
-	pathToks = path.split('/')
-
-	gameOrContent = pathToks.pop(0)
-	oldmod = pathToks.pop(0)
-	newPath = '/'.join(pathToks)
-	newPath = newPath[:-1]
-	newPath = root +'/'+ gameOrContent +'/'+ mod +'/'+ newPath
-
-	return newPath
-
-
-def relativeToEnvPath( path, envVar ):
-	'''
-    makes any path relative to a given environment variable
-    '''
-	return str( Path(path) - envVar )
-
-
-def relativeToPath( path, otherPath ):
-	return str( Path(path) - otherPath )
-
-
 def sendToMaya( cmd ):
 	defaultMayaCommandPort = 12123
 
@@ -187,26 +125,6 @@ def sendToMaya( cmd ):
 	sock.close()
 
 
-'''
-def openEngineSocket():
-	defaultEnginePort = 11111
-
-	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	sock.connect(("127.0.0.1", defaultEnginePort))
-	#print sock.recv(1024*8)
-	#sock.close()
-	return sock
-
-
-cmdToSend = 'map blob_vs_turrets'
-a=openEngineSocket()
-a.send(cmdToSend)
-#while time.clock() < 20:
-	#print sock.recv(1024*8)
-#'''
-
-
-import threading, subprocess
 class ProcessQueue(threading.Thread):
 	'''
     creates a queue object for executing multiple spawnProcess methods one after another, with an optional
@@ -279,10 +197,6 @@ def p4To( aPath ):
 	spawnProcess( 'p4win -q -s "%s"' % aPath.resolve().asNative() )
 
 
-def viewMdl( mdlPath ):
-	spawnProcess( 'hlmv "%s"' % str( mdlPath.resolve().asNative() ) )
-
-
 class Singleton(object) :
 	def __new__(cls, *p, **k):
 		if not '_the_instance' in cls.__dict__:
@@ -303,7 +217,6 @@ class Callback(object):
 		return self.func(*self.args, **self.kwargs)
 
 
-import new
 def reloadAll( module ):
 	'''
     recursively reloads a module and all sub-modules.  it doesn't check for cyclical imports, but it

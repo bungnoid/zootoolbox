@@ -1,6 +1,5 @@
 from animLib import *
 import presetsUI
-import bugReporterUI
 import xferAnimUI
 
 
