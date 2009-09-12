@@ -234,10 +234,21 @@ def lsSelectedAnimLayers():
 inMainThread = maya.utils.executeInMainThreadWithResult
 
 def iterParents( obj ):
-	parent = cmd.listRelatives( obj, p=True, l=True )
+	parent = cmd.listRelatives( obj, p=True, pa=True )
 	while parent is not None:
 		yield parent[ 0 ]
-		parent = cmd.listRelatives( obj, p=True, l=True )
+		parent = cmd.listRelatives( parent[ 0 ], p=True, pa=True )
+
+
+def sortByHierarchy( objs ):
+	sortedObjs = []
+	for o in objs:
+		pCount = len( list( iterParents( o ) ) )
+		sortedObjs.append( (pCount, o) )
+
+	sortedObjs.sort()
+
+	return [ o[ 1 ] for o in sortedObjs ]
 
 
 def pyArgToMelArg(arg):
@@ -446,6 +457,125 @@ def checkIfp4Edit( sceneName ):
 			sceneName.edit()
 
 
+def importSmdAnimationAndSkeleton( smdFilepath, namespace=None, startTime=0, angles=(-90, 0, 0) ):
+	'''
+	imports animation from an smd file without the need for a reference skeleton - just take note
+	that in general smd animation data contains a crap load of junk...  so the skeletons built by
+	this procedure are a lot more verbose.  sometimes this is desireable of course...
+
+	the top nodes that are created are returned
+	'''
+	smdFilepath = Path( smdFilepath )
+
+	fHandle = open( smdFilepath )
+	lineIter = iter( fHandle )
+
+	if namespace is None:
+		namespace = ''
+	else:
+		if not cmd.namespace( exists=namespace ):
+			namespace = cmd.namespace( addNamespace=namespace )
+
+		namespace = namespace +':'
+
+	skelDict = {}
+	prefix = ''
+	try:
+		while True:
+			line = lineIter.next().strip()
+			if line == 'nodes':
+				while True:
+					line = lineIter.next().strip()
+					if line == 'end':
+						raise BreakException
+
+					idx, name, parentIdx = line.split( ' ' )
+					idx = int( idx )
+					parentIdx = int( parentIdx )
+					name = name.replace( '"', '' )
+
+					#build the actual joint and store its name in the dict - we parent them later
+					cmd.select( cl=True )
+					nameToks = name.split( "." )
+					if len( nameToks ) > 1:
+						prefix = nameToks[ 0 ]
+
+					name = namespace + nameToks[ -1 ]
+					joint = cmd.joint( name=name )
+
+					skelDict[ idx ] = joint, parentIdx
+	except StopIteration:
+		melError( "EOF reached unexpectedly - attempting to build skeleton with data obtained thus far" )
+	except BreakException:
+		pass
+
+
+	#build the skeleton
+	for idx, (joint, parentIdx) in skelDict.iteritems():
+		if parentIdx < 0:
+			continue
+
+		parent, grandParentIdx = skelDict[ parentIdx ]
+		cmd.parent( joint, parent )
+
+
+	#turn the skeleton dict into a list
+	joints = []
+
+	jointIdxs = range( len( skelDict ) )
+	for idx in jointIdxs:
+		joints.append( skelDict[ idx ][ 0 ] )
+
+	times = []
+	attrs = 'tx', 'ty', 'tz', 'rx', 'ry', 'rz'
+	degrees = math.degrees
+	try:
+		while True:
+			line = lineIter.next().strip()
+			if line.startswith( 'skeleton' ):
+				while True:
+					line = lineIter.next().strip()
+					while not line.startswith( 'time' ):
+						line = lineIter.next().strip()
+
+					time = int( line.split()[ -1 ] ) + startTime
+					times.append( time )
+					for idx in jointIdxs:
+						line = lineIter.next().strip()
+						toks = line.split()
+						assert idx == int( toks[ 0 ] )
+						toks = list( map( float, toks[ 1: ] ) )
+						transRot = toks[ :3 ] + list( map( degrees, toks[ 3: ] ) )
+
+						for attr, value in zip( attrs, transRot ):
+							cmd.setKeyframe( joints[ idx ], time=time, attribute=attr, value=value )
+	except StopIteration: pass
+	finally:
+		fHandle.close()
+
+
+	#set initial time ranges
+	numFrames = len( times ) - 1 + startTime
+	cmd.playbackOptions( e=True, min=startTime, animationStartTime=startTime, max=numFrames, animationEndTime=numFrames )
+
+
+	#get the list of joints that have no parents and perform the rotation correction
+	topNodes = [ joint for idx, (joint, parentIdx) in skelDict.iteritems() if parentIdx < 0 ]
+	rotCorrectionGrp = cmd.group( empty=True, name=namespace + smdFilepath.name() )
+	for j in topNodes:
+		cmd.parent( j, rotCorrectionGrp )
+
+	cmd.setAttr( '%s.r' % rotCorrectionGrp, *angles )
+	#for time in times:
+		#cmd.currentTime( time )
+		#for j in topNodes:
+			#cmd.rotate( angles[ 0 ], angles[ 1 ], angles[ 2 ], j, r=True, ws=True, pivot=(0, 0, 0) )
+			#cmd.setKeyframe( j, at=attrs )
+
+
+	return joints
+
+
 #there are here to follow the convention specified in the filesystem writeExportDict method
 kEXPORT_DICT_SCENE = 'scene'
 kEXPORT_DICT_APP_VERSION = 'app_version'
@@ -483,7 +613,8 @@ def importFile( filepath, silent=False ):
 	if ext == 'ma' or ext == 'mb':
 		cmd.file( filepath, i=True, prompt=silent, rpr='__', type='mayaAscii', pr=True, loadReferenceDepth='all' )
 	elif ext == 'smd':
-		cmd.vstSmdIO( i=True, importSkeleton=True, filename=filepath )
+		importSmdAnimationAndSkeleton( filepath )
+		#cmd.vstSmdIO( i=True, importSkeleton=True, filename=filepath )
 
 
 class Name(object):
@@ -769,13 +900,14 @@ def addPerforceMenuItems( filepath, **kwargs ):
 
 
 def addExploreToMenuItems( filepath ):
-	filepath = Path(filepath)
+	if filepath is None:
+		return
+
+	filepath = Path( filepath )
 	if not filepath.exists:
 		filepath = filepath.getClosestExisting()
 
-	try: filepathResolved = str( filepath.resolve() )
-	except AttributeError:
-		cmd.menuItem(en=False, l='File not specified')
+	if filepath is None:
 		return
 
 	#try to import the modelpipeline
@@ -788,11 +920,11 @@ def addExploreToMenuItems( filepath ):
 
 	xtn = filepath.getExtension().lower()
 	if xtn == 'qc':
-		qcmdlPath = getMdlFromQc(filepathResolved)
+		qcmdlPath = getMdlFromQc( filepath )
 		try:
 			if qcmdlPath.exists:
-				cmd.menuItem(l="Explore to .mdl", c=lambda x: mel.zooExploreTo( mdlPath ), ann='open an explorer window to the location of the .mdl file this .qc file compiles to')
-				cmd.menuItem(l="View .mdl in HLMV", c=lambda x: utils.spawnProcess('hlmv.bat "%s"' % mdlPath.resolve(), mdlPath.resolve().up()), ann='open the .mdl this .qc file compiles to in hlmv')
+				cmd.menuItem(l="Explore to .mdl", c=lambda x: mel.zooExploreTo( qcmdlPath ), ann='open an explorer window to the location of the .mdl file this .qc file compiles to')
+				cmd.menuItem(l="View .mdl in HLMV", c=lambda x: utils.spawnProcess('hlmv.bat "%s"' % qcmdlPath, qcmdlPath.up()), ann='open the .mdl this .qc file compiles to in hlmv')
 				cmd.menuItem(d=True)
 		except AttributeError: pass
 	elif xtn == 'mdl':
@@ -815,9 +947,18 @@ def addExploreToMenuItems( filepath ):
 					cmd.menuItem( l="Open Asset Editor", c=lambda x: utils.spawnProcess('assetEditor %s %s' % ( myAsset.location(), myAsset.name() )), ann= 'open up the asset editor')
 			except AttributeError: pass
 
-	cmd.menuItem(l="Explore to location...", c=lambda x: mel.zooExploreTo( filepathResolved ), ann='open an explorer window to the location of this file/directory')
-	cmd.menuItem(l="CMD prompt to location...", c=lambda x: mel.zooCmdTo( filepathResolved ), ann='open a command prompt to the location of this directory')
-	cmd.menuItem(l="Perforce to location...", c=lambda x: mel.openp4At( filepathResolved ), ann='open p4win to the location of this file/directory')
+	cmd.menuItem(l="Explore to location...", c=lambda x: mel.zooExploreTo( filepath ), ann='open an explorer window to the location of this file/directory')
+
+	gameLoc = Path()
+	if filepath.isUnder( content() ):
+		gameLoc = game() / (filepath - content())
+		gameLoc = gameLoc.getClosestExisting()
+
+	if gameLoc.exists:
+		cmd.menuItem(l="Explore to corresponding game location...", c=lambda x: mel.zooExploreTo( gameLoc ), ann='open an explorer window to the location of this file/directory')
+
+	cmd.menuItem(l="CMD prompt to location...", c=lambda x: mel.zooCmdTo( filepath ), ann='open a command prompt to the location of this directory')
+	cmd.menuItem(l="Perforce to location...", c=lambda x: mel.openp4At( filepath ), ann='open p4win to the location of this file/directory')
 
 
 def p4buildMenu( parent, file=None ):
@@ -912,6 +1053,31 @@ def onFileOpenCB():
 
 		if msgs:
 			cmd.confirmDialog( m='\n------------------------------\n\n'.join( msgs ), b='OK', db='OK' )
+
+
+def resolveMapping( mapping, **kw ):
+	'''
+	resolves the mapping to actual maya nodes - returns a mapping object with non existing nodes
+	stripped.  any additional kw args are passed to the matchNames function
+	'''
+	assert isinstance( mapping, names.Mapping )
+
+	toSearch = cmd.ls( typ='transform' )
+	existingSrcs = []
+	existingTgts = []
+
+	for src, tgt in mapping.iteritems():
+		if not cmd.objExists( src ):
+			src = names.matchNames( [ src ], toSearch, **kw )[ 0 ]
+
+		if not cmd.objExists( tgt ):
+			tgt = names.matchNames( [ tgt ], toSearch, **kw )[ 0 ]
+
+		if cmd.objExists( src ) and cmd.objExists( tgt ):
+			existingSrcs.append( src )
+			existingTgts.append( tgt )
+
+	return names.Mapping( existingSrcs, existingTgts )
 
 
 ######  DECORATORS  ######

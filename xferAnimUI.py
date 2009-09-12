@@ -20,6 +20,7 @@ class XferAnimForm(MelForm):
 	def __init__( self, parent ):
 		MelForm.__init__( self, parent )
 
+		self.sortBySrcs = True  #otherwise it sorts by tgts when doing traces
 		self._clipPreset = None
 		self.UI_mapping = mappingEditor.MappingForm( self )
 		self.UI_options = MelFrame( self, l="xfer options", labelVisible=1, collapsable=0, borderStyle='etchedIn' )
@@ -58,10 +59,12 @@ class XferAnimForm(MelForm):
 		self.UI_keysOnly = cmd.checkBox( l="keys only", v=0, cc=self.on_update )
 		self.UI_withinRange = cmd.checkBox( l="within range:", v=0, cc=self.on_update )
 		cmd.text( l="start ->" )
-		self.UI_start = cmd.intField( en=0, v=cmd.playbackOptions( q=True, min=True ) )
+		self.UI_start = cmd.textField( en=0, tx='!' )
+		cmd.popupMenu( p=self.UI_start, b=3, pmc=self.buildTimeMenu )
 
 		cmd.text( l="end ->" )
-		self.UI_end = cmd.intField( en=0, v=cmd.playbackOptions( q=True, max=True ) )
+		self.UI_end = cmd.textField( en=0, tx='!' )
+		cmd.popupMenu( p=self.UI_end, b=3, pmc=self.buildTimeMenu )
 
 		cmd.setParent( self )
 		UI_button = cmd.button( l='Xfer Animation', c=self.on_xfer )
@@ -110,6 +113,15 @@ class XferAnimForm(MelForm):
 
 		self.on_update()
 
+	### MENU BUILDERS ###
+	def buildTimeMenu( self, parent, uiItem ):
+		cmd.menu( parent, e=True, dai=True )
+		cmd.setParent( parent, m=True )
+
+		cmd.menuItem( l="! - use current range", c=lambda a: cmd.textField( uiItem, e=True, tx='!' ) )
+		cmd.menuItem( l=". - use current frame", c=lambda a: cmd.textField( uiItem, e=True, tx='.' ) )
+		cmd.menuItem( l="$ - use scene range", c=lambda a: cmd.textField( uiItem, e=True, tx='$' ) )
+
 	### EVENT HANDLERS ###
 	def on_update( self, *a ):
 			sel = cmd.ls( sl=True, dep=True )
@@ -137,17 +149,21 @@ class XferAnimForm(MelForm):
 			keysOnly = cmd.checkBox( self.UI_keysOnly, q=True, v=True )
 			withinRange = cmd.checkBox( self.UI_withinRange, q=True, v=True )
 			if enableRange and not keysOnly or withinRange:
-				cmd.intField( self.UI_start, e=True, en=True )
-				cmd.intField( self.UI_end, e=True, en=True )
+				cmd.textField( self.UI_start, e=True, en=True )
+				cmd.textField( self.UI_end, e=True, en=True )
 			else:
-				cmd.intField( self.UI_start, e=True, en=False )
-				cmd.intField( self.UI_end, e=True, en=False )
+				cmd.textField( self.UI_start, e=True, en=False )
+				cmd.textField( self.UI_end, e=True, en=False )
 	def on_xfer( self, *a ):
-		mapping = self.UI_mapping.getMapping()
+		mapping = api.resolveMapping( self.UI_mapping.getMapping() )
 		theSrcs = []
 		theTgts = []
-		for src, tgts in mapping.iteritems():
-			for tgt in tgts:
+
+		#perform the hierarchy sort
+		idx = 0 if self.sortBySrcs else 1
+		toSort = [ (len(list(api.iterParents( srcAndTgt[ idx ] ))), srcAndTgt) for srcAndTgt in mapping.iteritems() if cmd.objExists( srcAndTgt[ idx ] ) ]
+		toSort.sort()
+		for idx, (src, tgt) in toSort:
 				theSrcs.append( src )
 				theTgts.append( tgt )
 
@@ -159,10 +175,24 @@ class XferAnimForm(MelForm):
 		instance = cmd.checkBox( self.UI_check1, q=True, v=True )
 		traceKeys = cmd.checkBox( self.UI_keysOnly, q=True, v=True )
 		matchRo = cmd.checkBox( self.UI_check2, q=True, v=True )
-		startTime = cmd.intField( self.UI_start, q=True, v=True )
-		endTime = cmd.intField( self.UI_end, q=True, v=True )
+		startTime = cmd.textField( self.UI_start, q=True, tx=True )
+		endTime = cmd.textField( self.UI_end, q=True, tx=True )
 		world = cmd.checkBox( self.UI_check3, q=True, v=True )  #this is also "process trace cmds"
 		nocreate = cmd.checkBox( self.UI_check4, q=True, v=True )
+
+		if startTime.isdigit():
+			startTime = int( startTime )
+		else:
+			if startTime == '!': startTime = cmd.playbackOptions( q=True, min=True )
+			elif startTime == '.': startTime = cmd.currentTime( q=True )
+			elif startTime == '$': startTime = cmd.playbackOptions( q=True, animationStartTime=True )
+
+		if endTime.isdigit():
+			endTime = int( endTime )
+		else:
+			if endTime == '!': endTime = cmd.playbackOptions( q=True, max=True )
+			elif endTime == '.': endTime = cmd.currentTime( q=True )
+			elif endTime == '$': endTime = cmd.playbackOptions( q=True, animationEndTime=True )
 
 		withinRange = cmd.checkBox( self.UI_withinRange, q=True, v=True )
 
@@ -186,7 +216,7 @@ class XferAnimForm(MelForm):
 		elif isCopy:
 			api.melecho.zooXferBatch( "-mode 1 -range %s %s -matchRo %d"+ (startTime, endTime, matchRo), theSrcs, theTgts )
 		elif isTraced:
-			api.melecho.zooXferBatch( "-mode 2 -keys %d -postCmds %d -matchRo %d -range %s %s" % (traceKeys, world, matchRo, startTime, endTime), theSrcs, theTgts )
+			api.melecho.zooXferBatch( "-mode 2 -keys %d -postCmds %d -matchRo %d -sortByHeirarchy 0 -range %s %s" % (traceKeys, world, matchRo, startTime, endTime), theSrcs, theTgts )
 
 
 class XferAnimEditor(baseMelUI.BaseMelWindow):
@@ -194,7 +224,9 @@ class XferAnimEditor(baseMelUI.BaseMelWindow):
 	WINDOW_TITLE = 'Xfer Anim'
 
 	DEFAULT_SIZE = 350, 450
-	DEFAULT_MENU = 'Help'
+	DEFAULT_MENU = 'Tools'
+
+	#FORCE_DEFAULT_SIZE = False
 
 	def __new__( cls, mapping=None, clipPreset=None ):
 		return baseMelUI.BaseMelWindow.__new__( cls )
@@ -206,6 +238,13 @@ class XferAnimEditor(baseMelUI.BaseMelWindow):
 
 		if clipPreset is not None:
 			self.editor.setClipPreset( clipPreset )
+
+		def loadOffsetEditor( *a ):
+			import applyToRig
+			editor = applyToRig.CreateRigOffsetEditor()
+
+		cmd.setParent( self.getMenu( 'Tools' ), m=True )
+		cmd.menuItem( l="Open Offset Editor", c=loadOffsetEditor )
 
 		self.show()
 

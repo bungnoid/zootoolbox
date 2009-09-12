@@ -7,11 +7,10 @@ design this a little better
 
 import maya.cmds as cmd
 from vectors import Vector
-from filesystem import Path
+from filesystem import Path, BreakException
 import mayaVectors
 import api
 import maya.OpenMaya as OpenMaya
-import vs
 
 
 kMAX_INF_PER_VERT = 3

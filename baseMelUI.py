@@ -1,5 +1,6 @@
 import maya.cmds as cmd
 import utils
+import weakref
 
 
 class BaseMelWidget(str):
@@ -22,10 +23,16 @@ class BaseMelWidget(str):
 	#this should be set to the mel widget command used by this widget wrapped - ie cmd.button, or cmd.formLayout
 	WIDGET_CMD = None
 
+	#track instances so we can send them update messages -
+	_INSTANCE_LIST = []
+
 	def __new__( cls, parent, *a, **kw ):
 		cmd.setParent( parent )
 
-		return str.__new__( cls, cls.WIDGET_CMD( *a, **kw ) )
+		new = str.__new__( cls, cls.WIDGET_CMD( *a, **kw ) )
+		cls._INSTANCE_LIST.append( new )
+
+		return new
 	def __init__( self, parent, *a, **kw ):
 		#make sure kw args passed to init are executed as edit commands (which should have been passed
 		#to the cmd on creation, but we can't do that because we're inheriting from str, and we don't
@@ -35,6 +42,21 @@ class BaseMelWidget(str):
 		self.parent = parent
 	def __call__( self, *a, **kw ):
 		return self.WIDGET_CMD( self, *a, **kw )
+	@classmethod
+	def FromStr( cls, theStr ):
+		'''
+		given a ui name, this will cast the string as a widget instance
+		'''
+		return str.__new__( cls, theStr )
+	@classmethod
+	def IterInstances( cls ):
+		existingInstList = []
+		for inst in cls._INSTANCE_LIST:
+			if cls.WIDGET_CMD( inst, q=True, exists=True ):
+				existingInstList.append( inst )
+				yield inst
+
+		cls._INSTANCE_LIST = existingInstList
 
 
 class MelForm(BaseMelWidget): WIDGET_CMD = cmd.formLayout

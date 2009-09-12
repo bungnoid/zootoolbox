@@ -91,6 +91,10 @@ class MappingForm(BaseMelWidget):
 			return []
 
 		return tgts
+	def getUnmappedSrcs( self ):
+		return list( set( self.srcs ).difference( self.getMapping().srcs ) )
+	def getUnmappedTgts( self ):
+		return list( set( self.tgts ).difference( self.getMapping().tgts ) )
 	def getMapping( self ):
 		mapping = names.Mapping.FromDict( self._srcToTgtDict )
 		return mapping
@@ -111,7 +115,7 @@ class MappingForm(BaseMelWidget):
 			return cmd.textScrollList( self.UI_tsl_src, q=True, selectItem=True )[ 0 ]
 		except TypeError: return None
 	def getSelectedTgts( self ):
-		return cmd.textScrollList( self.UI_tsl_tgt, q=True, selectItem=True )[ 0 ]
+		return cmd.textScrollList( self.UI_tsl_tgt, q=True, selectItem=True )
 	def mapSrcItem( self, src ):
 		self._srcToTgtDict[ src ] = names.matchNames( [ src ], self.tgts, self.STRIP_NAMESPACES, self.PARITY_MATCH, self.UNIQUE_MATCHING, self.MATCH_OPPOSITE_PARITY, self.THRESHOLD )
 	def mapAllSrcItems( self ):
@@ -267,7 +271,12 @@ class MappingForm(BaseMelWidget):
 		self.on_addSrc()
 	def on_selectSrc( self, *a ):
 		src = self.getSelectedSrc()
-		if src and cmd.objExists( src ):
+		if src:
+			#if the object doesnt' exist in teh scene - try to find it
+			if not cmd.objExists( src ):
+				src = names.matchNames( [ src ], cmd.ls( typ='transform' ) )[ 0 ]
+
+			if cmd.objExists( src ):
 			cmd.select( src )
 	def on_selectItemTgt( self, *a ):
 		src = self.getSelectedSrc()
@@ -290,9 +299,18 @@ class MappingForm(BaseMelWidget):
 		self.mapAllSrcItems()
 	def on_selectTgt( self, *a ):
 		tgts = self.getSelectedTgts()
-		print tgts
 		if tgts:
-			cmd.select( tgts )
+			toSearch = cmd.ls( typ='transform' )
+			existingTgts = []
+			for t in tgts:
+				if not cmd.objExists( t ):
+					t = names.matchNames( [ t ], toSearch )[ 0 ]
+
+				if cmd.objExists( t ):
+					existingTgts.append( t )
+
+			if existingTgts:
+				cmd.select( existingTgts )
 	def on_swap( self, *a ):
 		curMapping = names.Mapping.FromDict( self._srcToTgtDict )
 		curMapping.swap()
