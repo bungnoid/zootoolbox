@@ -1,6 +1,7 @@
 from filesystem import Path
 import subprocess
 import time
+import re
 
 
 class P4Exception(Exception): pass
@@ -21,7 +22,10 @@ class P4Output(dict):
 	INFO_PREFIX = 'info:'
 	INFO_LEN = len( INFO_PREFIX )
 
-	def __init__( self, outStr ):
+	#
+	END_DIGITS = re.compile( '(.*)([0-9]+$)' )
+
+	def __init__( self, outStr, keysColonDelimited=True ):
 		EXIT_PREFIX = P4Output.EXIT_PREFIX
 		INFO_PREFIX = P4Output.INFO_PREFIX
 		INFO_LEN = P4Output.INFO_LEN
@@ -34,20 +38,57 @@ class P4Output(dict):
 			print outStr
 			raise P4Exception( "unsupported type (%s) given to %s" % (type( outStr ), self.__class__.__name__) )
 
+		delimiter = ':' if keysColonDelimited else ' '
 		for line in lines:
 			line = line.strip()
 
 			if line.startswith( EXIT_PREFIX ):
 				break
 
-			if line.startswith( INFO_PREFIX ):
-				line = line[ INFO_LEN: ].strip()
-				idx = line.find( ':' )
+			if not line:
+				continue
+
+			idx = line.find( ':' )
+			if idx == -1:
+				continue
+
+			line = line[ idx + 1: ].strip()
+			idx = line.find( delimiter )
+			if idx == -1:
+				prefix = line
+				data = True
+			else:
 				prefix = line[ :idx ].strip()
 				data = line[ idx + 1: ].strip()
 
+			if keysColonDelimited:
 				prefix = ''.join( [ s.capitalize() if n else s for n, s in enumerate( prefix.lower().split() ) ] )
-				self[ prefix ] = data
+
+			self[ prefix ] = data
+
+		#finally, if there are prefixes which have a numeral at the end, strip it and pack the data into a list
+		multiKeys = {}
+		for k in self.keys():
+			m = self.END_DIGITS.search( k )
+			if m is None:
+				continue
+
+			prefix, idx = m.groups()
+			idx = int( idx )
+
+			data = self.pop( k )
+			try:
+				multiKeys[ prefix ].append( (idx, data) )
+			except KeyError:
+				multiKeys[ prefix ] = [ (idx, data) ]
+
+		for prefix, dataList in multiKeys.iteritems():
+			try:
+				self.pop( prefix )
+			except KeyError: pass
+
+			dataList.sort()
+			self[ prefix ] = [ d[ 1 ] for d in dataList ]
 	def __getattr__( self, attr ):
 		return self[ attr ]
 
@@ -194,6 +235,31 @@ class P4Change(dict):
 			changeNum = int( toks[ 1 ] )
 
 			yield cls.FetchByNumber( changeNum )
+
+
+print _p4run( '-s fstat //valvegames/l4d/main/game/bin/base.fgd' )
+#FROM FSTAT...  FUCK YOU PERFORCE
+s='''
+info1: depotFile //valvegames/l4d/main/game/bin/base.fgd
+info1: clientFile z:/valve/l4d\game\bin\base.fgd
+info1: isMapped
+info1: headAction edit
+info1: headType text
+info1: headTime 1252691117
+info1: headRev 100
+info1: headChange 732580
+info1: headModTime 1252689561
+info1: haveRev 99
+info2: otherOpen0 sergiy@sergiy_l4d_linux
+info2: otherAction0 edit
+info2: otherChange0 default
+info2: otherOpen1 zoid@zoidi7
+info2: otherAction1 edit
+info2: otherChange1 default
+info2: otherOpen 2
+exit: 0
+'''
+print P4Output( s, False )
 
 
 #end
