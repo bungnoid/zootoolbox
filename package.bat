@@ -2,12 +2,15 @@ del /q /f /s ..\scriptPackages\*
 rmdir /q /s ..\scriptPackages
 
 mkdir ..\scriptPackages
+mkdir ..\scriptPackages\prefs
+mkdir ..\scriptPackages\prefs\icons
 mkdir ..\scriptPackages\scripts
 mkdir ..\scriptPackages\scripts\CST
 mkdir ..\scriptPackages\scripts\rigger
 mkdir ..\scriptPackages\scripts\zz_scripts
 
 copy _topDistro\*.* ..\scriptPackages
+copy prefs\icons\*.* ..\scriptPackages\prefs\icons
 
 copy animLib.py                                           ..\scriptPackages\scripts\
 copy animLibUI.py                                         ..\scriptPackages\scripts\

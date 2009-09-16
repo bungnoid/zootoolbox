@@ -383,7 +383,7 @@ global proc string zooGetAssetMEL( int $slot, string $prePost ) {
 		if( $attr == "preMEL" || $attr == "postMEL" ) $val = "!";  //this is a safeguard, just in case the user tries to sub in the command string
 		$cmd = `substitute "\%[a-zA-Z_]+" $cmd $val`;
 		}
-	if( $useTriggered ) $cmd = `zooPopulateCmdStr $obj $cmd`;
+	if( $useTriggered ) $cmd = `zooPopulateCmdStr $obj $cmd {}`;
 	return $cmd;
 	}
 

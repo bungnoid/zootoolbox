@@ -771,11 +771,6 @@ formLayout -e
 	-ac $rootOptsTex "left" 0 $rootOptsLbl
 	-af $rootOptsTex "right" 0
 	-an $rootOptsTex "bottom"
-  
-  -ac $spineInfoLbl "top" 10 $rootOptsTex
-	-ac $spineInfoLbl "left" 0 $rootOptsLbl
-	-an $spineInfoLbl "right"
-	-an $spineInfoLbl "bottom"
 	$spineForm;
 
 formLayout -e

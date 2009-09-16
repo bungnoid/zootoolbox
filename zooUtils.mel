@@ -345,28 +345,22 @@ global proc string zooScrubPath( string $path ) {
 //as well as the .. path op
 global proc string zooResolvePath( string $path ) {
 	$path = `zooScrubPath $path`;
-	string $paths[] = `zooTokenize $path "/"`;
-	int $num = `size $paths`;
 
-	//first resolve any env variables
-	for( $n=0; $n<$num; $n++ ) {
-		while( `match "\%[^%]+\%" $paths[$n]` != "" ) {
-			string $envName = `match "\%[^%]+\%" $paths[$n]`;
-			string $envVal = `substring $envName 2 (size($envName)-1)`;
+	//first resolve all env variables
+	while( `match "\%[^%]+\%" $path` != "" ) {
+		string $envName = `match "\%[^%]+\%" $path`;
+		string $envVal = `substring $envName 2 (size($envName)-1)`;
 
-			$envVal = `getenv $envVal`;
-			$paths[$n] = `substitute $envName $paths[$n] $envVal`;
-			}
+		$envVal = `getenv $envVal`;
+		$path = `substitute $envName $path $envVal`;
 		}
 
-	//now split the paths up again
-	$path = `zooArrayToStr_str $paths "/"`;
-	$paths = `zooTokenize $path "/"`;
-	$num = `size $paths`;
+	//now split the paths up so we can resolve any path manipulation
+	string $paths[] = `zooTokenize $path "/"`;
 	string $usePaths[] = {};
+	int $num = `size $paths`;
 	int $i = 0;
 
-	//now resolve any path manipulation
 	for( $n=0; $n<$num; $n++ ) {
 		if( $paths[$n] == ".." ) {
 			$usePaths = `zooIndexCrop_str $usePaths ":-1"`;

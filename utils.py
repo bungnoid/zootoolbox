@@ -8,7 +8,6 @@ import subprocess
 import new
 from cacheDecorators import *
 from filesystem import *
-from vmf import *
 
 
 class UniverseSet:

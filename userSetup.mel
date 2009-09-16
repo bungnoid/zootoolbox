@@ -28,6 +28,13 @@ alias l listProcs;
 	putenv MAYA_SCRIPT_PATH $newPath;
 	eval( "rehash" );  //I've put this in an eval simply because its one of those weird mel directives - if the rehash doesn't work like this perhaps an evalDeferred at the end of the script might help
 	print "// ******************* added all subdirs to SCRIPT_PATH\n";
+
+	//now add all mel paths to python sys module
+	python( "import sys" );
+	for( $p in $paths ) {
+		python( "sys.path.append( '"+ $p +"' )" );
+		print( "sys.path.append( '"+ $p +"' )" );
+		}
 }
 
 
