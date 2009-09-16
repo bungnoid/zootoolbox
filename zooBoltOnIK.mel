@@ -39,7 +39,7 @@ global proc string zooBoltOnIK( string $pivots[], int $stretchy ) {
 		zooSameTransform $pivots[$n] $joint;
 
 		//copy viewport representation - so they look identical
-		zooReplaceShape $pivots[$n] $joint;
+		zooReplaceShape $pivots[$n] $joint 0;
 		}
 	//if( $numPivs==3 ) zooOrientTripletJoint $dupeChain;
 	zooOrientChainProperly $dupeChain {};
