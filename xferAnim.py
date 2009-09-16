@@ -85,57 +85,6 @@ def align( src, tgt, key=False ):
 		cmd.setKeyframe(tgt, at='t', at='r')
 
 
-align( 'pCube1', 'pSphere1' )
-'''
-def align( src, tgt, key, pivotOnly ):
-	try:
-		#grab the positions and rotations of the src object in world space
-		pos = cmd.xform(src, q=True, ws=True, rp=True)
-		rot = cmd.xform(src, q=True, ws=True, ro=True)
-	except RuntimeError:
-		return
-
-	#create a list of all the axes to look at - we will check all these axes to make sure they're not locked
-	#creating a constraint on a locked axis will give us an error
-	axes = [ "x", "y", "z" ]
-	posCmd = "move -a -ws -rpr "
-	rotCmd = "rotate -a -ws "
-	posAxes = []
-	rotAxes = []
-
-	for ax, p, r in zip( axes, pos, rot ):
-		if cmd.getAttr('%s.t%s' % (tgt, ax), se=True):
-			posAxes.append( "-%s %s " % (ax, p) )
-		if cmd.getAttr('%s.r%s' % (tgt, ax), se=True):
-			rotAxes.append( "-%s %s " % (ax, r) )
-
-	posAxes = ''.join( posAxes )
-	rotAxes = ''.join( rotAxes )
-
-	if pivotOnly:
-		if posAxes:
-			api.mel.eval( '%s%s%s.rp %s.sp' % (posCmd, posAxes, tgt, tgt) )
-	else:
-		#so if the rotation orders are different, we need to deal with that because the xform cmd doesn't
-		srcRo = cmd.getAttr( src +".ro" )
-		tgtRo = cmd.getAttr( tgt +".ro" )
-		if srcRo != tgtRo:
-			cmd.setAttr(tgt +".ro", srcRo)
-
-		if posAxes:
-			api.mel.eval( '%s%s%s' % (posCmd, posAxes, tgt) )
-		if rotAxes:
-			api.mel.eval( '%s%s%s' % (rotCmd, rotAxes, tgt) )
-
-		#now restore the original rotation order
-		if srcRo != tgtRo:
-			cmd.xform(tgt, p=True, roo=kROOS[ tgtRo ])
-
-	if key:
-		cmd.setKeyframe(tgt, at='t', at='r')
-'''
-
-
 def transfer( src, tgt, instance=False, matchRo=True ):
 	'''
 	this is the core proc for node duplication/instancing animation transfers. you can call this proc

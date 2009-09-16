@@ -277,7 +277,7 @@ class MappingForm(BaseMelWidget):
 				src = names.matchNames( [ src ], cmd.ls( typ='transform' ) )[ 0 ]
 
 			if cmd.objExists( src ):
-			cmd.select( src )
+				cmd.select( src )
 	def on_selectItemTgt( self, *a ):
 		src = self.getSelectedSrc()
 		if src:
