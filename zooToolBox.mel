@@ -5,7 +5,7 @@ zooUtils;
 
 global proc zooToolBox() {
 	string $windowName = "zooToolBoxWindow";
-	string $windowTitle = "The zoo Tool Box  v07.04";
+	string $windowTitle = "The zoo Tool Box  v09.09";
 	int $infoDate = 60224;
 	int $showTips = `zooTipState zooToolBox -1`;
 	int $latestTip = -1;
