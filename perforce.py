@@ -8,16 +8,6 @@ import os
 class P4Exception(Exception): pass
 
 
-class P4Path(Path):
-	TIMEOUT_PERIOD = 5
-	USE_P4 = True
-
-	def __new__( cls, path='', caseMatters=None, envDict=None ):
-		pass
-	def __init__( self, path='', caseMatters=None, envDict=None ):
-		pass
-
-
 class P4Output(dict):
 	EXIT_PREFIX = 'exit:'
 	ERROR_PREFIX = 'error:'
@@ -105,7 +95,7 @@ class P4Output(dict):
 
 
 def _p4run( *args ):
-	if not P4Path.USE_P4:
+	if not P4File.USE_P4:
 		return False
 
 	cmdStr = 'p4 '+ ' '.join( map( str, args ) )
@@ -113,7 +103,7 @@ def _p4run( *args ):
 	try:
 		p4Proc = subprocess.Popen( cmdStr, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
 	except OSError:
-		P4Path.USE_P4 = False
+		P4File.USE_P4 = False
 		return False
 
 	startTime = time.clock()
@@ -137,7 +127,7 @@ def _p4run( *args ):
 
 		#make sure we haven't timed out
 		curTime = time.clock()
-		if curTime - startTime > P4Path.TIMEOUT_PERIOD:
+		if curTime - startTime > P4File.TIMEOUT_PERIOD:
 			return False
 
 
