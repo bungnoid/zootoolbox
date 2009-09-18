@@ -108,7 +108,7 @@ global proc string zooPopulateCmdStr( string $trigger, string $cmdStr, string $o
 //------
 global proc string zooPopulateCmdStrRaw( string $trigger, string $cmdStr, string $optionalStrings[] ) {
 	string $optionalAsStr = "[r'''"+ `zooArrayToStr_str $optionalStrings "''',r'''"` +"''']";
-	python( "import vMaya.triggered as triggered;" );
+	python( "import triggered" );
 	$cmdStr = python( "triggered.Trigger('"+ $trigger +"').resolve('"+ encodeString($cmdStr) +"',"+ $optionalAsStr +")" );
 
 	return $cmdStr;

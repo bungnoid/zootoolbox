@@ -148,8 +148,8 @@ global proc zooBuildTrigCmdPopup( string $parent ) {
 	menuItem -l "poses to sliders" -c( "select "+ $obj +"; zooPosesToSliders \"\";" );
 	menuItem -l "poses to sliders (preserve)" -c( "select "+ $obj +"; zooPosesToSliders \"-preserve 1\";" );
 	menuItem -d 1;
-	menuItem -l "scrub this cmd" -c( "python(\"import vMaya.triggered as triggered; triggered.Trigger('"+ $obj +"').scrubMenuCmd("+ $slot +");\"); zooTriggeredWindowFunctions -updateCmd;" );
-	menuItem -l "scrub all cmds" -c( "python(\"import vMaya.triggered as triggered; triggered.Trigger('"+ $obj +"').scrubMenuCmds();\"); zooTriggeredWindowFunctions -updateCmd;" );
+	menuItem -l "scrub this cmd" -c( "python(\"import triggered; triggered.Trigger('"+ $obj +"').scrubMenuCmd("+ $slot +");\"); zooTriggeredWindowFunctions -updateCmd;" );
+	menuItem -l "scrub all cmds" -c( "python(\"import triggered; triggered.Trigger('"+ $obj +"').scrubMenuCmds();\"); zooTriggeredWindowFunctions -updateCmd;" );
 	}
 
 
@@ -282,7 +282,7 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			for( $obj in $usedObjs ) textScrollList -e -si $obj zooTriggeredScrollTargets;
 			break;
 		case "-scrubCmd":
-			python("import vMaya.triggered as triggered");
+			python("import triggered");
 			if( $cmdViewMode ) python("triggered.Trigger('"+ $trigger +"').scrubMenuCmd("+ $slot +")");
 			else python("triggered.Trigger('"+ $trigger +"').scrubCmd()");
 			zooTriggeredWindowFunctions -updateCmd;
@@ -344,7 +344,7 @@ global proc zooTriggeredWindowFunctions( string $function ) {
 			break;
 		case "-replaceConnect":
 			if( !`objExists $trigger` ) break;
-			python("import vMaya.triggered as triggered");
+			python("import triggered");
 			string $sel[] = `ls -sl`;
 			string $connects[] = `textScrollList -q -si zooTriggeredScrollTargets`;
 			int $connect = zooGetElement_int(0,`zooGetConnectSlots $trigger $connects[0]`);
