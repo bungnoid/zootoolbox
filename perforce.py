@@ -101,7 +101,7 @@ def _p4run( *args ):
 	cmdStr = 'p4 '+ ' '.join( map( str, args ) )
 	print cmdStr
 	try:
-		p4Proc = subprocess.Popen( cmdStr, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
+		p4Proc = subprocess.Popen( cmdStr, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
 	except OSError:
 		P4File.USE_P4 = False
 		return False
@@ -140,6 +140,7 @@ def p4run( *args, **kwargs ):
 
 
 P4INFO = None
+
 def p4Info():
 	global P4INFO
 
@@ -152,9 +153,6 @@ def p4Info():
 
 
 class P4Change(dict):
-	CHANGE_NUM_INVALID = -1
-	CHANGE_NUM_DEFAULT = 0
-
 	def __init__( self ):
 		self.change = None
 		self.description = None
@@ -165,6 +163,11 @@ class P4Change(dict):
 		return len( self.files )
 	def __iter__( self ):
 		return zip( self.files, self.revisions, self.actions )
+	def __eq__( self, other ):
+		if isinstance( other, int ):
+			return self.change == other
+
+		return self.change == other.change
 	@classmethod
 	def Create( cls, description, files=None ):
 
@@ -262,7 +265,12 @@ class P4Change(dict):
 			yield cls.FetchByNumber( changeNum )
 
 
-DEFAULT_CHANGE = 'default'
+P4Change.CHANGE_NUM_DEFAULT = P4Change()
+P4Change.CHANGE_NUM_DEFAULT.change = 0
+P4Change.CHANGE_NUM_INVALID = P4Change()
+
+
+DEFAULT_CHANGE = 'default auto-checkout'
 
 class P4File(Path):
 	'''
@@ -277,9 +285,6 @@ class P4File(Path):
 	TIMEOUT_PERIOD = 5
 	USE_P4 = True
 
-	#def __init__( self, path='', caseMatters=None, envDict=None ):
-		#Path.__init__( self, path, caseMatters, envDict )
-		#self.
 	def run( self, *args, **kwargs ):
 		return p4run( *args, **kwargs )
 	def getFile( self, f=None ):
@@ -287,6 +292,8 @@ class P4File(Path):
 			return self
 
 		return Path( f )
+	def getFileStr( self, f ):
+		pass
 	def getStatus( self, f=None ):
 		'''
 		returns the status dictionary for the instance.  if the file isn't managed by perforce,
@@ -356,14 +363,12 @@ class P4File(Path):
 		data = self.getStatus( f )
 
 		try:
-			return int( data[ 'haveRev' ] ), int( data[ 'headRev' ] )
+			return data[ 'haveRev' ], data[ 'headRev' ]
 		except (AttributeError, TypeError, KeyError):
 			return None, None
 	def isEdit( self, f=None ):
 		if not self.USE_P4:
 			return False
-
-		f = self.getFile( f )
 
 		editActions = [ 'add', 'edit' ]
 		action = self.getAction( f )
@@ -383,7 +388,6 @@ class P4File(Path):
 		if not self.USE_P4:
 			return True
 
-		f = self.getFile( f )
 		status = self.getStatus( f )
 		if not status:
 			return None
@@ -399,44 +403,53 @@ class P4File(Path):
 			return headRev == haveRev
 		except KeyError:
 			return False
-	def editoradd( self, f=None ):
-		if not self.USE_P4:
-			return False
-
-		f = self.getFile( f )
-
-		#if the file doesn't exist, bail
-		if not os.path.exists( f ):
-			return False
-
-		action = self.getAction( f )
-		if not self.managed( f ):
-			return self.run( 'add', '-c', self.getOrCreateChange(), f )
-		elif action is None:
-			return self.run( 'edit', '-c', self.getOrCreateChange(), f )
-
-		return True
-	edit = editoradd
 	def add( self, f=None, type=None ):
 		if not self.USE_P4:
 			return False
 
-		f = self.getFile( f )
-		args = [ 'add', '-c', self.getOrCreateChange() ]
+		args = [ '-s add', '-c', self.getOrCreateChange() ]
 
 		#if the type has been specified, add it to the add args
 		if type is not None:
 			args += [ '-t', type ]
-		args.append( f )
 
-		return self.run( *args )
+		args.append( self.getFile( f ) )
+
+		lines = _p4run( *args )
+		for line in lines:
+			if line.startswith( 'error' ):
+				return False
+
+			if "can't add existing file" in line:
+				return False
+
+		return True
+	def edit( self, f=None ):
+		if not self.USE_P4:
+			return False
+
+		lines = _p4run( '-s edit', '-c', self.getOrCreateChange(), self.getFile( f ) )
+		for line in lines:
+			if line.startswith( 'error' ):
+				return False
+
+			if "can't edit exclusive" in line:
+				return False
+
+		return True
+	def editoradd( self, f=None ):
+		if self.edit( f ):
+			return True
+
+		if self.add( f ):
+			return True
+
+		return False
 	def revert( self, f=None ):
 		if not self.USE_P4:
 			return False
 
-		f = self.getFile( f )
-
-		return self.run( 'revert', f )
+		return self.run( 'revert', self.getFile( f ) )
 	def sync( self, f=None, force=False, rev=None, change=None ):
 		'''
 		rev can be a negative number - if it is, it works as previous revisions - so rev=-1 syncs to
@@ -449,7 +462,7 @@ class P4File(Path):
 		f = self.getFile( f )
 
 		#if file is a directory, then we want to sync to the dir
-		if os.path.isdir(f):
+		if os.path.isdir( f ):
 			f = ('%s/...' % f).replace('//','/')
 
 		if rev is not None:
@@ -551,8 +564,8 @@ class P4File(Path):
 
 		f = self.getFile( f )
 		ch = self.getChange( f )
-		if ch == self.CHANGE_NUM_DEFAULT:
-			return P4Change.FetchByDescription( self.DEFAULT_CHANGE ).change
+		if ch == P4Change.CHANGE_NUM_DEFAULT:
+			return P4Change.FetchByDescription( self.DEFAULT_CHANGE, True ).change
 
 		return ch
 	def allPaths( self, f=None ):
@@ -628,8 +641,9 @@ info2: otherOpen 2
 exit: 0
 '''
 #print P4Output( s, False )
-print P4File( r'd:\tools\python\cacheDecorators.py' ).getStatus().asStr()
-print P4File( r'd:\tools\python\cacheDecorators.py' ).toDepotPath()
+#print P4File( r'd:\tools\python\cacheDecorators.py' ).getStatus().asStr()
+#print P4File( r'd:\tools\python\cacheDecorators.py' ).toDepotPath()
+print P4File( r'z:\valve\tools\python\cacheDecorators.py' ).getHaveHead()
 #print _p4run( r'-s where d:\tools\python\cacheDecorators.py' )
 
 
