@@ -94,6 +94,9 @@ class P4Output(dict):
 		return '\n'.join( '%s:  %s' % items for items in self.iteritems() )
 
 
+P4_LENGTHY_CALLBACK = None
+P4_RETURNED_CALLBACK = None
+
 def _p4run( *args ):
 	if not P4File.USE_P4:
 		return False
@@ -109,6 +112,7 @@ def _p4run( *args ):
 	startTime = time.clock()
 	stdoutAccum = []
 	stderrAccum = []
+	hasTimedOut = False
 	while True:
 		ret = p4Proc.poll()
 		newStdout = p4Proc.stdout.readlines()
@@ -119,6 +123,11 @@ def _p4run( *args ):
 
 		#if the proc has terminated, deal with returning appropriate data
 		if ret is not None:
+			if hasTimedOut:
+				if callable( P4_RETURNED_CALLBACK ):
+					try: P4_RETURNED_CALLBACK( *args )
+					except: pass
+
 			return stdoutAccum + stderrAccum
 
 		#if there has been new output, the proc is still alive so reset counters
@@ -128,7 +137,14 @@ def _p4run( *args ):
 		#make sure we haven't timed out
 		curTime = time.clock()
 		if curTime - startTime > P4File.TIMEOUT_PERIOD:
-			return False
+			hasTimedOut = True
+			if callable( P4_LENGTHY_CALLBACK ):
+				try:
+					P4_LENGTHY_CALLBACK( p4Proc, *args )
+				except BreakException:
+					return False
+				except:
+					return False
 
 
 def p4run( *args, **kwargs ):
@@ -159,6 +175,8 @@ class P4Change(dict):
 		self.files = []
 		self.actions = []
 		self.revisions = []
+	def __str__( self ):
+		return str( self.change )
 	def __len__( self ):
 		return len( self.files )
 	def __iter__( self ):
@@ -560,7 +578,7 @@ class P4File(Path):
 		if the file isn't already in a changelist, this will create one.  returns the change number
 		'''
 		if not self.USE_P4:
-			return self.CHANGE_NUM_INVALID
+			return P4Change.CHANGE_NUM_INVALID
 
 		f = self.getFile( f )
 		ch = self.getChange( f )
