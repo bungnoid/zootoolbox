@@ -15,7 +15,6 @@ try:
 except AttributeError: pass
 
 from cacheDecorators import *
-from qcTools import getMdlFromQc
 from filesystem import *
 import maya.utils
 import names, utils, filesystem

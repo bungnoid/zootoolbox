@@ -5,7 +5,6 @@ comprehensive/mature is found
 '''
 
 import math, random
-import vs
 
 zeroThreshold = 1e-8
 
@@ -211,8 +210,6 @@ class Vector(list):
 		return self.__class__( [ complex(v) for v in tuple(self) ] )
 	def conjugate( self ):
 		return self.__class__( [ v.conjugate() for v in tuple(self.complex()) ] )
-	def as_vsVector( self ):
-		return vs.Vector( *self )
 
 	#this is kinda dumb - it'd be nice if this could be auto-derived from the value of INDEX_NAMES but I couldn't get it working so...  meh
 	x = property( lambda self: self.getNamedIndex( 'x' ), lambda self, value: self.setNamedIndex( 'x', value ) )
@@ -334,8 +331,6 @@ class Quaternion(Vector):
 					y = ( matrix[1][2] + matrix[2][1] )/s
 					z = 0.5 / s
 					w = ( matrix[0][1] + matrix[1][0] )/s
-		elif isinstance(w, vs.Quaternion):
-			x, y, z, w = w.x, w.y, w.z, w.w
 
 		Vector.__init__(self, [x, y, z, w])
 	def __mul__( self, other ):
@@ -438,20 +433,10 @@ class Quaternion(Vector):
 class Matrix(object):
 	'''deals with square matricies'''
 	def __init__( self, values=(), size=4 ):
-		'''initialises a matrix from either an iterable container of values, a vs.VMatrix instance,
-		or a quaternion.  in the case of a quaternion the matrix is 3x3'''
+		'''initialises a matrix from either an iterable container of values or a quaternion.  in the
+		case of a quaternion the matrix is 3x3'''
 		if isinstance(values,Matrix):
 			values = values.as_list()
-		elif isinstance( values, vs.VMatrix ):
-			#NOTE: VMatrix objects are only 3x4 matricies - hence only 3 rows
-			size = 4
-			col0 = values.GetForward()
-			col1 = values.GetLeft()
-			col2 = values.GetUp()
-			col3 = values.GetTranslation()
-			values = [ col0.x, col1.x, col2.x, col3.x,\
-					   col0.y, col1.y, col2.y, col3.y,\
-					   col0.z, col1.z, col2.z, col3.z ]
 		elif isinstance( values, Quaternion ):
 			#NOTE: quaternions result in a 4x4 matrix
 			size = 4
@@ -1054,8 +1039,6 @@ class Matrix(object):
 		return list
 	def as_tuple( self ):
 		return tuple( self.as_list() )
-	def as_vsMatrix( self ):
-		return vs.VMatrix( *self.as_list() )
 
 def euler_from_matrix(matrix, axes='rxyz'):
 	"""Return Euler angles from rotation matrix for specified axis sequence.

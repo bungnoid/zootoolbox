@@ -209,10 +209,15 @@ class AnimLibUI(utils.Singleton):
 		if ans == CANCEL:
 			return
 
+		kwargs = {}
+		if type == kANIM:
+			kwargs = { 'startFrame': cmd.playbackOptions( q=True, min=True ),
+			           'endFrame': cmd.playbackOptions( q=True, max=True ) }
+
 		objs = cmd.ls(sl=True)
 		name = cmd.promptDialog(q=True, tx=True)
 		newClip = ClipPreset(LOCAL, self.getSelectedLibrary(), name, type)
-		newClip.write(objs)
+		newClip.write( objs, **kwargs )
 		self.clipUIs.append( ClipSliderUI(newClip, self.localeUI[LOCAL]) )
 
 		print 'wrote new %s clip!' % typeLabel, newClip
@@ -326,6 +331,8 @@ class AnimLibUI(utils.Singleton):
 class ClipSliderUI(object):
 	SLIDER_VISIBLE = {kPOSE: True,
 					  kANIM: False}
+
+	@d_initCache
 	def __init__( self, clipPreset, parentUI ):
 		self.clipPreset = clipPreset
 		self.name = self.clipPreset.niceName
@@ -339,12 +346,18 @@ class ClipSliderUI(object):
 		self.apply = clipPreset.apply
 
 		#read the clip and cache some data...
-		fromFile = clipPreset.unpickle()
-		self.clipObjs = fromFile['objects']
-		self.clipInstance = fromFile['clip']
 		self.blended = None
 
-		self.build(parentUI)
+		self.build( parentUI )
+	@d_cacheValue
+	def unpickle( self ):
+		return self.clipPreset.unpickle()
+	@property
+	def clipObjs( self ):
+		return self.unpickle()[ 'objects' ]
+	@property
+	def clipInstance( self ):
+		return self.unpickle()[ 'clip' ]
 	def build( self, parentUI ):
 		'''
 		build the top level form layout, and then call the populate method

@@ -318,7 +318,7 @@ class AnimClip(BaseClip):
 		for obj, attrDict in self.iteritems():
 			for attr, value in attrDict.iteritems():
 				value *= other
-	def generate( self, objects, **kwargs ):
+	def generate( self, objects, startFrame=None, endFrame=None ):
 		'''
 		generates an anim dictionary - its basically just dict with node names for keys.  key values
 		are lists of tuples with the form: (keyTime, attrDict) where attrDict is a dictionary with
@@ -327,9 +327,19 @@ class AnimClip(BaseClip):
 		defaultWeightedTangentOpt = bool(cmd.keyTangent(q=True, g=True, wt=True))
 		self.clear()
 
+		if startFrame is None:
+			startFrame = cmd.playbackOptions( q=True, min=True )
+		if endFrame is None:
+			endFrame = cmd.playbackOptions( q=True, max=True )
+
+		startFrame, endFrame = list( sorted( [startFrame, endFrame] ) )
+		self.offset = startFrame
+
 		#list all keys on the objects - so we can determine the start frame, and range.  all times are stored relative to this time
-		allKeys = cmd.keyframe( objects, q=True )
+		allKeys = cmd.keyframe( objects, q=True ) or []
 		allKeys.sort()
+		allKeys = [ k for k in allKeys if startFrame <= k <= endFrame ]
+
 		self.offset = offset = allKeys[ 0 ]
 		self.__range = allKeys[ -1 ] - offset
 
@@ -341,10 +351,12 @@ class AnimClip(BaseClip):
 			objDict = {}
 			self[ obj ] = objDict
 			for attr in attrs:
+				timeTuple = startFrame, endFrame
+
 				#so the attr value dict contains a big fat list containing tuples of the form:
 				#(time, value, itt, ott, ita, ota, iw, ow, isLockedTangents, isWeightLock)
 				attrpath = '%s.%s' % (obj, attr)
-				times = cmd.keyframe( attrpath, q=True )
+				times = cmd.keyframe( attrpath, q=True, t=timeTuple )
 				weightedTangents = defaultWeightedTangentOpt
 
 				#if there is an animCurve this will return its "weighted tangent" state - otherwise it will return None and a TypeError will be raised
@@ -356,17 +368,17 @@ class AnimClip(BaseClip):
 					objDict[attr] = (False, [(None, cmd.getAttr(attrpath), None, None, None, None, None, None, None, None)])
 					continue
 				else:
-					times = [t-offset for t in times]
+					times = [ t-offset for t in times ]
 
-				values = cmd.keyframe(attrpath, q=True, vc=True)
-				itts = cmd.keyTangent(attrpath, q=True, itt=True)
-				otts = cmd.keyTangent(attrpath, q=True, ott=True)
-				ixs = cmd.keyTangent(attrpath, q=True, ix=True)
-				iys = cmd.keyTangent(attrpath, q=True, iy=True)
-				oxs = cmd.keyTangent(attrpath, q=True, ox=True)
-				oys = cmd.keyTangent(attrpath, q=True, oy=True)
-				isLocked = cmd.keyTangent(attrpath, q=True, weightLock=True)
-				isWeighted = cmd.keyTangent(attrpath, q=True, weightLock=True)
+				values = cmd.keyframe(attrpath, q=True, t=timeTuple, vc=True)
+				itts = cmd.keyTangent(attrpath, q=True, t=timeTuple, itt=True)
+				otts = cmd.keyTangent(attrpath, q=True, t=timeTuple, ott=True)
+				ixs = cmd.keyTangent(attrpath, q=True, t=timeTuple, ix=True)
+				iys = cmd.keyTangent(attrpath, q=True, t=timeTuple, iy=True)
+				oxs = cmd.keyTangent(attrpath, q=True, t=timeTuple, ox=True)
+				oys = cmd.keyTangent(attrpath, q=True, t=timeTuple, oy=True)
+				isLocked = cmd.keyTangent(attrpath, q=True, t=timeTuple, weightLock=True)
+				isWeighted = cmd.keyTangent(attrpath, q=True, t=timeTuple, weightLock=True)
 
 				objDict[ attr ] = weightedTangents, zip(times, values, itts, otts, ixs, iys, oxs, oys, isLocked, isWeighted)
 	def apply( self, mapping, **kwargs ):
@@ -443,7 +455,7 @@ class AnimClip(BaseClip):
 					value += preValue
 					if time is None:
 						#in this case the attr value was just a pose...
-						cmd.setAttr(attrpath, value)
+						cmd.setAttr( attrpath, value )
 					else:
 						time += timeOffset
 						cmd.setKeyframe( attrpath, t=(time,), v=value )
@@ -455,10 +467,7 @@ class AnimClip(BaseClip):
 						else:
 							cmd.keyTangent( attrpath, t=(time,), ix=ix, iy=iy, ox=ox, oy=oy )
 
-		#this is all wrapped up into a mel eval string so that its all in a single undo
-		#entry - it seems calling setAttr individually creates multiple undo items for
-		#some reason...
-		cmd.keyTangent( e=True, g=True, wt=beginningWeightedTanState )
+		#cmd.keyTangent( e=True, g=True, wt=beginningWeightedTanState )
 	@d_cacheValue
 	def getKeyTimes( self ):
 		'''
@@ -595,12 +604,15 @@ class ClipPreset(Preset):
 		#generate the name mapping
 		slamApply = kwargs.get( 'slam', False )
 		if slamApply:
-			mapping = Mapping(srcObjs, cmd.ls(typ='transform'), threshold=kDEFAULT_MAPPING_THRESHOLD)
+			objects = cmd.ls( typ='transform' )
+			tgts = names.matchNames( srcObjs, objects, threshold=kDEFAULT_MAPPING_THRESHOLD )
+			mapping = Mapping( srcObjs, tgts )
 		else:
-			mapping = Mapping(srcObjs, objects, threshold=kDEFAULT_MAPPING_THRESHOLD)
+			tgts = names.matchNames( srcObjs, objects, threshold=kDEFAULT_MAPPING_THRESHOLD )
+			mapping = Mapping( srcObjs, tgts )
 
 		#run the clip's apply method
-		clip.apply(mapping, **kwargs)
+		clip.apply( mapping, **kwargs )
 	def getClipObjects( self ):
 		'''
 		returns a list of all the object names contained in the clip
@@ -609,7 +621,7 @@ class ClipPreset(Preset):
 		srcObjs = presetDict[ kEXPORT_DICT_OBJECTS ]
 
 		return srcObjs
-	def write( self, objects ):
+	def write( self, objects, **kwargs ):
 		type = self.getType()
 		clipDict = api.writeExportDict( TOOL_NAME, VER )
 		clipDict[ kEXPORT_DICT_CLIP_TYPE ] = type
@@ -617,7 +629,7 @@ class ClipPreset(Preset):
 		clipDict[ kEXPORT_DICT_WORLDSPACE ] = False
 
 		theClip = self.TYPE_CLASSES[ type ]()
-		theClip.generate( objects )
+		theClip.generate( objects, **kwargs )
 		clipDict[ kEXPORT_DICT_THE_CLIP ] = theClip
 
 		#write the preset file to disk

@@ -515,47 +515,4 @@ def getJointScale( joint ):
 	return (x + y + z) / 3
 
 
-def convexifyObjects( objs ):
-	noUndo = vs.CDisableUndoScopeGuard()
-	dmxedit = vs.dmxedit
-
-	tmpFile = Path( '%TEMP%/tmp.dmx' )
-	cmd.vsdmxio( objs, export=True, sl=True, ascii=True, filename=tmpFile )
-
-	#now load the file
-	root = dmxedit.LoadDmx( tmpFile )
-
-	for dag in root.model.dagWalk():
-		shape = dag.shape
-		if isinstance( shape, vs.movieobjects.CDmeMesh ):
-			convexHull = dmxedit.ComputeConvexHull3D( shape )
-			convexHull.name = dag.name
-			dag.SetShape( convexHull )
-
-	dmxedit.SaveDmx( root, tmpFile )
-
-	importedNodes = cmd.vsdmxio( i=True, filename=tmpFile )
-	tmpFile.delete()
-
-	toReturn = []
-	toDelete = set()
-	for n in importedNodes:
-		if cmd.nodeType( n ) == 'mesh':
-			p = cmd.listRelatives( n, pa=True, p=True )[ 0 ]
-			pp = cmd.listRelatives( p, pa=True, p=True )[ 0 ]
-			toDelete.add( pp )
-
-			p = cmd.parent( p, world=True )[ 0 ]
-			p = cmd.rename( p, n.split( '|' )[ -1 ] )
-			toReturn.append( p )
-
-	cmd.delete( list( toDelete ) )
-
-	return toReturn
-
-
-def convexifySelectedObjects():
-	convexifyObjects( cmd.ls( sl=True ) )
-
-
 #end
