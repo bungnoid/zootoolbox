@@ -25,6 +25,9 @@ class Name(object):
 	Name objects are strings that are used to identify something such as an object or a filepath.
 	this class creates some useful ways of comparing and manipulating Name objects
 	'''
+	PREFIX_DELIMETERS = ':|'
+	PUNCTUATION = '_.'
+
 	@d_initCache
 	def __init__( self, theString='' ):
 		#NOTE: this value should never be set directly...  instead use the set method or the string property
@@ -32,8 +35,8 @@ class Name(object):
 		self.prefix = None
 
 		#determines what characters denote a prefix boundary - so if it were set to ':' then apples:bananas would have the string 'apples:' as its prefix
-		self.prefixDelimeters = ':'
-		self.punctuation = '_.'
+		self.prefixDelimeters = self.PREFIX_DELIMETERS
+		self.punctuation = self.PUNCTUATION
 		self._parity = None
 	def __str__( self ):
 		return self._string
@@ -74,7 +77,7 @@ class Name(object):
 		self.prefix = ''
 		string = self._string.strip()
 		lastMatch = -1
-		if delimeters == None:
+		if delimeters is None:
 			delimeters = self.prefixDelimeters
 
 		for char in delimeters:
@@ -95,7 +98,8 @@ class Name(object):
 	def get_prefix( self, delimeters=None ):
 		'''strips any namespace or path data from the name string - by default the stripping is done
 		"in place", but if the inPlace variable is set to true, then a new Name object is returned'''
-		if self.prefix == None: return self.cache_prefix(delimeters)
+		if self.prefix is None:
+			return self.cache_prefix( delimeters )
 		else: return self.prefix
 	def likeness( self, other, parityMatters=False, stripFirst=True ):
 		'''
@@ -316,6 +320,26 @@ def swapParity( name ):
 	return name
 
 
+def getCommonPrefix( strs ):
+	'''
+	returns the longest prefix common to all given strings
+	'''
+	class PrefixDifference(Exception): pass
+
+	prefix = ''
+	first = strs[ 0 ]
+
+	for n, s in enumerate( first ):
+		try:
+			for aStr in strs[ 1: ]:
+				if s != aStr[ n ]:
+					raise PrefixDifference
+
+			prefix += s
+		except PrefixDifference:
+			return prefix
+
+
 def matchCase( theStr, caseToMatch ):
 	matchedCase = []
 	lastCaseWasLower = True
@@ -419,9 +443,9 @@ def matchNamesDict( srcList, tgtList, **kwargs ):
 
 
 class Mapping(object):
-	def __init__( self, srcList, tgtList, **kw ):
+	def __init__( self, srcList, tgtList ):
 		self.srcs = srcList[:]
-		self.tgts = matchNames( srcList, tgtList, **kw )
+		self.tgts = tgtList[:]
 	def __iter__( self ):
 		return iter( self.srcs )
 	def __len__( self ):
@@ -481,6 +505,8 @@ class Mapping(object):
 
 		self.srcs = srcs
 		self.tgts = tgts
+	def asStr( self ):
+		return '\n'.join( [ '%s  ->  %s' % m for m in self.iteritems() ] )
 	@classmethod
 	def FromDict( cls, mappingDict, ordering=() ):
 		new = Mapping( [], [] )

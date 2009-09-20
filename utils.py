@@ -216,6 +216,7 @@ class Callback(object):
 		return self.func(*self.args, **self.kwargs)
 
 
+import new
 def reloadAll( module ):
 	'''
     recursively reloads a module and all sub-modules.  it doesn't check for cyclical imports, but it
