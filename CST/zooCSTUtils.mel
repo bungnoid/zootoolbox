@@ -288,14 +288,11 @@ global proc zooCSTUtilsRigVis( string $function ) {
 
 
 global proc finalizeRigBuild( string $prefix ) {
-	string $infoNodes[] = `ls -type vstInfo`;
 	string $geoLayer = `createDisplayLayer -name "geo" -empty`;
 	string $ctrlsLayer = `createDisplayLayer -name "ctrls" -empty`;
 
-	editDisplayLayerMembers -noRecurse $geoLayer ( $infoNodes[0] );
 	editDisplayLayerMembers -noRecurse $ctrlsLayer `sets -q ( "all_ctrls" )`;
 	setAttr ( $geoLayer +".displayType" ) 2;
-	catchQuiet( parent("parts_grp",$infoNodes[0]) );
 	echoRigElementCreationCommand( "finalizeRigBuild \""+ $prefix +"\";" );
 	}
 

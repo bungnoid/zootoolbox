@@ -44,16 +44,6 @@ global proc string[] zooCSTBuildWorld( string $prefix, string $optionStr ) {
 		$qss = `sets -empty -text "gCharacterSet" -n "body_ctrls"`;
 		$masterqss = `sets -empty -text "gCharacterSet" -n "all_ctrls"`;
 
-		//discover the info node - when building the rig, the info should already exist as it belongs in the model
-		//which it is assumed, is referenced by the rig (ie the current scene)
-		string $infoNodes[] = `ls -type vstInfo`;
-		if( !`size $infoNodes` ) warning "cannot find an appropriate node to set the main node to be the default exportRelative object";
-		else {
-			$infoNode = $infoNodes[0];
-			parent $parts $infoNode;
-			python("exportManagerCore.ExportComponent.SetDefault('exportRelative', '"+ $world +"', '"+ $infoNode +"')");
-			}
-
 		sets -add $masterqss $qss;
 		$world = `rename $world "main"`;
 		$parts = `rename $parts "parts_grp"`;
