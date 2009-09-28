@@ -94,15 +94,11 @@ class P4Output(dict):
 		return '\n'.join( '%s:  %s' % items for items in self.iteritems() )
 
 
-P4_LENGTHY_CALLBACK = None
-P4_RETURNED_CALLBACK = None
-
 def _p4run( *args ):
 	if not P4File.USE_P4:
 		return False
 
 	cmdStr = 'p4 '+ ' '.join( map( str, args ) )
-	print cmdStr
 	try:
 		p4Proc = subprocess.Popen( cmdStr, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
 	except OSError:
@@ -179,26 +175,25 @@ class P4Change(dict):
 		return str( self.change )
 	def __len__( self ):
 		return len( self.files )
-	def __iter__( self ):
-		return zip( self.files, self.revisions, self.actions )
 	def __eq__( self, other ):
 		if isinstance( other, int ):
 			return self.change == other
 
 		return self.change == other.change
+	def __iter__( self ):
+		return zip( self.files, self.revisions, self.actions )
 	@classmethod
 	def Create( cls, description, files=None ):
 
+		#clean the description line
+		description = '\n\t'.join( [ line.strip() for line in description.split( '\n' ) ] )
 		info = p4Info()
 		contents = '''Change:\tnew\n\nClient:\t%s\n\nUser:\t%s\n\nStatus:\tnew\n\nDescription:\n\t%s\n''' % (info.clientName, info.userName, description)
 
-		p4Proc = subprocess.Popen( 'p4 -s change -i', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
+		p4Proc = subprocess.Popen( 'p4 -s change -i', shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
 		stdout, stderr = p4Proc.communicate( contents )
 
-		if stderr:
-			return False
-
-		output = P4Output( stdout, False )
+		output = P4Output( stdout + stderr, False )
 		changeNum = int( P4Output.START_DIGITS.match( output.change ).groups()[ 0 ] )
 
 		new = cls()
@@ -283,25 +278,36 @@ class P4Change(dict):
 			yield cls.FetchByNumber( changeNum )
 
 
+#the number of the default changelist
 P4Change.CHANGE_NUM_DEFAULT = P4Change()
 P4Change.CHANGE_NUM_DEFAULT.change = 0
+
+#the object to represent invalid changelist numbers
 P4Change.CHANGE_NUM_INVALID = P4Change()
 
-
+#all opened perforce files get added to a changelist with this description by default
 DEFAULT_CHANGE = 'default auto-checkout'
+
+#gets called when a perforce command takes too long (defined by P4File.TIMEOUT_PERIOD)
+P4_LENGTHY_CALLBACK = None
+
+#gets called when a lengthy perforce command finally returns
+P4_RETURNED_CALLBACK = None
 
 class P4File(Path):
 	'''
 	provides a more convenient way of interfacing with perforce.  NOTE: where appropriate all actions
 	are added to the changelist with the description DEFAULT_CHANGE
 	'''
+	USE_P4 = True
+
+	#the default change description for instances
 	DEFAULT_CHANGE = DEFAULT_CHANGE
 
 	BINARY = 'binary'
 	XBINARY = 'xbinary'
 
 	TIMEOUT_PERIOD = 5
-	USE_P4 = True
 
 	def run( self, *args, **kwargs ):
 		return p4run( *args, **kwargs )
@@ -310,8 +316,15 @@ class P4File(Path):
 			return self
 
 		return Path( f )
-	def getFileStr( self, f ):
-		pass
+	def getFileStr( self, f=None, allowMultiple=False, verifyExistence=True ):
+		if f is None:
+			return '"%s"' % self
+
+		if isinstance( f, (list, tuple) ):
+			if verifyExistence: return '"%s"' % '" "'.join( [ anF for anF in f if Path( anF ).exists ] )
+			else: return '"%s"' % '" "'.join( f )
+
+		return '"%s"' % Path( f )
 	def getStatus( self, f=None ):
 		'''
 		returns the status dictionary for the instance.  if the file isn't managed by perforce,
@@ -586,6 +599,11 @@ class P4File(Path):
 			return P4Change.FetchByDescription( self.DEFAULT_CHANGE, True ).change
 
 		return ch
+	def getChangeNumFromDesc( self, description=None, createIfNotFound=True ):
+		if description is None:
+			description = self.DEFAULT_CHANGE
+
+		return P4Change.FetchByDescription( description, createIfNotFound )
 	def allPaths( self, f=None ):
 		'''
 		returns all perforce paths for the file (depot path, workspace path and disk path)
