@@ -909,42 +909,6 @@ def addExploreToMenuItems( filepath ):
 	if filepath is None:
 		return
 
-	#try to import the modelpipeline
-	mpEnabled = False
-	try:
-		from modelpipeline import Asset, ComponentInterface_common
-		mpEnabled = True
-	except: pass
-
-
-	xtn = filepath.getExtension().lower()
-	if xtn == 'qc':
-		qcmdlPath = getMdlFromQc( filepath )
-		try:
-			if qcmdlPath.exists:
-				cmd.menuItem(l="Explore to .mdl", c=lambda x: mel.zooExploreTo( qcmdlPath ), ann='open an explorer window to the location of the .mdl file this .qc file compiles to')
-				cmd.menuItem(l="View .mdl in HLMV", c=lambda x: utils.spawnProcess('hlmv.bat "%s"' % qcmdlPath, qcmdlPath.up()), ann='open the .mdl this .qc file compiles to in hlmv')
-				cmd.menuItem(d=True)
-		except AttributeError: pass
-	elif xtn == 'mdl':
-		try:
-			if filepath.exists:
-				cmd.menuItem(l="View .mdl in HLMV", c=lambda x: utils.spawnProcess('hlmv.bat "%s"' % filepath.resolve()), ann='open the .mdl in hlmv')
-				cmd.menuItem(d=True)
-		except AttributeError: pass
-
-	#make sure modelpipeline got imported properly before adding any modelpipeline menus...
-	elif mpEnabled:
-		if xtn == ComponentInterface_common.EXTENSION:
-			myAsset = Asset.FromComponentScript( filepath )
-			mdlPath = myAsset.getMdlPath()
-			try:
-				if mdlPath.exists:
-					cmd.menuItem(l="Explore to .mdl", c=lambda x: mel.zooExploreTo( mdlPath ), ann='open an explorer window to the location of the .mdl file this .qc file compiles to')
-					cmd.menuItem(l="View .mdl in HLMV", c=lambda x: utils.spawnProcess('hlmv.bat "%s"' % mdlPath.resolve(), mdlPath.resolve().up()), ann='open the .mdl this .qc file compiles to in hlmv')
-					cmd.menuItem(d=True)
-					cmd.menuItem( l="Open Asset Editor", c=lambda x: utils.spawnProcess('assetEditor %s %s' % ( myAsset.location(), myAsset.name() )), ann= 'open up the asset editor')
-			except AttributeError: pass
 
 	cmd.menuItem(l="Explore to location...", c=lambda x: mel.zooExploreTo( filepath ), ann='open an explorer window to the location of this file/directory')
 
