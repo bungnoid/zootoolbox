@@ -548,6 +548,16 @@ class Path(str):
 			return os.path.exists( self )
 		except IndexError: return False
 	exists = property( doesExist )
+	def matchCase( self ):
+		'''
+		If running under an env where file case doesn't matter, this method will return a Path instance
+		whose case matches the file on disk.  It assumes the file exists
+		'''
+		if self.doesCaseMatter(): return self
+
+		for f in self.up().files():
+			if f == self:
+				return f
 	def getSize( self, units=sz_MEGABYTES ):
 		'''
 		returns the size of the file in mega-bytes
@@ -646,10 +656,9 @@ class Path(str):
 		same as rename - except for copying.  returns the new target name
 		'''
 		if self.isfile():
-			target = Path( target ).resolve()
+			target = Path( target )
 			if nameIsLeaf:
-				asPath = Path(self)
-				asPath[-1] = str(target)
+				asPath = self.up() / target
 				target = asPath
 
 			if doP4 and P4File.USE_P4:
@@ -666,7 +675,7 @@ class Path(str):
 				except: pass
 
 			try:
-				shutil.copy2(str(self.resolve()), str(target))
+				shutil.copy2( self, target )
 			#this happens when src and dest are the same...  its pretty harmless, so we do nothing...
 			except shutil.Error:
 				pass
@@ -978,158 +987,408 @@ except KeyError:
 ########### PERFORCE INTEGRATION ###########
 
 
-#timeout period before bailing on a perforce operation - in seconds
-P4_OP_WARNING_PERIOD = 10
-P4_OP_TIMEOUT_PERIOD = 30
-
-
-class ThreadedP4Cmd(threading.Thread):
-	def __init__( self, returnList, cmd, *a, **kw ):
-		threading.Thread.__init__( self )
-		self.returnList = returnList
-		self.cmd = cmd
-		self.a = a
-		self.kw = kw
-		self.alertOnFinish = False
-	def run( self ):
-		returnValue = sys.exc_info()
-		try:
-			ret = self.cmd( *self.a, **self.kw )
-			if not P4File.USE_P4:
-				P4File.USE_P4 = True
-				print 'p4 command finally finished - re-enabling integration.  YAY!'
-
-			returnValue = ret
-		except BaseException, x:
-			#perforce is super happy with its "exception" throwing - even vaguely mild issues raise a P4Exception
-			#so we can't assume an exception has resulted in anything bad happening
-			returnValue = x
-
-		self.returnList.append( returnValue )
-
-		if self.alertOnFinish:
-			if callable( P4_RETURNED_CALLBACK ):
-				P4_RETURNED_CALLBACK( *self.a, **self.kw )
-
-
 class FinishedP4Operation(Exception): pass
 class TimedOutP4Operation(Exception): pass
 
 
-def d_killIfLengthy(f):
-	'''
-	kills the decorated function if it takes too long - uses P4_OP_TIMEOUT_PERIOD for timeout period
-	'''
-	def newF( *a, **kw ):
-		returnVal = []
-		cmdThread = ThreadedP4Cmd( returnVal, f, *a, **kw )
+class P4Exception(Exception): pass
 
-		start = time.clock()
-		try:
+
+class P4Output(dict):
+	EXIT_PREFIX = 'exit:'
+	ERROR_PREFIX = 'error:'
+
+	#
+	START_DIGITS = re.compile( '(^[0-9]+)(.*)' )
+	END_DIGITS = re.compile( '(.*)([0-9]+$)' )
+
+	def __init__( self, outStr, keysColonDelimited=False ):
+		EXIT_PREFIX = P4Output.EXIT_PREFIX
+		ERROR_PREFIX = P4Output.ERROR_PREFIX
+		self.errors = []
+
+		if isinstance( outStr, basestring ):
+			lines = outStr.split( '\n' )
+		elif isinstance( outStr, (list, tuple) ):
+			lines = outStr
+		else:
+			print outStr
+			raise P4Exception( "unsupported type (%s) given to %s" % (type( outStr ), self.__class__.__name__) )
+
+		delimiter = (' ', ':')[ keysColonDelimited ]
+		for line in lines:
+			line = line.strip()
+
+			if not line:
+				continue
+
+			if line.startswith( EXIT_PREFIX ):
+				break
+
+			if line.startswith( ERROR_PREFIX ):
+				self.errors.append( line )
+				continue
+
+			idx = line.find( ':' )
+			if idx == -1:
+				continue
+
+			line = line[ idx + 1: ].strip()
+			idx = line.find( delimiter )
+			if idx == -1:
+				prefix = line
+				data = True
+			else:
+				prefix = line[ :idx ].strip()
+				data = line[ idx + 1: ].strip()
+				if data.isdigit():
+					data = int( data )
+
+			if keysColonDelimited:
+				prefix = ''.join( [ (s, s.capitalize())[ n ] for n, s in enumerate( prefix.lower().split() ) ] )
+			else:
+				prefix = prefix[ 0 ].lower() + prefix[ 1: ]
+
+			self[ prefix ] = data
+
+		#finally, if there are prefixes which have a numeral at the end, strip it and pack the data into a list
+		multiKeys = {}
+		for k in self.keys():
+			m = self.END_DIGITS.search( k )
+			if m is None:
+				continue
+
+			prefix, idx = m.groups()
+			idx = int( idx )
+
+			data = self.pop( k )
+			try:
+				multiKeys[ prefix ].append( (idx, data) )
+			except KeyError:
+				multiKeys[ prefix ] = [ (idx, data) ]
+
+		for prefix, dataList in multiKeys.iteritems():
+			try:
+				self.pop( prefix )
+			except KeyError: pass
+
+			dataList.sort()
+			self[ prefix ] = [ d[ 1 ] for d in dataList ]
+	def __getattr__( self, attr ):
+		return self[ attr ]
+	def asStr( self ):
+		return '\n'.join( '%s:  %s' % items for items in self.iteritems() )
+
+
+def _p4run( *args ):
+	if not P4File.USE_P4:
+		return False
+
+	cmdStr = 'p4 '+ ' '.join( map( str, args ) )
+	try:
+		p4Proc = subprocess.Popen( cmdStr, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
+	except OSError:
+		P4File.USE_P4 = False
+		return False
+
+	startTime = time.clock()
+	stdoutAccum = []
+	stderrAccum = []
+	hasTimedOut = False
+	while True:
+		ret = p4Proc.poll()
+		newStdout = p4Proc.stdout.readlines()
+		newStderr = p4Proc.stderr.readlines()
+
+		stdoutAccum += newStdout
+		stderrAccum += newStderr
+
+		#if the proc has terminated, deal with returning appropriate data
+		if ret is not None:
+			if hasTimedOut:
+				if callable( P4_RETURNED_CALLBACK ):
+					try: P4_RETURNED_CALLBACK( *args )
+					except: pass
+
+			return stdoutAccum + stderrAccum
+
+		#if there has been new output, the proc is still alive so reset counters
+		if newStderr or newStdout:
 			startTime = time.clock()
-			cmdThread.start()
 
-			#now start a loop to test whether the cmdThread is still alive and bail when we've waited
-			#too long
-			performedWarning = False
-			while cmdThread.isAlive():
-				elapsedTime = time.clock() - startTime
-				if elapsedTime > P4_OP_WARNING_PERIOD:
-					if not performedWarning:
-						print 'WARNING :: perforce is taking a long time to execute %s( *%s, **%s )' % (f.__name__, a, kw)
-
-						cmdThread.alertOnFinish = True
-						if callable( P4_LENGTHY_CALLBACK ):
-							try: P4_LENGTHY_CALLBACK( *a, **kw )
-							except: print 'WARNING :: P4_LENGTHY_CALLBACK failed', sys.exc_info()
-
-					performedWarning = True
-					if elapsedTime > P4_OP_TIMEOUT_PERIOD:
-						raise TimedOutP4Operation
-
-			raise FinishedP4Operation
-		except FinishedP4Operation:
-			return returnVal[ 0 ]
-		except TimedOutP4Operation:
-			print 'ERROR :: p4 timeout -disabling perforce- cmd was %s( *%s, **%s )' % (f.__name__, a, kw)
-			P4File.USE_P4 = False
-			if callable( P4_FAILED_CALLBACK ):
-				try: P4_FAILED_CALLBACK( *a, **kw )
+		#make sure we haven't timed out
+		curTime = time.clock()
+		if curTime - startTime > P4File.TIMEOUT_PERIOD:
+			hasTimedOut = True
+			if callable( P4_LENGTHY_CALLBACK ):
+				try:
+					P4_LENGTHY_CALLBACK( p4Proc, *args )
+				except BreakException:
+					return False
 				except:
-					print 'ERROR :: FAILED_P4_CALLBACK failed - %s' % sys.exc_info()
-
-	return newF
+					return False
 
 
-#change this to whatever you want the default changelist description to be when performing
-#perforce operations
-DEFAULT_CHANGE = 'default'
+def p4run( *args, **kwargs ):
+	ret = _p4run( *args )
+	if ret is False:
+		return False
+
+	return P4Output( ret, **kwargs )
+
+
+P4INFO = None
+def p4Info():
+	global P4INFO
+
+	if P4INFO:
+		return P4INFO
+
+	P4INFO = p4run( '-s info', keysColonDelimited=True )
+
+	return P4INFO
+
+
+def populateChange( change ):
+		changeNum = change[ 'change' ]
+		if isinstance( changeNum, int ) and changeNum:
+			fullChange = P4Change.FetchByNumber( changeNum )
+			for key, value in fullChange.iteritems():
+				change[ key ] = value
+
+
+class P4Change(dict):
+	def __init__( self ):
+		self[ 'change' ] = None
+		self[ 'description' ] = ''
+		self[ 'files' ] = []
+		self[ 'actions' ] = []
+		self[ 'revisions' ] = []
+	def __setattr__( self, attr, value ):
+		if isinstance( value, basestring ):
+			if value.isdigit():
+				value = int( value )
+
+		self[ attr ] = value
+	def __getattr__( self, attr ):
+		'''
+		if the value of an attribute is the populateChanges function (in the root namespace), then
+		the full changelist data is queried.  This is useful for commands like the p4 changes command
+		(wrapped by the FetchChanges class method) which lists partial changelist data.  The method
+		returns P4Change objects with partial data, and when more detailed data is required, a full
+		query can be made.  This ensures minimal server interaction.
+		'''
+		value = self[ attr ]
+		if value is populateChange:
+			populateChange( self )
+			value = self[ attr ]
+
+		return value
+	def __str__( self ):
+		return str( self.change )
+	def __int__( self ):
+		return self[ 'change' ]
+	__hash__ = __int__
+	def __lt__( self, other ):
+		return self.change < other.change
+	def __le__( self, other ):
+		return self.change <= other.change
+	def __eq__( self, other ):
+		return self.change == other.change
+	def __ne__( self, other ):
+		return self.change != other.change
+	def __gt__( self, other ):
+		return self.change > other.change
+	def __ge__( self, other ):
+		return self.change >= other.change
+	def __len__( self ):
+		return len( self.files )
+	def __eq__( self, other ):
+		if isinstance( other, int ):
+			return self.change == other
+		elif isinstance( other, basestring ):
+			if other == 'default':
+				return self.change == 0
+
+		return self.change == other.change
+	def __iter__( self ):
+		return zip( self.files, self.revisions, self.actions )
+	@classmethod
+	def Create( cls, description, files=None ):
+
+		#clean the description line
+		description = '\n\t'.join( [ line.strip() for line in description.split( '\n' ) ] )
+		info = p4Info()
+		contents = '''Change:\tnew\n\nClient:\t%s\n\nUser:\t%s\n\nStatus:\tnew\n\nDescription:\n\t%s\n''' % (info.clientName, info.userName, description)
+
+		p4Proc = subprocess.Popen( 'p4 -s change -i', shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
+		stdout, stderr = p4Proc.communicate( contents )
+
+		output = P4Output( stdout + stderr, False )
+		changeNum = int( P4Output.START_DIGITS.match( output.change ).groups()[ 0 ] )
+
+		new = cls()
+		new.description = description
+		new.change = changeNum
+
+		if files is not None:
+			p4run( 'reopen -c', changeNum, *files )
+
+		return new
+	@classmethod
+	def FetchByNumber( cls, number ):
+		lines = _p4run( '-s', 'describe', number )
+		if not lines:
+			return None
+
+		change = cls()
+		change.change = number
+
+		change.description = ''
+		lineIter = iter( lines[ 2: ] )
+		try:
+			prefix = 'text:'
+			PREFIX_LEN = len( prefix )
+
+			line = lineIter.next()
+			while line.startswith( prefix ):
+				line = line[ PREFIX_LEN: ].lstrip()
+
+				if line.startswith( 'Affected files ...' ):
+					break
+
+				change.description += line
+				line = lineIter.next()
+
+			prefix = 'info1:'
+			PREFIX_LEN = len( prefix )
+			while not line.startswith( prefix ):
+				line = lineIter.next()
+
+			while line.startswith( prefix ):
+				line = line[ PREFIX_LEN: ].lstrip()
+				idx = line.rfind( '#' )
+				depotFile = Path( line[ :idx ] )
+
+				revAndAct = line[ idx + 1: ].split()
+				rev = int( revAndAct[ 0 ] )
+				act = revAndAct[ 1 ]
+
+				change.files.append( depotFile )
+				change.actions.append( act )
+				change.revisions.append( rev )
+
+				line = lineIter.next()
+		except StopIteration:
+			pass
+
+		return change
+	@classmethod
+	def FetchByDescription( cls, description, createIfNotFound=False ):
+		'''
+		fetches a changelist based on a given description from the list of pending changelists
+		'''
+		cleanDesc = ''.join( [ s.strip() for s in description.lower().strip().split( '\n' ) ] )
+		for change in cls.IterPending():
+			thisDesc = ''.join( [ s.strip() for s in change.description.lower().strip().split( '\n' ) ] )
+			if thisDesc == cleanDesc:
+				return change
+
+		if createIfNotFound:
+			return cls.Create( description )
+	@classmethod
+	def FetchChanges( cls, *args ):
+		'''
+		effectively runs the command:
+		p4 changes -l *args
+
+		a list of P4Change objects is returned
+		'''
+		lines = _p4run( 'changes -l %s' % ' '.join( args ) )
+		changes = []
+		if lines:
+			lineIter = iter( lines )
+			curChange = None
+			try:
+				while True:
+					line = lineIter.next()
+					if line.startswith( 'Change' ):
+						curChange = cls()
+						changes.append( curChange )
+						toks = line.split()
+						curChange.change = int( toks[ 1 ] )
+						curChange.user = toks[ -1 ]
+						curChange.date = datetime.date( *list( map( int, toks[ 3 ].split( '/' ) ) ) )
+						curChange.description = ''
+
+						#setup triggers for other data in the changelist that doesn't get returned by the changes command - see the __getattr__ doc for more info
+						curChange.files = populateChange
+						curChange.actions = populateChange
+						curChange.revisions = populateChange
+					elif curChange is not None:
+						curChange.description += line
+			except StopIteration:
+				return changes
+	@classmethod
+	def IterPending( cls ):
+		'''
+		iterates over pending changelists
+		'''
+		info = p4Info()
+		for line in _p4run( 'changes -u %s -s pending -c %s' % (info.userName, info.clientName) ):
+			toks = line.split()
+			changeNum = int( toks[ 1 ] )
+
+			yield cls.FetchByNumber( changeNum )
+
+
+#the number of the default changelist
+P4Change.CHANGE_NUM_DEFAULT = P4Change()
+P4Change.CHANGE_NUM_DEFAULT.change = 0
+
+#the object to represent invalid changelist numbers
+P4Change.CHANGE_NUM_INVALID = P4Change()
+
+#all opened perforce files get added to a changelist with this description by default
+DEFAULT_CHANGE = 'default auto-checkout'
+
+#gets called when a perforce command takes too long (defined by P4File.TIMEOUT_PERIOD)
 P4_LENGTHY_CALLBACK = None
+
+#gets called when a lengthy perforce command finally returns
 P4_RETURNED_CALLBACK = None
-P4_FAILED_CALLBACK = None
 
-
-@d_killIfLengthy
-def protectedP4Command( p4CmdObject, *args, **kwargs ):
-	'''
-	'''
-	ret = p4CmdObject( *args, **kwargs )
-
-	return ret
-
-
-class P4File(object):
+class P4File(Path):
 	'''
 	provides a more convenient way of interfacing with perforce.  NOTE: where appropriate all actions
 	are added to the changelist with the description DEFAULT_CHANGE
 	'''
-	#try to import the P4 module - apps such is called by apps (such as modo) that use non
-	#mainline python versions.  P4 is a binary module, so this may fail in such cases
 	USE_P4 = True
-	try:
-		import P4
-	except: USE_P4 = False
+
+	#the default change description for instances
+	DEFAULT_CHANGE = DEFAULT_CHANGE
 
 	BINARY = 'binary'
 	XBINARY = 'xbinary'
-	CHANGE_NUM_INVALID = -1
-	CHANGE_NUM_DEFAULT = 0
 
-	def __init__( self, filepath='' ):
-		self.p4 = self.P4.P4()
+	TIMEOUT_PERIOD = 5
 
-		#this is done so that the DEFAULT_CHANGE can be changed on either a global basis by changing
-		#the DEFAULT_CHANGE (which is valid for the entire life of this module's instantiation), or
-		#for the life of just this P4File instance
-		self.DEFAULT_CHANGE = DEFAULT_CHANGE
-
-		self.file = str( filepath )
-	def __del__( self ):
-		if self.USE_P4: self.disconnect()
-	def __str__( self ):
-		return str( self.file )
-	__repr__ = __str__
+	def run( self, *args, **kwargs ):
+		return p4run( *args, **kwargs )
 	def getFile( self, f=None ):
-		if f is None: f = self.file
-		else:
-			f = str( f )
+		if f is None:
+			return self
 
-		return f
-	def connect( self ):
-		if not self.USE_P4:
-			return
+		return Path( f )
+	def getFileStr( self, f=None, allowMultiple=False, verifyExistence=True ):
+		if f is None:
+			return '"%s"' % self
 
-		try:
-			if not protectedP4Command( self.p4.connected ):
-				protectedP4Command( self.p4.connect )
-		except:
-			#if the perforce connection dies, turn integration off
-			self.USE_P4 = False
-			raise
-	def disconnect( self ):
-		if self.USE_P4:
-			if protectedP4Command( self.p4.connected ):
-				protectedP4Command( self.p4.disconnect )
+		if isinstance( f, (list, tuple) ):
+			if verifyExistence: return '"%s"' % '" "'.join( [ anF for anF in f if Path( anF ).exists ] )
+			else: return '"%s"' % '" "'.join( f )
+
+		return '"%s"' % Path( f )
 	def getStatus( self, f=None ):
 		'''
 		returns the status dictionary for the instance.  if the file isn't managed by perforce,
@@ -1140,8 +1399,7 @@ class P4File(object):
 
 		f = self.getFile( f )
 		try:
-			status = self.run( 'fstat', f )
-			return status[ 0 ]
+			return self.run( '-s fstat', f )
 		except Exception: return None
 	def isManaged( self, f=None ):
 		'''
@@ -1152,7 +1410,7 @@ class P4File(object):
 
 		f = self.getFile( f )
 		stat = self.getStatus( f )
-		if stat is not None:
+		if stat:
 			#if the file IS managed - only return true if the head action isn't delete - which effectively means the file
 			#ISN'T managed...
 			try:
@@ -1170,12 +1428,12 @@ class P4File(object):
 			return False
 
 		f = self.getFile( f )
-		self.connect()
-		try: results = protectedP4Command( self.p4.run, 'fstat', f )
-		except BaseException, e:
-			phrases = ["not in client view", "not under client's root"]
-			for ph in phrases:
-				if e.value.find( ph ) > 0: return False
+		results = self.getStatus()
+		if not results:
+			phrases = [ "not in client view", "not under client's root" ]
+			for e in results.errors:
+				for ph in phrases:
+					if ph in e: return False
 
 		return True
 	def getAction( self, f=None ):
@@ -1200,21 +1458,19 @@ class P4File(object):
 		data = self.getStatus( f )
 
 		try:
-			return int( data[ 'haveRev' ] ), int( data[ 'headRev' ] )
+			return data[ 'haveRev' ], data[ 'headRev' ]
 		except (AttributeError, TypeError, KeyError):
 			return None, None
 	def isEdit( self, f=None ):
 		if not self.USE_P4:
 			return False
 
-		f = self.getFile( f )
-
 		editActions = [ 'add', 'edit' ]
 		action = self.getAction( f )
 
 		#if the action is none, the file may not be managed - check
 		if action is None:
-			if self.getStatus( f ) is None:
+			if not self.getStatus( f ):
 				return None
 
 		return action in editActions
@@ -1227,9 +1483,8 @@ class P4File(object):
 		if not self.USE_P4:
 			return True
 
-		f = self.getFile( f )
 		status = self.getStatus( f )
-		if status is None:
+		if not status:
 			return None
 
 		#if there is any action on the file then always return True
@@ -1243,76 +1498,53 @@ class P4File(object):
 			return headRev == haveRev
 		except KeyError:
 			return False
-	def run( self, *args, **kwargs ):
-		'''
-		a slightly nicer interface to the p4.run method - this makes sure the p4 connection
-		is open, and suppresses any exceptions raised during execution.
-
-		you can pass in the kwarg protected=False if you want the perforce command to be run
-		unprotected.  by default all commands are run as protected commands, which basically means
-		the command is protected from timeouts - see the protectedP4Command function
-
-		NOTE: perforce is kinda exception happy - if a file is in sync and you run a file.sync() on
-		it, an exception gets rasied for example...  the method returns whether the command was
-		successful or not
-		'''
-		if not self.USE_P4:
-			return False
-
-		protected = kwargs.get( 'protected', True )
-		try:
-			self.connect()
-
-			if protected:
-				results = protectedP4Command( self.p4.run, *args )
-			else:
-				results = self.p4.run( *args )
-
-			if not results:
-				#if the run command returns something that evaluates to false, then return True - because the run
-				#command was a success - a successful execution of run should return a value of true
-				return True
-			return results
-		except Exception, e:
-			return False
-	def editoradd( self, f=None ):
-		if not self.USE_P4:
-			return False
-
-		f = self.getFile( f )
-
-		#if the file doesn't exist, bail
-		if not os.path.exists( f ):
-			return False
-
-		action = self.getAction( f )
-		if not self.managed( f ):
-			return self.run( 'add', '-c', self.getOrCreateChange(), f )
-		elif action is None:
-			return self.run( 'edit', '-c', self.getOrCreateChange(), f )
-
-		return True
-	edit = editoradd
 	def add( self, f=None, type=None ):
 		if not self.USE_P4:
 			return False
 
-		f = self.getFile( f )
-		args = [ 'add', '-c', self.getOrCreateChange() ]
+		args = [ '-s add', '-c', self.getOrCreateChange() ]
 
 		#if the type has been specified, add it to the add args
 		if type is not None:
 			args += [ '-t', type ]
-		args.append( f )
 
-		return self.run( *args )
+		args.append( self.getFile( f ) )
+
+		lines = _p4run( *args )
+		for line in lines:
+			if line.startswith( 'error' ):
+				return False
+
+			if "can't add existing file" in line:
+				return False
+
+		return True
+	def edit( self, f=None ):
+		if not self.USE_P4:
+			return False
+
+		lines = _p4run( '-s edit', '-c', self.getOrCreateChange(), self.getFile( f ) )
+		for line in lines:
+			if line.startswith( 'error' ):
+				return False
+
+			if "can't edit exclusive" in line:
+				return False
+
+		return True
+	def editoradd( self, f=None ):
+		if self.edit( f ):
+			return True
+
+		if self.add( f ):
+			return True
+
+		return False
 	def revert( self, f=None ):
 		if not self.USE_P4:
 			return False
 
-		f = self.getFile( f )
-
-		return self.run( 'revert', f )
+		return self.run( 'revert', self.getFile( f ) )
 	def sync( self, f=None, force=False, rev=None, change=None ):
 		'''
 		rev can be a negative number - if it is, it works as previous revisions - so rev=-1 syncs to
@@ -1325,23 +1557,23 @@ class P4File(object):
 		f = self.getFile( f )
 
 		#if file is a directory, then we want to sync to the dir
-		if os.path.isdir(f):
+		if os.path.isdir( f ):
 			f = ('%s/...' % f).replace('//','/')
 
 		if rev is not None:
 			if rev == 0: f += '#none'
 			elif rev < 0:
 				status = self.getStatus()
-				headRev = status['headRev']
+				headRev = status[ 'headRev' ]
 				rev += int( headRev )
-				if rev <= 0: rev='none'
+				if rev <= 0: rev = 'none'
 				f += '#%s' % rev
 			else: f += '#%s' % rev
 		elif change is not None:
 			f += '@%s' % change
 
-		if force: return self.run( 'sync', '-f', f )
-		else: return self.run( 'sync', f )
+		if force: return self.run( '-s sync', '-f', f )
+		else: return self.run( '-s sync', f )
 	def delete( self, f=None ):
 		if not self.USE_P4:
 			return False
@@ -1349,7 +1581,7 @@ class P4File(object):
 		f = self.getFile( f )
 		action = self.getAction( f )
 		if action is None and self.managed( f ):
-			return self.run( 'delete', '-c', self.getOrCreateChange(), f )
+			return self.run( '-s delete', '-c', self.getOrCreateChange(), f )
 	def rename( self, newName, f=None ):
 		if not self.USE_P4:
 			return False
@@ -1383,88 +1615,31 @@ class P4File(object):
 			change = self.getChange()
 
 		self.run( 'submit', '-c', change )
-	def createChange( self, description ):
-		if not self.USE_P4:
-			return self.INVALID_CHANGE
-
-		self.connect()
-		newChange = protectedP4Command( self.p4.fetch_change )
-		newChange[ 'Description' ] = str( description )
-		newChange[ 'Files' ] = []
-		ret = protectedP4Command( self.p4.save_change, newChange )[ 0 ]
-
-		changeNum = re.findall( '[0-9]+', ret )[ 0 ]
-
-		return int( changeNum )
-	def getChanges( self ):
-		'''
-		returns a list of changelist dictionaries
-		'''
-		if not self.USE_P4:
-			return []
-
-		changes = self.run( 'changes', '-s', 'pending', '-u', self.p4.user, '-c', self.p4.client )
-		if isinstance( changes, bool ): return []
-		changeDicts = []
-		for c in changes:
-			thisChange = protectedP4Command( self.p4.fetch_change, c[ 'change' ] )
-			changeDicts.append( thisChange )
-
-		return changeDicts
-	def getChangeNumFromDesc( self, desc=None, createIfNotFound=True ):
-		'''
-		returns the changelist number based on a change description
-		'''
-		if not self.USE_P4:
-			return self.CHANGE_NUM_INVALID
-
-		if desc is None:
-			desc = self.DEFAULT_CHANGE
-
-		if desc is None or desc == 'default':
-			return 'default'
-
-		desc = str( desc ).strip()
-		changes = self.getChanges()
-		descToMatch = desc.lower()
-		for c in changes:
-			if c[ 'Description' ].strip().lower() == descToMatch:
-				return int( c[ 'Change' ] )
-
-		#if the changelist doesn't exist, create it if desired
-		if createIfNotFound:
-			try:
-				newChange = protectedP4Command( self.p4.fetch_change )
-				newChange[ 'Description' ] = desc
-				newChange[ 'Files' ] = []
-				protectedP4Command( self.p4.save_change, newChange )
-
-				return self.getChangeNumFromDesc( desc, False )
-			except: pass
-
-		return self.CHANGE_NUM_INVALID
 	def getChange( self, f=None ):
 		if not self.USE_P4:
-			return self.CHANGE_NUM_INVALID
+			return P4Change.CHANGE_NUM_INVALID
 
 		f = self.getFile( f )
 		stat = self.getStatus( f )
 		try:
-			return int( stat.get( 'change', self.CHANGE_NUM_DEFAULT ) )
-		except (AttributeError, ValueError): return self.CHANGE_NUM_DEFAULT
+			return stat.get( 'change', P4Change.CHANGE_NUM_DEFAULT )
+		except (AttributeError, ValueError): return P4Change.CHANGE_NUM_DEFAULT
 	def setChange( self, newChange=None, f=None ):
 		'''
-		sets the changelist the file belongs to - the changelist can be specified as either a changelist number, or a description.
-		if a description is given, the existing pending changelists are searched for a matching description.  use 0 for the default
-		changelist.  if None is passed, then the changelist as described by self.DEFAULT_CHANGE is used
+		sets the changelist the file belongs to. the changelist can be specified as either a changelist
+		number, a P4Change object, or a description. if a description is given, the existing pending
+		changelists are searched for a matching description.  use 0 for the default changelist.  if
+		None is passed, then the changelist as described by self.DEFAULT_CHANGE is used
 		'''
 		if not self.USE_P4:
 			return
 
-		if isinstance(newChange, (int, long)):
+		if isinstance( newChange, (int, long) ):
 			change = newChange
+		elif isinstance( newChange, P4Change ):
+			change = newChange.change
 		else:
-			change = self.getChangeNumFromDesc(newChange)
+			change = P4Change.FetchByDescription( newChange, True ).change
 
 		f = self.getFile( f )
 		self.run( 'reopen', '-c', change, f )
@@ -1480,14 +1655,51 @@ class P4File(object):
 		if the file isn't already in a changelist, this will create one.  returns the change number
 		'''
 		if not self.USE_P4:
-			return self.CHANGE_NUM_INVALID
+			return P4Change.CHANGE_NUM_INVALID
 
 		f = self.getFile( f )
 		ch = self.getChange( f )
-		if ch == self.CHANGE_NUM_DEFAULT:
-			return self.getChangeNumFromDesc()
+		if ch == P4Change.CHANGE_NUM_DEFAULT:
+			return P4Change.FetchByDescription( self.DEFAULT_CHANGE, True ).change
 
 		return ch
+	def getChangeNumFromDesc( self, description=None, createIfNotFound=True ):
+		if description is None:
+			description = self.DEFAULT_CHANGE
+
+		return P4Change.FetchByDescription( description, createIfNotFound )
+	def allPaths( self, f=None ):
+		'''
+		returns all perforce paths for the file (depot path, workspace path and disk path)
+		'''
+		if not self.USE_P4:
+			return None
+
+		f = self.getFile( f )
+
+		dataLine = _p4run( 'where', f )[ 0 ].strip()
+		dataLineToSearch = dataLine
+		fName = f[ -1 ]
+		fNameLen = len( fName )
+
+		if not self.doesCaseMatter():
+			dataLineToSearch = dataLine.lower()
+			fName = fName.lower()
+
+		#I'm not entirely sure this is bullet-proof...  but basically the return string for this command
+		#is a simple space separated string, with three values.  i guess I could try to match //HOSTNAME
+		#and the client's depot root to find the start of files, but for now its simply looking for the
+		#file name substring three times
+		depotNameIdx = dataLineToSearch.find( fName ) + fNameLen
+		depotName = P4File( dataLine[ :depotNameIdx ], self.doesCaseMatter() )
+
+		workspaceNameIdx = dataLineToSearch.find( fName, depotNameIdx ) + fNameLen
+		workspaceName = P4File( dataLine[ depotNameIdx + 1:workspaceNameIdx ], self.doesCaseMatter() )
+
+		diskNameIdx = dataLineToSearch.find( fName, workspaceNameIdx ) + fNameLen
+		diskName = P4File( dataLine[ workspaceNameIdx + 1:diskNameIdx ], self.doesCaseMatter() )
+
+		return depotName, workspaceName, diskName
 	def toDepotPath( self, f=None ):
 		'''
 		returns the depot path to the file
@@ -1495,12 +1707,7 @@ class P4File(object):
 		if not self.USE_P4:
 			return None
 
-		f = self.getFile( f )
-
-		try:
-			return Path( self.run( 'where', f )[ 0 ][ 'depotFile' ] )
-		except (KeyError, IndexError, AttributeError), err:
-			return None
+		return self.allPaths( f )[ 0 ]
 	def toDiskPath( self, f=None ):
 		'''
 		returns the disk path to a depot file
@@ -1508,12 +1715,7 @@ class P4File(object):
 		if not self.USE_P4:
 			return None
 
-		f = self.getFile( f )
-
-		try:
-			return Path( self.run( 'where', f )[ 0 ][ 'path' ] )
-		except (KeyError, IndexError, AttributeError, TypeError), err:
-			return None
+		return self.allPaths( f )[ 2 ]
 
 
 P4Data = P4File  #used to be called P4Data - this is just for any legacy references...
@@ -1579,13 +1781,13 @@ def syncFiles( files, force=False, rev=None, change=None ):
 		if force:
 			args = [ '-f' ] + args
 
-		return p4.run( 'sync', '-c', change, protected=False, *args )
+		return p4.run( 'sync', '-c', change, *args )
 	else:
 		args = files
 		if force:
 			args = [ '-f' ] + args
 
-		return p4.run( 'sync', protected=False, *args )
+		return p4.run( 'sync', *args )
 
 
 def findStaleFiles( fileList ):
@@ -1646,15 +1848,14 @@ def gatherFilesIntoChange( files, change=None ):
 
 def cleanEmptyChanges():
 	p4 = P4File()
-	for change in p4.getChanges():
+	for change in P4Change.IterPending():
 		deleteIt = False
 		try:
-			files = change[ 'Files' ]
-			deleteIt = not files
+			deleteIt = not change.files
 		except KeyError: deleteIt = True
 
 		if deleteIt:
-			p4.run( 'change', '-d', change[ 'Change' ] )
+			p4run( 'change -d', str( change ) )
 
 
 def removeLineComments( lines ):
