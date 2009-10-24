@@ -28,7 +28,6 @@ class Name(object):
 	PREFIX_DELIMETERS = ':|'
 	PUNCTUATION = '_.'
 
-	@d_initCache
 	def __init__( self, theString='' ):
 		#NOTE: this value should never be set directly...  instead use the set method or the string property
 		self._string = str(theString)
@@ -56,7 +55,6 @@ class Name(object):
 			self._string[0]
 			return True
 		except IndexError: return False
-	@d_resetCache
 	def set( self, newString ):
 		self._string = newString
 		self._parity = None
@@ -220,7 +218,6 @@ class Name(object):
 		new.__init__(string)
 
 		return new
-	@d_cacheValue
 	def split( self, aString=None ):
 		'''
 		retuns a list of name tokens.  tokens are delimited by either camel case separation,
@@ -264,7 +261,6 @@ class Name(object):
 
 		#finally get rid of any empty/null array entries - this could be done above but is easier (maybe even faster?) to do as a post step
 		return [tok for tok in tokens if tok ]
-	@d_resetCache
 	def redo_split( self, aString=None ):
 		#forces a rebuild of the token cache
 		return self.split()

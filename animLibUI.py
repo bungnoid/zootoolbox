@@ -332,7 +332,6 @@ class ClipSliderUI(object):
 	SLIDER_VISIBLE = {kPOSE: True,
 					  kANIM: False}
 
-	@d_initCache
 	def __init__( self, clipPreset, parentUI ):
 		self.clipPreset = clipPreset
 		self.name = self.clipPreset.niceName
@@ -349,7 +348,6 @@ class ClipSliderUI(object):
 		self.blended = None
 
 		self.build( parentUI )
-	@d_cacheValue
 	def unpickle( self ):
 		return self.clipPreset.unpickle()
 	@property

@@ -307,7 +307,6 @@ class PoseClip(BaseClip):
 
 class AnimClip(BaseClip):
 	blender = AnimBlender
-	@d_initCache
 	def __init__( self, objects=None ):
 		self.offset = 0
 		BaseClip.__init__(self, objects)
@@ -468,7 +467,6 @@ class AnimClip(BaseClip):
 							cmd.keyTangent( attrpath, t=(time,), ix=ix, iy=iy, ox=ox, oy=oy )
 
 		#cmd.keyTangent( e=True, g=True, wt=beginningWeightedTanState )
-	@d_cacheValue
 	def getKeyTimes( self ):
 		'''
 		returns an ordered list of key times
