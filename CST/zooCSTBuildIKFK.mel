@@ -18,8 +18,8 @@ global proc string[] zooCSTBuildIKFK( string $prefix, string $parity, string $bi
 		string $suffix = ( $parity == "r" )?"_R":"_L";
 		string $temp[] = {};
 		string $id = "";
-		string $ikType = "skingeometry";
-		string $fkType = "skingeometry";
+		string $ikType = "cube";
+		string $fkType = "cube";
 		string $poleType = "sphere";
 		string $bicepTwists[] = `zooGetInBTweenJoints $bicep $elbow`;
 		string $wristTwists[] = `zooGetInBTweenJoints $elbow $wrist`;

@@ -12,7 +12,6 @@ mkdir ..\scriptPackages\scripts\zz_scripts
 copy _topDistro\*.* ..\scriptPackages
 copy prefs\icons\*.* ..\scriptPackages\prefs\icons
 
-copy *.shape ..\scriptPackages\scripts\
 
 copy animLib.py                                           ..\scriptPackages\scripts\
 copy animLibUI.py                                         ..\scriptPackages\scripts\

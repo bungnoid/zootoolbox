@@ -1,6 +1,5 @@
 zooArrays_str;
 zooAttrUtils;
-zooAssetsUtils;
 zooBrandTools;
 zooCSTUtils;
 zooFlags;
@@ -54,7 +53,6 @@ global proc string[] zooCSTBuildWorld( string $prefix, string $optionStr ) {
 		setAttr -l 1 -type "string" ( $world +".rigAuthor" ) $rigAuthor;
 		setAttr -l 1 -type "string" ( $world +".setupWithVersion" ) $setupVersion;
 		setAttr -l 1 -type "string" ( $world +".date" ) $date;
-		addAttr -ln smdModelSourceLocation -dt "string" $world;
 		connectAttr -f ( $world +".s" ) ( $parts +".s" );
 
 		//add right items to the world controller

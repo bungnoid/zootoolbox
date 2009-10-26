@@ -19,7 +19,7 @@ global proc string[] zooCSTBuildPrimHead( string $prefix, string $head, string $
 		string $parents[] = {};
 		string $rootFlag;
 		string $chestFlag;
-		string $headType = "skingeometry";
+		string $headType = "cube";
 		string $neck = "";
 		string $neckType = "pin";
 		string $neckAxis = "";

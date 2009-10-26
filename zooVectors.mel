@@ -1,6 +1,7 @@
 zooArrays_float;
 zooArrays_str;
 zooFlags;
+eval( "source dotProduct" );
 
 
 //dummy proc to auto-source this script
