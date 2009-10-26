@@ -12,6 +12,8 @@ mkdir ..\scriptPackages\scripts\zz_scripts
 copy _topDistro\*.* ..\scriptPackages
 copy prefs\icons\*.* ..\scriptPackages\prefs\icons
 
+copy *.shape ..\scriptPackages\scripts\
+
 copy animLib.py                                           ..\scriptPackages\scripts\
 copy animLibUI.py                                         ..\scriptPackages\scripts\
 copy api.py                                               ..\scriptPackages\scripts\
@@ -290,3 +292,4 @@ copy zz_scripts\zzUVTools.mel                             ..\scriptPackages\scri
 copy zz_scripts\zzWeightTools.mel                         ..\scriptPackages\scripts\zz_scripts\
 
 7z a -r ..\scriptPackages\zooToolBox.7z ..\scriptPackages\
+pause

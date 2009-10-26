@@ -1,0 +1,83 @@
+{
+string $control[] = {};
+$control[0] = `createNode transform -n "zooControl"`;
+$control[1] = `createNode nurbsSurface -n "zooControlShape" -p $control[0]`;
+	setAttr -k off ".v";
+	setAttr ".vir" yes;
+	setAttr ".vif" yes;
+	setAttr ".covm[0]"  0 1 1;
+	setAttr ".cdvm[0]"  0 1 1;
+	setAttr ".dvu" 0;
+	setAttr ".dvv" 0;
+	setAttr ".cpr" 4;
+	setAttr ".cps" 4;
+	setAttr ".cc" -type "nurbsSurface"
+		1 1 0 0 no
+		5 0 0.1 0.2 0.3 0.4
+		2 0 1
+		10
+		-0.4833 0 -0.0833
+		-0.5 0 -0.1
+		0.4833 0 -0.0833
+		0.5 0 -0.1
+		0.4833 0 0.0833
+		0.5 0 0.1
+		-0.4833 0 0.0833
+		-0.5 0 0.1
+		-0.4833 0 -0.0833
+		-0.5 0 -0.1
+		;
+	setAttr ".nufa" 4.5;
+	setAttr ".nvfa" 4.5;
+$control[2] = `createNode nurbsSurface -n "zooControlShape2" -p $control[0]`;
+	setAttr -k off ".v";
+	setAttr ".vir" yes;
+	setAttr ".vif" yes;
+	setAttr ".covm[0]"  0 1 1;
+	setAttr ".cdvm[0]"  0 1 1;
+	setAttr ".dvu" 0;
+	setAttr ".dvv" 0;
+	setAttr ".cpr" 4;
+	setAttr ".cps" 4;
+	setAttr ".cc" -type "nurbsSurface"
+		1 1 0 0 no
+		2 0 1
+		2 0 1
+
+		4
+		-0.45 0 0.022
+		-0.45 0 -0.022
+		0.45 0 0.022
+		0.45 0 -0.022
+		;
+	setAttr ".nufa" 4.5;
+	setAttr ".nvfa" 4.5;
+	setAttr ".template" 1;
+$control[3] = `createNode nurbsSurface -n "slider_controlShape" -p $control[0]`;
+	setAttr -k off ".v";
+	setAttr ".vir" yes;
+	setAttr ".vif" yes;
+	setAttr ".covm[0]"  0 1 1;
+	setAttr ".cdvm[0]"  0 1 1;
+	setAttr ".dvu" 0;
+	setAttr ".dvv" 0;
+	setAttr ".cpr" 4;
+	setAttr ".cps" 4;
+	setAttr ".cc" -type "nurbsSurface"
+		1 1 0 0 no
+		2 0 1
+		2 0 1
+
+		4
+		-0.025 0 0.075
+		-0.025 0 -0.075
+		0.025 0 0.075
+		0.025 0 -0.075
+		;
+	setAttr ".nufa" 4.5;
+	setAttr ".nvfa" 4.5;
+
+rotate 0 0 90 $control[0];
+makeIdentity -a 1 -r 1 $control[0];
+select $control[0];
+}
