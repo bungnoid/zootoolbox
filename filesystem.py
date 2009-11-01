@@ -2469,6 +2469,29 @@ def scrubName( theStr, replaceChar='_', exceptions=None ):
 	return theStr
 
 
+#these are a bunch of variables used for keys in the export dict.  they're provided mainly for
+#the sake of auto-completion...
+kEXPORT_DICT_USER = 'user'
+kEXPORT_DICT_MACHINE = 'machine'
+kEXPORT_DICT_DATE = 'date'
+kEXPORT_DICT_TIME = 'time'
+kEXPORT_DICT_TOOL = 'tool_name'
+kEXPORT_DICT_TOOL_VER = 'tool_version'
+kEXPORT_DICT_SOURCE = 'scene'  #the source of the file - if any
+def writeExportDict( toolName=None, toolVersion=None, **kwargs ):
+	'''
+	returns a dictionary containing a bunch of common info to write when generating presets
+	or other such export type data
+	'''
+	d = {}
+	d[ kEXPORT_DICT_USER ] = os.environ[ 'USERNAME' ]
+	d[ kEXPORT_DICT_MACHINE ] = os.environ[ 'COMPUTERNAME' ]
+	now = datetime.datetime.now()
+	d[ kEXPORT_DICT_DATE ], d[ kEXPORT_DICT_TIME ] = now.date(), now.time()
+	d[ kEXPORT_DICT_TOOL ] = toolName
+	d[ kEXPORT_DICT_TOOL_VER ] = toolVersion
+
+
 class PresetManager(object):
 	def __init__( self, tool, ext=DEFAULT_XTN ):
 		self.tool = tool
