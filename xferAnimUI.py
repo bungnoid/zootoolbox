@@ -214,7 +214,7 @@ class XferAnimForm(MelForm):
 		elif isDupe:
 			api.melecho.zooXferBatch( "-mode 0 -instance %d -matchRo %d" % (instance, matchRo), theSrcs, theTgts )
 		elif isCopy:
-			api.melecho.zooXferBatch( "-mode 1 -range %s %s -matchRo %d"+ (startTime, endTime, matchRo), theSrcs, theTgts )
+			api.melecho.zooXferBatch( "-mode 1 -range %s %s -matchRo %d" % (startTime, endTime, matchRo), theSrcs, theTgts )
 		elif isTraced:
 			api.melecho.zooXferBatch( "-mode 2 -keys %d -postCmds %d -matchRo %d -sortByHeirarchy 0 -range %s %s" % (traceKeys, world, matchRo, startTime, endTime), theSrcs, theTgts )
 
