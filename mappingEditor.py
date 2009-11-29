@@ -12,7 +12,7 @@ EXT = 'mapping'
 ui = None
 
 
-class MappingForm(BaseMelWidget):
+class MappingForm(MelForm):
 	'''
 	Acts as a generic UI for editing "mappings".  A mapping is basically just a dictionaries in maya,
 	but they're used for things like animation transfer and weight transfer between one or more
@@ -20,8 +20,6 @@ class MappingForm(BaseMelWidget):
 
 	Mappings can be stored out to presets.
 	'''
-
-	WIDGET_CMD = cmd.formLayout
 
 	#args for controlling the name mapping algorithm - see the names.matchNames method for documentation on what these variables actually control
 	STRIP_NAMESPACES = True
