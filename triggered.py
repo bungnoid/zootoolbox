@@ -12,15 +12,26 @@ class Trigger(object):
 	INVALID = '<invalid connect>'
 	DEFAULT_MENU_NAME = '<empty>'
 	DEFAULT_CMD_STR = '//blank'
+
+	PRESET_SELECT_CONNECTED = "select -d #;\nselect -add @;"
+	PRESET_KEY_CONNECTED = "select -d #;\nsetKeyframe @;"
+	PRESET_TOGGLE_CONNECTED = "string $sel[] = `ls -sl`;\nint $vis = !`getAttr %1.v`;\nfor($obj in @) setAttr ($obj +\".v\") $vis;\nif( `size $sel` ) select $sel;"
+	PRESET_TOOL_TO_MOVE = "setToolTo $gMove;"
+	PRESET_TOOL_TO_ROTATE = "setToolTo $gRotate;"
+
 	def __init__( self, object ):
-		self.obj = object
+		self.obj = str( object )
 	@classmethod
-	def CreateTrigger( cls, object, cmdStr=DEFAULT_CMD_STR ):
+	def CreateTrigger( cls, object, cmdStr=DEFAULT_CMD_STR, connects=None ):
 		'''
 		creates a trigger and returns a new trigger instance
 		'''
 		new = cls(object)
 		new.setCmd(cmdStr)
+
+		if connects:
+			for c in connects:
+				new.connect( str( c ) )
 
 		return new
 	@classmethod
@@ -106,7 +117,11 @@ class Trigger(object):
 
 		cmd.setAttr("%s.zooCmd%d" % ( self.obj, slot ), '%s^%s' % (name, cmdStr), type='string')
 
+		self.setKillState( True )
+
 		return slot
+	def createMenu( self, name=DEFAULT_MENU_NAME, cmdStr=DEFAULT_CMD_STR ):
+		return self.setMenuInfo( None, name, cmdStr )
 	def getMenuName( self, slot ):
 		cmdInfo = cmd.getAttr( "%s.zooCmd%d" % ( self.obj, slot ) )
 		idx = cmdInfo.find('^')
@@ -176,7 +191,7 @@ class Trigger(object):
 					#if there is no connect, then check to see if there is a name cache, and query it - no need to
 					#check for its existence as we're already in a try block and catching the appropriate exception
 					#should the attribute not exist...
-					cacheAttrName = "%s.%s%d%s" % ( self.obj, slotPrefix, slot, "cache" )
+					cacheAttrName = "%s.%s%dcache" % ( self.obj, slotPrefix, slot )
 					cacheName = cmd.getAttr( cacheAttrName )
 					if objExists( cacheName ):
 						self.connect( cacheName, slot )  #add the object to the connect slot
@@ -198,6 +213,7 @@ class Trigger(object):
 		return newConnects
 	def getConnectSlots( self, object ):
 		'''return a list of the connect slot indicies <object> is connected to'''
+		object = str( object )
 		conPrefix = 'zooTrig'
 		prefixSize = len( conPrefix )
 		trigger = cmd.ls( self.obj )[0]
@@ -234,16 +250,21 @@ class Trigger(object):
 		return slots
 	def isConnected( self, object ):
 		'''returns whether a given <object> is connected as a connect to this trigger'''
+		object = str( object )
 		if not objExists(object): return []
 		return bool( self.getConnectSlots(object) )
 	def connect( self, object, slot=None ):
-		'''performs the actual connection of an object to a connect slot'''
+		'''
+		performs the actual connection of an object to a connect slot
+		'''
+		object = str( object )
 		if not cmd.objExists(object): return -1
 
 		#if the user is trying to connect the trigger to itself, return zero which is the reserved slot for the trigger
 		if self.obj == object: return 0
+
+		if slot is None: slot = self.nextSlot()
 		if slot <= 0: return 0
-		elif slot is None: slot = self.nextSlot()
 
 		#make sure the connect isn't already connected - if it is, return the slot number
 		existingSlots = self.isConnected(object)
@@ -252,12 +273,12 @@ class Trigger(object):
 		conPrefix = 'zooTrig'
 		prefixSize = len(conPrefix)
 
-		slotPath = "%s.%s%d" % (self.obj, conPrefix, slot )
+		slotPath = "%s.%s%d" % (self.obj, conPrefix, slot)
 		if not objExists( slotPath ):
-			cmd.addAttr(self.obj,ln= "%s%d" % (slotPrefix, slot ), at='message')
+			cmd.addAttr(self.obj,ln= "%s%d" % (conPrefix, slot), at='message')
 
 		cmd.connectAttr( "%s.msg" % object, slotPath, f=True )
-		self.cacheConnect(slot)
+		self.cacheConnect( slot )
 
 		return slot
 	def disconnect( self, objectOrSlot ):
@@ -561,15 +582,17 @@ class Trigger(object):
 		return next
 	def cacheConnect( self, slot ):
 		'''caches the objectname of a slot connection'''
-		try: connectName = self[slot]
+		try: connectName = self[ slot ]
 		except IndexError: return None
 
 		slotPrefix = 'zooTrig'
-		cacheAttrName = '%s%d%cache' % ( slotPrefix, slot )
+		cacheAttrName = '%s%dcache' % ( slotPrefix, slot )
 		cacheAttrPath = '%s.%s' % ( self.obj, cacheAttrName )
 
-		if not cmd.objExists(cacheAttrPath): addAttr(self.obj, ln=cacheAttrName, dt='string')
-		cmd.setAttr(cacheAttrPath, connectName, type='string')
+		if not cmd.objExists( cacheAttrPath ):
+			cmd.addAttr( self.obj, ln=cacheAttrName, dt='string' )
+
+		cmd.setAttr( cacheAttrPath, connectName, type='string' )
 	def validateConnects( self ):
 		'''connects maintain a cache which "remembers" the last object that was plugged into them.  this method will
 		run over all connects and for those unconnected ones, it will look for the object that it USED to be connected to
@@ -611,6 +634,18 @@ class Trigger(object):
 			cons.extend( self.getConnectSlots(obj) )
 
 		return cons
+
+
+def addConnect( obj, connectObj, slot=None ):
+	return Trigger( obj ).connect( connectObj, slot )
+
+
+def setKillState( obj, state ):
+	return Trigger( obj ).setKillState( state )
+
+
+def getKillState( obj ):
+	return Trigger( obj ).getKillState()
 
 
 def writeSetAttrCmd( trigger, objs ):

@@ -5,22 +5,25 @@ lines of code in the API.  these aren't particularly efficient, but they'll make
 easier to read scripts if speed isn't a consideration
 '''
 
+import __future__
 
-try:
-	import maya.OpenMaya as OpenMaya
-	import maya.cmds as cmd
-	import maya.mel
-
-	melEval = maya.mel.eval
-except AttributeError: pass
-
+from pymel.core import *
 from cacheDecorators import *
 from filesystem import *
+from vectors import *
+
+import maya.OpenMaya as OpenMaya
+import maya.cmds as cmd
+import maya.mel
+
+import pymel.core as pymelCore
 import maya.utils
 import names, utils, filesystem
 import traceback, datetime
-from vectors import *
-import __future__
+import math
+
+melEval = maya.mel.eval
+
 Callback = utils.Callback
 
 
@@ -40,7 +43,7 @@ except RuntimeError: pass
 def getMObject( objectName ):
 	'''given an object name string, this will return the MDagPath api handle to that object'''
 	sel = OpenMaya.MSelectionList()
-	sel.add( objectName )
+	sel.add( str( objectName ) )
 	obj = OpenMaya.MObject()
 	sel.getDependNode(0,obj)
 
@@ -50,7 +53,7 @@ def getMObject( objectName ):
 def getMDagPath( objectName ):
 	'''given an object name string, this will return the MDagPath api handle to that object'''
 	sel = OpenMaya.MSelectionList()
-	sel.add( objectName )
+	sel.add( str( objectName ) )
 	obj = OpenMaya.MDagPath()
 	sel.getDagPath(0,obj)
 
@@ -66,34 +69,27 @@ def getObjectMatrix( objectName ):
 
 
 def getWorldSpaceMatrix( objectName ):
-	#NOTE: so i just found out that this can be done easily using:
-	#getMDagPath(obj).inclusiveMatrix()
-	#so - this function is kinda redundant
-	#first traverse parents - NOTE: this will fail as it is if there are non-unique leaf names - ideally the routine should march up the path list
-	parents = getMDagPath(objectName).fullPathName()[1:].split('|') #the slice is to remove the | at the head of the string - its always there
-	parents.reverse()
-
-	sel = OpenMaya.MSelectionList()
-	for p in parents: sel.add(p)
-
-	matrix = OpenMaya.MMatrix()
-	for n in xrange(sel.length()):
-		obj = OpenMaya.MDagPath()
-		sel.getDagPath(n,obj)
-		curMatrix = OpenMaya.MFnTransform(obj).transformation().asMatrix()
-		matrix *= curMatrix
-
-	return matrix
+	return getMDagPath( objectName ).inclusiveMatrix()
 
 
-def getBases( objectName ):
+def getObjectBases( objectName ):
 	'''returns a 3-tuple of world space orthonormal basis vectors that represent the orientation of the given object'''
-	x = OpenMaya.MVector(1,0,0)
-	y = OpenMaya.MVector(0,1,0)
-	z = OpenMaya.MVector(0,0,1)
-	objMatrix = getMDagPath( objectName ).inclusiveMatrix()
+	x = OpenMaya.MVector( 1, 0, 0 )
+	y = OpenMaya.MVector( 0, 1, 0 )
+	z = OpenMaya.MVector( 0, 0, 1 )
+	matrix = getMDagPath( objectName ).inclusiveMatrix()
 
-	return x*objMatrix,y*objMatrix,z*objMatrix
+	return x * matrix, y * matrix, z * matrix
+
+
+def getLocalBases( objectName ):
+	'''returns a 3-tuple of world space orthonormal basis vectors that represent the local coordinate system of the given object'''
+	x = OpenMaya.MVector( 1, 0, 0 )
+	y = OpenMaya.MVector( 0, 1, 0 )
+	z = OpenMaya.MVector( 0, 0, 1 )
+	matrix = getMDagPath( objectName ).exclusiveMatrix()
+
+	return x * matrix, y * matrix, z * matrix
 
 
 def getRotateDelta( src, tgt, other=None ):
@@ -119,19 +115,19 @@ def getRotateDelta( src, tgt, other=None ):
 	return asEuler
 
 
-def getRotateDelta__( srcJoint, tgtJoint, jointControl ):
+def getRotateDelta__( srcJoint, jointControl ):
 	'''
 	srcJoint should be the joint to which we want to align the rigged skeleton
 	tgtJoint is the joint on the rigged skeleton which is driven by the jointControl
 	'''
-	mat_j1 = getMDagPath( srcJoint ).inclusiveMatrix()
-	mat_j2 = getMDagPath( tgtJoint ).inclusiveMatrix()
+	mat_j = getMDagPath( srcJoint ).inclusiveMatrix()
+	mat_c = getMDagPath( jointControl ).inclusiveMatrix()
 
-	#generate the matrix describing offset between src joint and the tgt joint (the one driven by the rig)
-	mat_o = mat_j2 * mat_j1.inverse()
+	#generate the matrix describing offset between joint and the rig control
+	mat_o = mat_j.inverse() * mat_c
 
 	#put into space of the control
-	rel_mat = mat_o.inverse() * getMDagPath( jointControl ).exclusiveMatrixInverse()
+	rel_mat = mat_o * getMDagPath( jointControl ).exclusiveMatrixInverse()
 
 	#now figure out the euler rotations for the offset
 	tMat = OpenMaya.MTransformationMatrix( rel_mat )
@@ -233,7 +229,7 @@ def lsSelectedAnimLayers():
 inMainThread = maya.utils.executeInMainThreadWithResult
 
 def iterParents( obj ):
-	parent = cmd.listRelatives( obj, p=True, pa=True )
+	parent = cmd.listRelatives( str( obj ), p=True, pa=True )
 	while parent is not None:
 		yield parent[ 0 ]
 		parent = cmd.listRelatives( parent[ 0 ], p=True, pa=True )
@@ -253,6 +249,7 @@ def sortByHierarchy( objs ):
 def pyArgToMelArg(arg):
 	#given a python arg, this method will attempt to convert it to a mel arg string
 	if isinstance(arg, basestring): return '"%s"' % cmd.encodeString(arg)
+	elif isinstance(arg, PyNode): return '"%s"' % cmd.encodeString( str( arg ) )
 
 	#if the object is iterable then turn it into a mel array string
 	elif hasattr(arg, '__iter__'): return '{%s}' % ','.join(map(pyArgToMelArg, arg))
@@ -276,16 +273,18 @@ class Mel( object ):
 		#construct the mel cmd execution method
 		echo = self.echo
 		def melExecutor( *args ):
-			strArgs = map(pyArgToMelArg,args)
-			cmdStr = '%s(%s);' % (attr, ','.join(strArgs))
+			strArgs = map( pyArgToMelArg, args )
+			cmdStr = '%s(%s);' % (attr, ','.join( strArgs ))
 
 			if echo: print cmdStr
 			try:
-				retVal = melEval(cmdStr)
+				retVal = melEval( cmdStr )
 			except RuntimeError:
 				print 'cmdStr: %s' % cmdStr
 				return
 			return retVal
+
+		melExecutor.__name__ = attr
 
 		return melExecutor
 	def source( self, script ):
@@ -330,14 +329,15 @@ class CmdQueue(list):
 		m.source( fp )
 
 
-def melPrint( strToPrint ):
+def melPrint( *args ):
 	'''
 	this dumb looking method routes a print through the mel print command instead of the python print statement.  this
 	is useful because it seems the script line in the main maya UI doesn't echo data printed to the python.stdout.  so
 	if you want to communicate via this script line from python scripts, you need to print using this method
 	'''
 	try:
-		melEval('''print "%s\\n";''' % cmd.encodeString(str(strToPrint)))
+		argsStr = ' '.join( cmd.encodeString( str(a) ) for a in args )
+		melEval('''print "%s\\n";''' % argsStr )
 	except RuntimeError:
 		#if encodeString fails, bail...
 		pass
@@ -1220,6 +1220,23 @@ def d_restoreAnimLayers( f ):
 			cmd.animLayer( l, e=True, selected=True )
 
 		cmd.animLayer( forceUIRefresh=True )
+
+	func.__name__ = f.__name__
+	func.__doc__ = f.__doc__
+
+	return func
+
+
+def d_maintainSceneSelection(f):
+	def func( *a, **kw ):
+		initSel = cmd.ls( sl=True )
+		ret = f( *a, **kw )
+
+		if cmd.ls( sl=True ) != initSel:
+			initSel = [ o for o in initSel if cmd.objExists( o ) ]
+			if initSel: cmd.select( initSel )
+
+		return ret
 
 	func.__name__ = f.__name__
 	func.__doc__ = f.__doc__

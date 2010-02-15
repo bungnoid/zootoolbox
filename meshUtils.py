@@ -5,15 +5,20 @@ of this stuff yet.  as it grows it may make sense to step back a bit and think a
 design this a little better
 '''
 
+from pymel.core import *
+
 import maya.cmds as cmd
+import pymel.core as pymelCore
+
 from vectors import Vector
 from filesystem import Path, BreakException
-import mayaVectors
 import api
 import maya.OpenMaya as OpenMaya
+from maya.OpenMayaAnim import MFnSkinCluster
 
 
 kMAX_INF_PER_VERT = 3
+kMIN_SKIN_WEIGHT_VALUE = 0.05
 
 def numVerts( mesh ):
 	return len( cmd.ls("%s.vtx[*]" % mesh, fl=True) )
@@ -145,6 +150,49 @@ def extractMeshForEachJoint( joints, tolerance=1e-4 ):
 	return extractedMeshes
 
 
+def extractMeshForJoints( joints, tolerance=0.25, expand=0 ):
+	'''
+	given a list of joints this will extract the mesh influenced by these joints into
+	a separate object.  the default tolerance is high because verts are converted to
+	faces which generally results in a larger than expected set of faces
+	'''
+	faces = []
+	joints = map( str, joints )
+	for j in joints:
+		faces += jointFacesForMaya( j, tolerance, False )
+
+	if not faces:
+		return None
+
+	theJoint = joints[ 0 ]
+
+	meshes = extractFaces( faces )
+	grp = cmd.group( em=True, name='%s_mesh#' % theJoint )
+	cmd.delete( cmd.parentConstraint( theJoint, grp ) )
+
+	for m in meshes:
+		#unlock all xform attrs
+		for at in 't', 'r', 's':
+			cmd.setAttr( '%s.%s' % (m, at), l=False )
+			for ax in 'x', 'y', 'z':
+				cmd.setAttr( '%s.%s%s' % (m, at, ax), l=False )
+
+		if expand > 0:
+			cmd.polyMoveFacet( "%s.vtx[*]" % m, ch=False, ltz=expand )
+
+		#parent to the grp and freeze transforms to ensure the shape's space is the same as its new parent
+		cmd.parent( m, grp )
+		cmd.makeIdentity( m, a=True, t=True, r=True, s=True )
+
+		#parent all shapes to the grp
+		cmd.parent( cmd.listRelatives( m, s=True, pa=True ), grp, add=True, s=True )
+
+		#delete the mesh transform
+		cmd.delete( m )
+
+	return grp
+
+
 def autoGenerateRagdollForEachJoint( joints, threshold=0.65 ):
 	convexifiedMeshes = []
 	for j in joints:
@@ -197,7 +245,7 @@ def isPointInSphere( point, volumePos, volumeScale, volumeBasis ):
 	pointRel.change_space(*volumeBasis)
 
 	if -x<= pointRel.x <=x  and  -y<= pointRel.y <=y  and  -z<= pointRel.z <=z:
-		pointN = vectors.Vector(pointRel)
+		pointN = Vector(pointRel)
 		pointN.x /= x
 		pointN.y /= y
 		pointN.z /= z
@@ -275,9 +323,9 @@ def findVertsInVolume( meshes, volume ):
 	within the given <volume>
 	'''
 	#define a super simple vector class to additionally record vert id with position...
-	class VertPos(vectors.Vector):
+	class VertPos(Vector):
 		def __init__( self, x, y, z, vertIdx=None ):
-			vectors.Vector.__init__(self, [x, y, z])
+			Vector.__init__(self, [x, y, z])
 			self.id = vertIdx
 
 	#this dict provides the functions used to determine whether a point is inside a volume or not
@@ -290,9 +338,9 @@ def findVertsInVolume( meshes, volume ):
 									ExportManager.kVOLUME_CUBE: isPointInCube}
 
 	#grab any data we're interested in for the volume
-	volumePos = vectors.Vector( cmd.xform(volume, q=True, ws=True, rp=True) )
+	volumePos = Vector( cmd.xform(volume, q=True, ws=True, rp=True) )
 	volumeScale = map(abs, cmd.getAttr('%s.s' % volume)[0])
-	volumeBasis = map(mayaVectors.MayaVector, api.getBases(volume))
+	volumeBasis = map(Vector, api.getBases(volume))
 
 	#make sure the basis is normalized
 	volumeBasis = [v.normalize() for v in volumeBasis]
@@ -302,10 +350,10 @@ def findVertsInVolume( meshes, volume ):
 	try: type = int( cmd.getAttr('%s.exportVolume' % volume) )
 	except TypeError: pass
 
-	isContainedMethod = insideDeterminationMethod[type]
+	isContainedMethod = insideDeterminationMethod[ type ]
 	print 'method for interior volume determination', isContainedMethod.__name__
 	sx = volumeScale[0]
-	if vectors.Vector(volumeScale).within((sx, sx, sx)):
+	if Vector( volumeScale ).within((sx, sx, sx)):
 		try: isContainedMethod = insideDeterminationIfUniform[type]
 		except KeyError: pass
 
@@ -346,22 +394,35 @@ def jointVerts( joint, tolerance=1e-4 ):
 	newObjs = []
 	meshVerts = {}
 
+	jointMDag = api.getMDagPath( joint )
 	try:
-		skins = list( set( cmd.listConnections(joint, s=0, type='skinCluster') ) )
+		skins = list( set( listConnections( joint, s=0, type='skinCluster' ) ) )
 	except TypeError:
 		return meshVerts
 
+	MObject = OpenMaya.MObject
+	MDagPath = OpenMaya.MDagPath
+	MDoubleArray = OpenMaya.MDoubleArray
+	MSelectionList = OpenMaya.MSelectionList
+	MIntArray = OpenMaya.MIntArray
+	MFnSingleIndexedComponent = OpenMaya.MFnSingleIndexedComponent
 	for skin in skins:
-		skinMeshes = cmd.ls(cmd.listHistory(skin, f=1), type='mesh')
-		mesh = skinMeshes[0]
-		dataList = []
-		meshVerts[mesh] = dataList
-		numVerts = len(cmd.ls("%s.vtx[*]" % mesh, fl=True))
+		mfnSkin = MFnSkinCluster( api.getMObject( skin ) )
 
-		for n in xrange(numVerts):
-			weight = cmd.skinPercent(skin, '%s.vtx[%d]' % (mesh, n), q=True, t=joint)
-			if weight < tolerance: continue
-			dataList.append( (weight, n) )
+		mSel = MSelectionList()
+		mWeights = MDoubleArray()
+		mfnSkin.getPointsAffectedByInfluence( jointMDag, mSel, mWeights )
+
+		for n in range( mSel.length() ):
+			mesh = MDagPath()
+			component = MObject()
+			mSel.getDagPath( n, mesh, component )
+
+			c = MFnSingleIndexedComponent( component )
+			idxs = MIntArray()
+			c.getElements( idxs )
+
+			meshVerts[ mesh.partialPathName() ] = [ (w, idx) for idx, w in zip( idxs, mWeights ) if w > tolerance ]
 
 	return meshVerts
 
@@ -382,8 +443,13 @@ def jointFacesForMaya( joint, tolerance=1e-4, contained=True ):
 	returns a list containing the faces influences by the given joint
 	'''
 	verts = jointVertsForMaya( joint, tolerance )
+	if not verts:
+		return []
+
 	if contained:
-		faceList = set( cmd.ls( cmd.polyListComponentConversion( verts, toFace=True ), fl=True ) )
+		faceList = cmd.polyListComponentConversion( verts, toFace=True )
+		if faceList:
+			faceList = set( cmd.ls( faceList, fl=True ) )
 		for f in cmd.ls( cmd.polyListComponentConversion( verts, toFace=True, border=True ), fl=True ):
 			faceList.remove( f )
 
@@ -405,6 +471,8 @@ def jointFaces( joint, tolerance=1e-4, contained=True ):
 
 def componentListToDict( componentList ):
 	componentDict = {}
+	if not componentList:
+		return componentDict
 
 	#detect the prefix type
 	suffix = componentList[ 0 ].split( '.' )[ 1 ]
@@ -444,9 +512,11 @@ def stampVolumeToJoint( joint, volume, amount=0.1 ):
 def clampVertInfluenceCount( geos=None ):
 	'''
 	'''
-	global kMAX_INF_PER_VERT
+	global kMAX_INF_PER_VERT, kMIN_SKIN_WEIGHT_VALUE
 	progressWindow = cmd.progressWindow
 	skinPercent = cmd.skinPercent
+
+	halfMin = kMIN_SKIN_WEIGHT_VALUE / 2.0
 
 	if geos is None:
 		geos = cmd.ls(sl=True)
@@ -455,27 +525,66 @@ def clampVertInfluenceCount( geos=None ):
 		skin = cmd.ls(cmd.listHistory(geo), type='skinCluster')[0]
 		verts = cmd.ls(cmd.polyListComponentConversion(geo, toVertex=True), fl=True)
 
-		inc = 100.0/len(verts)
+		inc = 100.0 / len( verts )
 		progress = 0
+		vertsFixed = []
 		for vert in verts:
 			progress += inc
 			progressWindow(e=True, progress=progress)
-			weightList = skinPercent(skin, vert, ib=1e-4, q=True, value=True)
+
+			reapplyWeights = False
+			weightList = skinPercent(skin, vert, ib=1e-5, q=True, value=True)
+
 			if len(weightList) > kMAX_INF_PER_VERT:
-				jointList = skinPercent(skin, vert, ib=1e-4, q=True, transform=None)
+				jointList = skinPercent(skin, vert, ib=halfMin, q=True, transform=None)
 				sorted = zip(weightList, jointList)
 				sorted.sort()
 
 				#now clamp to the highest kMAX_INF_PER_VERT number of weights, and re-normalize
-				sorted = sorted[-kMAX_INF_PER_VERT:]
-				weightSum = sum([a for a, b in sorted])
+				sorted = sorted[ -kMAX_INF_PER_VERT: ]
+				weightSum = sum( [ a for a, b in sorted ] )
 
-				t_values = [(b, a/weightSum) for a, b in sorted]
-				skinPercent(skin, vert, tv=t_values)
+				t_values = [ (b, a/weightSum) for a, b in sorted ]
+				reapplyWeights = True
 
-		#turn in limiting in the skinCluster
+			else:
+				for n, v in enumerate( weightList ):
+					if v <= kMIN_SKIN_WEIGHT_VALUE:
+						jointList = skinPercent( skin, vert, ib=halfMin, q=True, transform=None )
+						t_values = [ (a, b) for a, b in zip( jointList, weightList ) if b > halfMin ]
+						reapplyWeights = True
+						break
+
+			if reapplyWeights:
+				js = [ a for a, b in t_values ]
+				vs = renormalizeWithMinimumValue( [ b for a, b in t_values ] )
+				t_values = zip( js, vs )
+
+				skinPercent( skin, vert, tv=t_values )
+				vertsFixed.append( vert )
+
+		#turn on limiting in the skinCluster
 		cmd.setAttr('%s.maxInfluences' % skin, kMAX_INF_PER_VERT)
 		cmd.setAttr('%s.maintainMaxInfluences' % skin, 1)
+
+		print 'fixed skin weights on %d verts' % len( vertsFixed )
+		#print '\n'.join( vertsFixed )
+
+
+def renormalizeWithMinimumValue( values, minValue=kMIN_SKIN_WEIGHT_VALUE ):
+	minCount = sum( 1 for v in values if v <= minValue )
+	toAlter = [ n for n, v in enumerate( values ) if v > minValue ]
+	modValues = [ max( minValue, v ) for v in values ]
+
+	toAlterSum = sum( [ values[ n ] for n in toAlter ] )
+	for n in toAlter:
+		modValues[ n ] /= toAlterSum
+
+	modifier = 1.0035 + ( float( minCount ) * minValue )
+	for n in toAlter:
+		modValues[ n ] /= modifier
+
+	return modValues
 
 
 def getBoundsForJoint( joint ):

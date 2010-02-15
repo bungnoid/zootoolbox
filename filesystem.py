@@ -1,5 +1,13 @@
+from cacheDecorators import *
 import cPickle, threading, time
-import os, sys, re, shutil, stat, inspect
+import os, sys, re
+import shutil, stat, inspect
+import datetime, subprocess
+
+IS_WING_DEBUG = 'WINGDB_ACTIVE' in os.environ
+
+#the mail server used to send mail
+MAIL_SERVER = 'exchange'
 
 
 class GoodException(Exception):
@@ -12,9 +20,65 @@ class GoodException(Exception):
 
 BreakException = GoodException
 
-
-MAIL_SERVER = 'exchange'
 DEFAULT_AUTHOR = 'default_username@your_domain.com'
+
+
+class Callback(object):
+	'''
+	stupid little callable object for when you need to "bake" temporary args into a
+	callback - useful mainly when creating callbacks for dynamicly generated UI items
+	'''
+	def __init__( self, func, *args, **kwargs ):
+		self.func = func
+		self.args = args
+		self.kwargs = kwargs
+	def __call__( self, *args ):
+		return self.func( *self.args, **self.kwargs )
+
+
+def trackableClassFactory( superClass=object ):
+	'''
+	returns a class that tracks subclasses.  for example, if you had classB(classA)
+	ad you wanted to track subclasses, you could do this:
+
+	class classB(trackableClassFactory( classA )):
+		...
+
+	a classmethod called GetSubclasses is created in the returned class for
+	querying the list of subclasses
+	'''
+	subclassList = []
+	class TrackableType(type):
+		def __new__( cls, name, bases, attrs ):
+			new = type.__new__( cls, name, bases, attrs )
+			subclassList.append( new )
+
+			return new
+
+	class TrackableClass(superClass): __metaclass__ = TrackableType
+	def GetSubclasses( cls ):
+		'''
+		returns a list of subclasses
+		'''
+		toReturn = []
+		for c in subclassList:
+			if c is cls: continue
+			if issubclass( c, cls ):
+				toReturn.append( c )
+
+		return toReturn
+	def GetNamedSubclass( cls, name ):
+		'''
+		returns the first subclass found with the given name
+		'''
+		for c in cls.GetSubclasses():
+			if c.__name__ == name: return c
+
+	TrackableClass.GetSubclasses = classmethod( GetSubclasses )
+	TrackableClass.GetNamedSubclass = classmethod( GetNamedSubclass )
+
+	return TrackableClass
+
 
 def removeDupes( iterable ):
 	'''
@@ -28,6 +92,28 @@ def removeDupes( iterable ):
 	return newIterable
 
 
+def iterBy( iterable, count ):
+	'''
+	returns an generator which will yield "chunks" of the iterable supplied of size "count".  eg:
+	for chunk in iterBy( range( 7 ), 3 ): print chunk
+
+	results in the following output:
+	[0, 1, 2]
+	[3, 4, 5]
+	[6]
+	'''
+	cur = 0
+	i = iter( iterable )
+	while True:
+		try:
+			toYield = []
+			for n in range( count ): toYield.append( i.next() )
+			yield toYield
+		except StopIteration:
+			if toYield: yield toYield
+			break
+
+
 def findMostRecentDefitionOf( variableName ):
 	'''
 	'''
@@ -38,6 +124,7 @@ def findMostRecentDefitionOf( variableName ):
 		#in this case, walk up the caller tree and find the first occurance of the variable named <variableName>
 		for frameInfo in frameInfos:
 			frame = frameInfo[0]
+			var = None
 
 			if var is None:
 				try:
@@ -96,6 +183,25 @@ def reportUsageToAuthor( author=None, payloadCB=None ):
 		svr.sendmail(os.environ['USERNAME'], author, msg)
 	#NOTE: this method should never ever throw an exception...  its purely a useage tracking tool and if it fails, it should fail invisibly...
 	except: pass
+
+
+def getArgDefault( function, argName ):
+	'''
+	returns the default value of the given named arg.  if the arg doesn't exist,
+	or a NameError is raised.  if the given arg has no default an IndexError is
+	raised.
+	'''
+	args, va, vkw, defaults = inspect.getargspec( function )
+	if argName not in args:
+		raise NameError( "The given arg does not exist in the %s function" % function )
+
+	args.reverse()
+	idx = args.index( argName )
+
+	try:
+		return list( reversed( defaults ) )[ idx ]
+	except IndexError:
+		raise IndexError( "The function %s has no default for the %s arg" % (function, argName) )
 
 
 #try to import the windows api - this may fail if we're not running on windows
@@ -192,6 +298,11 @@ sz_GIGABYTES = 3
 
 class Path(str):
 	__CASE_MATTERS = os.name != 'nt'
+
+	@classmethod
+	def DoesCaseMatter( cls ):
+		return cls.__CASE_MATTERS
+
 	def __new__( cls, path='', caseMatters=None, envDict=None ):
 		if path is None:
 			path = ''
@@ -663,8 +774,8 @@ class Path(str):
 
 			if doP4 and P4File.USE_P4:
 				try:
-					asP4 = P4File(self)
-					tgtAsP4 = P4File(target)
+					asP4 = P4File( self )
+					tgtAsP4 = P4File( target )
 					if asP4.managed() and tgtAsP4.isUnderClient():
 						'''
 						so if we're managed by p4 - try a p4 rename, and return on success.  if it
@@ -961,7 +1072,7 @@ class Path(str):
 		'''
 		returns this instance as a perforce depot path
 		'''
-		return self.asP4().where()
+		return self.asP4().toDepotPath()
 
 
 def findInPyPath( filename ):
@@ -1003,8 +1114,9 @@ class P4Output(dict):
 	END_DIGITS = re.compile( '(.*)([0-9]+$)' )
 
 	def __init__( self, outStr, keysColonDelimited=False ):
-		EXIT_PREFIX = P4Output.EXIT_PREFIX
-		ERROR_PREFIX = P4Output.ERROR_PREFIX
+		EXIT_PREFIX = self.EXIT_PREFIX
+		ERROR_PREFIX = self.ERROR_PREFIX
+
 		self.errors = []
 
 		if isinstance( outStr, basestring ):
@@ -1024,16 +1136,10 @@ class P4Output(dict):
 
 			if line.startswith( EXIT_PREFIX ):
 				break
-
-			if line.startswith( ERROR_PREFIX ):
+			elif line.startswith( ERROR_PREFIX ):
 				self.errors.append( line )
 				continue
 
-			idx = line.find( ':' )
-			if idx == -1:
-				continue
-
-			line = line[ idx + 1: ].strip()
 			idx = line.find( delimiter )
 			if idx == -1:
 				prefix = line
@@ -1077,31 +1183,36 @@ class P4Output(dict):
 	def __getattr__( self, attr ):
 		return self[ attr ]
 	def asStr( self ):
+		if self.errors:
+			return '\n'.join( self.errors )
+
 		return '\n'.join( '%s:  %s' % items for items in self.iteritems() )
 
+
+INFO_PREFIX_RE = re.compile( '^info([0-9]*): ' )
 
 def _p4run( *args ):
 	if not P4File.USE_P4:
 		return False
 
+	global INFO_PREFIX_RE
+	if '-s' not in args:  #if the -s flag is in the global flags, perforce sends all data to the stdout, and prefixes all errors with "error:"
+		args = ('-s',) + args
+
 	cmdStr = 'p4 '+ ' '.join( map( str, args ) )
 	try:
-		p4Proc = subprocess.Popen( cmdStr, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
+		p4Proc = subprocess.Popen( cmdStr, shell=True, stdout=subprocess.PIPE )
 	except OSError:
 		P4File.USE_P4 = False
 		return False
 
 	startTime = time.clock()
 	stdoutAccum = []
-	stderrAccum = []
 	hasTimedOut = False
 	while True:
 		ret = p4Proc.poll()
 		newStdout = p4Proc.stdout.readlines()
-		newStderr = p4Proc.stderr.readlines()
-
 		stdoutAccum += newStdout
-		stderrAccum += newStderr
 
 		#if the proc has terminated, deal with returning appropriate data
 		if ret is not None:
@@ -1110,10 +1221,12 @@ def _p4run( *args ):
 					try: P4_RETURNED_CALLBACK( *args )
 					except: pass
 
-			return stdoutAccum + stderrAccum
+			cleanLines = [ INFO_PREFIX_RE.sub( '', line ) for line in stdoutAccum ]
+
+			return cleanLines
 
 		#if there has been new output, the proc is still alive so reset counters
-		if newStderr or newStdout:
+		if newStdout:
 			startTime = time.clock()
 
 		#make sure we haven't timed out
@@ -1144,7 +1257,7 @@ def p4Info():
 	if P4INFO:
 		return P4INFO
 
-	P4INFO = p4run( '-s info', keysColonDelimited=True )
+	P4INFO = p4run( 'info', keysColonDelimited=True )
 
 	return P4INFO
 
@@ -1221,10 +1334,13 @@ class P4Change(dict):
 		info = p4Info()
 		contents = '''Change:\tnew\n\nClient:\t%s\n\nUser:\t%s\n\nStatus:\tnew\n\nDescription:\n\t%s\n''' % (info.clientName, info.userName, description)
 
+		global INFO_PREFIX_RE
+
 		p4Proc = subprocess.Popen( 'p4 -s change -i', shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
 		stdout, stderr = p4Proc.communicate( contents )
+		stdout = [ INFO_PREFIX_RE.sub( '', line ) for line in stdout.split( '\n' ) ]
 
-		output = P4Output( stdout + stderr, False )
+		output = P4Output( stdout )
 		changeNum = int( P4Output.START_DIGITS.match( output.change ).groups()[ 0 ] )
 
 		new = cls()
@@ -1237,7 +1353,7 @@ class P4Change(dict):
 		return new
 	@classmethod
 	def FetchByNumber( cls, number ):
-		lines = _p4run( '-s', 'describe', number )
+		lines = _p4run( 'describe', number )
 		if not lines:
 			return None
 
@@ -1337,7 +1453,9 @@ class P4Change(dict):
 		info = p4Info()
 		for line in _p4run( 'changes -u %s -s pending -c %s' % (info.userName, info.clientName) ):
 			toks = line.split()
+			try:
 			changeNum = int( toks[ 1 ] )
+			except IndexError: continue
 
 			yield cls.FetchByNumber( changeNum )
 
@@ -1399,7 +1517,7 @@ class P4File(Path):
 
 		f = self.getFile( f )
 		try:
-			return self.run( '-s fstat', f )
+			return self.run( 'fstat', f )
 		except Exception: return None
 	def isManaged( self, f=None ):
 		'''
@@ -1502,7 +1620,7 @@ class P4File(Path):
 		if not self.USE_P4:
 			return False
 
-		args = [ '-s add', '-c', self.getOrCreateChange() ]
+		args = [ 'add', '-c', self.getOrCreateChange() ]
 
 		#if the type has been specified, add it to the add args
 		if type is not None:
@@ -1510,12 +1628,8 @@ class P4File(Path):
 
 		args.append( self.getFile( f ) )
 
-		lines = _p4run( *args )
-		for line in lines:
-			if line.startswith( 'error' ):
-				return False
-
-			if "can't add existing file" in line:
+		ret = p4run( *args )
+		if ret.errors:
 				return False
 
 		return True
@@ -1523,12 +1637,8 @@ class P4File(Path):
 		if not self.USE_P4:
 			return False
 
-		lines = _p4run( '-s edit', '-c', self.getOrCreateChange(), self.getFile( f ) )
-		for line in lines:
-			if line.startswith( 'error' ):
-				return False
-
-			if "can't edit exclusive" in line:
+		ret = p4run( 'edit', '-c', self.getOrCreateChange(), self.getFile( f ) )
+		if ret.errors:
 				return False
 
 		return True
@@ -1557,8 +1667,10 @@ class P4File(Path):
 		f = self.getFile( f )
 
 		#if file is a directory, then we want to sync to the dir
+		f = str( f.asfile() )
+		if not f.startswith( '//' ):  #depot paths start with // - but windows will try to poll the network for a computer with the name, so if it starts with //, assume its a depot path
 		if os.path.isdir( f ):
-			f = ('%s/...' % f).replace('//','/')
+				f = '%s/...' % f
 
 		if rev is not None:
 			if rev == 0: f += '#none'
@@ -1572,8 +1684,8 @@ class P4File(Path):
 		elif change is not None:
 			f += '@%s' % change
 
-		if force: return self.run( '-s sync', '-f', f )
-		else: return self.run( '-s sync', f )
+		if force: return self.run( 'sync', '-f', f )
+		else: return self.run( 'sync', f )
 	def delete( self, f=None ):
 		if not self.USE_P4:
 			return False
@@ -1581,7 +1693,12 @@ class P4File(Path):
 		f = self.getFile( f )
 		action = self.getAction( f )
 		if action is None and self.managed( f ):
-			return self.run( '-s delete', '-c', self.getOrCreateChange(), f )
+			return self.run( 'delete', '-c', self.getOrCreateChange(), f )
+	def remove( self, f=None ):
+		if not self.USE_P4:
+			return False
+
+		self.sync( f, rev=0 )
 	def rename( self, newName, f=None ):
 		if not self.USE_P4:
 			return False
@@ -1677,29 +1794,7 @@ class P4File(Path):
 
 		f = self.getFile( f )
 
-		dataLine = _p4run( 'where', f )[ 0 ].strip()
-		dataLineToSearch = dataLine
-		fName = f[ -1 ]
-		fNameLen = len( fName )
-
-		if not self.doesCaseMatter():
-			dataLineToSearch = dataLine.lower()
-			fName = fName.lower()
-
-		#I'm not entirely sure this is bullet-proof...  but basically the return string for this command
-		#is a simple space separated string, with three values.  i guess I could try to match //HOSTNAME
-		#and the client's depot root to find the start of files, but for now its simply looking for the
-		#file name substring three times
-		depotNameIdx = dataLineToSearch.find( fName ) + fNameLen
-		depotName = P4File( dataLine[ :depotNameIdx ], self.doesCaseMatter() )
-
-		workspaceNameIdx = dataLineToSearch.find( fName, depotNameIdx ) + fNameLen
-		workspaceName = P4File( dataLine[ depotNameIdx + 1:workspaceNameIdx ], self.doesCaseMatter() )
-
-		diskNameIdx = dataLineToSearch.find( fName, workspaceNameIdx ) + fNameLen
-		diskName = P4File( dataLine[ workspaceNameIdx + 1:diskNameIdx ], self.doesCaseMatter() )
-
-		return depotName, workspaceName, diskName
+		return toDepotAndDiskPaths( [f] )[ 0 ]
 	def toDepotPath( self, f=None ):
 		'''
 		returns the depot path to the file
@@ -1715,10 +1810,106 @@ class P4File(Path):
 		if not self.USE_P4:
 			return None
 
-		return self.allPaths( f )[ 2 ]
+		return self.allPaths( f )[ 1 ]
 
 
 P4Data = P4File  #used to be called P4Data - this is just for any legacy references...
+
+
+def lsP4( queryStr, includeDeleted=False ):
+	'''
+	returns a list of dict's containing the clientFile, depotFile, headRev, headChange and headAction
+	'''
+	filesAndDicts = []
+	queryLines = _p4run( 'files', queryStr )
+	for line in queryLines:
+		fDict = {}
+
+		toks = line.split( ' ' )
+
+		#deal with error lines, or exit lines (an exit prefix may not actually mean the end of the data - the query may have been broken into batches)
+		if line.startswith( 'exit' ):
+			continue
+
+		if line.startswith( 'error' ):
+			continue
+
+		fData = toks[ 0 ]
+		idx = fData.index( '#' )
+		f = Path( fData[ :idx ] )
+		fDict[ 'depotPath' ] = f
+
+		rev = int( fData[ idx+1: ] )
+		fDict[ 'headRev' ] = rev
+
+		action = toks[ 2 ]
+		fDict[ 'headAction' ] = action
+
+		if action == 'delete' and not includeDeleted:
+			continue
+
+		fDict[ 'headChange' ] = toks[ 4 ]
+
+		filesAndDicts.append( (f, fDict) )
+
+	diskPaths = toDiskPaths( [f[0] for f in filesAndDicts] )
+
+	lsResult = []
+	for diskPath, (f, fDict) in zip( diskPaths, filesAndDicts ):
+		fDict[ 'clientFile' ] = diskPath
+		lsResult.append( fDict )
+
+	return lsResult
+
+
+def toDepotAndDiskPaths( files ):
+	caseMatters = Path.DoesCaseMatter()
+
+	lines = []
+	for filesChunk in iterBy( files, 15 ):
+		lines += _p4run( 'where', *filesChunk )[ :-1 ]  #last line is the "exit" line...
+
+	paths = []
+	for f, line in zip( map( Path, files ), lines ):
+		fName = f[ -1 ]
+		fNameLen = len( fName )
+
+		manipLine = line
+
+		if not caseMatters:
+			manipLine = line.lower()
+			fName = fName.lower()
+
+		#I'm not entirely sure this is bullet-proof...  but basically the return string for this command
+		#is a simple space separated string, with three values.  i guess I could try to match //HOSTNAME
+		#and the client's depot root to find the start of files, but for now its simply looking for the
+		#file name substring three times
+		depotNameIdx = manipLine.find( fName ) + fNameLen
+		depotName = P4File( line[ :depotNameIdx ], caseMatters )
+
+		workspaceNameIdx = manipLine.find( fName, depotNameIdx ) + fNameLen
+		#workspaceName = P4File( line[ depotNameIdx + 1:workspaceNameIdx ], caseMatters )
+
+		diskNameIdx = manipLine.find( fName, workspaceNameIdx ) + fNameLen
+		diskName = P4File( line[ workspaceNameIdx + 1:diskNameIdx ], caseMatters )
+
+		paths.append( (depotName, diskName) )
+
+	return paths
+
+
+def toDepotPaths( files ):
+	'''
+	return the depot paths for the given list of disk paths
+	'''
+	return [ depot for depot, disk in toDepotAndDiskPaths( files ) ]
+
+
+def toDiskPaths( files ):
+	'''
+	return the depot paths for the given list of disk paths
+	'''
+	return [ disk for depot, disk in toDepotAndDiskPaths( files ) ]
 
 
 def isPerforceEnabled():
@@ -1777,11 +1968,13 @@ def syncFiles( files, force=False, rev=None, change=None ):
 
 		return ret
 	elif change is not None:
-		args = files
+		args = [ 'sync' ]
 		if force:
-			args = [ '-f' ] + args
+			args.append( '-f' )
 
-		return p4.run( 'sync', '-c', change, *args )
+		args += [ '%s@%d' % (f, change) for f in files ]
+
+		return p4run( *args )
 	else:
 		args = files
 		if force:
@@ -1905,10 +2098,11 @@ class Chunk( object ):
 	a chunk's parent.  the value attribute can contain either a string or a list containing other Chunk instances
 	'''
 	QUOTE_COMPOUND_KEYS = False
-	def __init__( self, key, value=None, parent=None, append=False ):
+	def __init__( self, key, value=None, parent=None, append=False, serializeWithQuotes=None ):
 		self.key = key
 		self.value = value
 		self.parent = parent
+		self.serializeWithQuotes = serializeWithQuotes
 		if append:
 			parent.append(self)
 	def __getitem__( self, item ):
@@ -1943,7 +2137,19 @@ class Chunk( object ):
 			for val in self.value: strLines.append( val.__repr__(depth+1) )
 			strLines.append( '\t'*depth +'}\n' )
 		else:
-			strLines.append( '%s"%s" "%s"\n'%('\t'*depth, self.key, self.value) )
+			v = self.value
+			serializeWithQuotes = self.serializeWithQuotes
+
+			if serializeWithQuotes is None:
+				if isinstance( v, (float, int) ):
+					serializeWithQuotes = True
+				if not v:
+					serializeWithQuotes = True
+
+			if serializeWithQuotes:
+				strLines.append( '%s"%s" "%s"\n'%('\t'*depth, self.key, v) )
+			else:
+				strLines.append( '%s"%s" %s\n'%('\t'*depth, self.key, v) )
 
 		return ''.join( strLines )
 	__str__ = __repr__
@@ -2490,6 +2696,13 @@ def writeExportDict( toolName=None, toolVersion=None, **kwargs ):
 	d[ kEXPORT_DICT_DATE ], d[ kEXPORT_DICT_TIME ] = now.date(), now.time()
 	d[ kEXPORT_DICT_TOOL ] = toolName
 	d[ kEXPORT_DICT_TOOL_VER ] = toolVersion
+
+	#add the data in kwargs to the export dict - NOTE: this is done using setdefault so its not possible
+	#to clobber existing keys by specifying them as kwargs...
+	for key, value in kwargs.iteritems():
+		d.setdefault(key, value)
+
+	return d
 
 
 class PresetManager(object):
