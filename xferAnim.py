@@ -1,164 +1,87 @@
-import maya.cmds as cmd, api
+from pymel.core import *
 from names import *
 from vectors import *
+from filesystem import removeDupes
+
+import api
+
 import mayaVectors
 import triggered
 import maya.OpenMaya as OpenMaya
 
 
+Transform = nt.Transform
 eul = api.OpenMaya.MEulerRotation
 
 AXES = [ "x", "y", "z" ]
 kROOS = ["xyz", "yzx", "zxy", "xzy", "yxz", "zyx"]
 kM_ROOS = [eul.kXYZ, eul.kYZX, eul.kZXY, eul.kXZY, eul.kYXZ, eul.kZYX]
-def align( src, tgt, key=False ):
+
+
+def align( src=None, tgt=None, key=False, pivotOnly=False ):
 	'''
 	this is separated into a separate proc, because its less "user friendly" ie require less syntax to work
 	its better to call zooAlign in non speed intensive operations because the syntax for this command may change
 	if the scope of the script is expanded in future - ie I add more functionality
 	'''
-	try:
-		#grab the positions and rotations of the src object in world space
-		srcRp = OpenMaya.MVector( *cmd.getAttr( src +'.rp' )[0] )
-		srcMatrix = api.getMDagPath( src ).inclusiveMatrix()
-		srcRp *= srcMatrix
 
-		tgtRp = OpenMaya.MVector( *cmd.getAttr( tgt +'.rp' )[0] )
-		tgtMatrix = api.getMDagPath( tgt ).exclusiveMatrix()
-		tgtMatrixInv = api.getMDagPath( tgt ).exclusiveMatrixInverse()
-		tgtRp *= tgtMatrix
+	if src is None or tgt is None:
+		sel = selected()
+		if src is None: src = sel[ 0 ]
+		if tgt is None: tgt = sel[ 1 ]
 
-		print mayaVectors.MayaVector( tgtRp )
-		xformMatrix = srcMatrix * tgtMatrixInv
-		new = mayaVectors.MayaMatrix( xformMatrix )
-
-		pos = new.get_position() - mayaVectors.MayaVector( tgtRp ) + mayaVectors.MayaVector( srcRp )
-		cmd.setAttr( tgt +'.t', *pos )
-		cmd.setAttr( tgt +'.r', *new.get_rotXYZ( asdeg=True ) )
-		raise Exception
-
-		srcRo = kM_ROOS[ cmd.getAttr( src +".ro" ) ]
-		tgtRo = kM_ROOS[ cmd.getAttr( tgt +".ro" ) ]
-		rot = OpenMaya.MVector( *cmd.xform(src, q=True, ws=True, ro=True) )
-		rot = OpenMaya.MEulerRotation( rot, srcRo ).asMatrix()
-		tgtXformMatrixInv = api.getMDagPath( tgt ).exclusiveMatrixInverse()
-	except RuntimeError, x:
-		print 'ERRR', x
+	#these two lines check to make sure the objects to be aligned are both transform (or joint) nodes, otherwise, it quits
+	if not isinstance( src, Transform ) or not isinstance( tgt, Transform ):
 		return
 
-	#so if the rotation orders are different, we need to deal with that
+	global AXES
 
-	#tgtRo = cmd.getAttr( tgt +".ro" )
-	#if srcRo != tgtRo:
-		#cmd.setAttr(tgt +".ro", srcRo)
+	pos = xform( src, q=True, ws=True, rp=True )
+	rot = xform( src, q=True, ws=True, ro=True )
 
-	#transform the world space position and rotation to the tgt object's local space
-	pos = pos * tgtXformMatrixInv
-	rot = rot * tgtXformMatrixInv
+	#create a list of all the axes to look at - we will check all these axes to make sure they're not locked
+	#creating a constraint on a locked axis will give us an error
+	moveCmdKw = { 'a': True, 'ws': True, 'rpr': True }
+	rotateCmdKw = { 'a': True, 'ws': True }
+	rotateCmdAxisAccum = ''
+	performMove = False
+	performRotate = False
 
-	rot = mayaVectors.MayaMatrix( rot )
-	rot = getattr(rot, 'get_rot' + kROOS[ tgtRo ].upper())( asdeg=True )
+	for ax in AXES:
+		if tgt.attr( 't'+ ax ).isSettable():
+			moveCmdKw[ ax ] = True
+			performMove = True
+		if tgt.attr( 'r'+ ax ).isSettable():
+			rotateCmdAxisAccum += ax
+			performRotate = True
 
-	#rot = OpenMaya.MTransformationMatrix( rot ).eulerRotation()
-	#rot = Angle(rot.x, True).degrees, Angle(rot.y, True).degrees, Angle(rot.z, True).degrees
-	print rot
+	if pivotOnly:
+		if performMove:
+			move( tgt.rp, tgt.sp, **moveCmdKw )
+	else:
+		#so if the rotation orders are different, we need to deal with that because the xform cmd doesn't
+		srcRo = src.ro.get()
+		tgtRo = tgt.ro.get()
+		if srcRo != tgtRo:
+			tgt.ro.set( srcRo )
 
-	strT = tgt +'.t'
-	strR = tgt +'.r'
-	for ax, p, r in zip( AXES, pos, rot ):
-		try:
-			print strT + ax, p
-			cmd.setAttr(strT + ax, p)
-		except RuntimeError: print 'err' #pass
+		if performMove:
+			move( tgt, pos, **moveCmdKw )
+		if performRotate:
+			rotateCmdKw[ 'rotate'+ rotateCmdAxisAccum.upper() ] = True
+			rotate( tgt, rot, **rotateCmdKw )
 
-		try:
-			print strR + ax, r
-			cmd.setAttr(strR + ax, r)
-		except RuntimeError: pass
-
-
-	#now restore the original rotation order
-	#if srcRo != tgtRo:
-		#cmd.xform(tgt, p=True, roo=kROOS[ tgtRo ])
+		#now restore the original rotation order
+		if srcRo != tgtRo:
+			xform( tgt, p=True, roo=kROOS[ tgtRo ] )
 
 	if key:
-		cmd.setKeyframe(tgt, at='t', at='r')
+		setKeyframe( tgt, at='t', at='r' )
 
 
-def transfer( src, tgt, instance=False, matchRo=True ):
-	'''
-	this is the core proc for node duplication/instancing animation transfers. you can call this proc
-	directly, but it was meant to be called from the zooXferBatch command. this command donly deals with
-	a single source, single target. it therefore must be called once for each source object
-	'''
-	try:
-		attribs = cmd.listAttr(src, keyable=True, visible=True, scalar=True, multi=True)
-	except RuntimeError: return
+TRACE_MODES = TRACE_ALL_FRAMES, TRACE_KEYFRAMES, TRACE_ALL_KEYFRAMES = range( 3 )
 
-	for attrib in attribs:
-		tgtAttrPath = '%s.%s' % (tgt, attrib )
-		try:
-			#### can remove this - wrap the setAttr below in a try block instead, and remove isTgtSettable if test below...
-			isTgtSettable = cmd.getAttr(tgtAttrPath, settable=True)
-		except RuntimeError:
-			continue
-
-		if not isTgtSettable:
-			continue
-
-		if matchRo:
-			try:
-				cmd.setAttr(tgt +".ro", cmd.getAttr(src +".ro"))
-			except RuntimeError: pass
-
-		srcAttrPath = '%s.%s' % (src, attrib)
-		srcAnimCurveInfo = cmd.listConnections(srcAttrPath, d=False, connections=False, plugs=True, type='animCurve')
-		if srcAnimCurveInfo is None:
-			continue
-
-		toks = srcAnimCurveInfo[0].split( '.' )
-		srcAnimCurveName, srcAnimCurveOut = toks
-
-		#if the user doesn't want to instance the anim curves, then duplicate the anim curve nodes
-		if not instance:
-			srcAnimCurveName = cmd.duplicate( srcAnimCurveName )[0]
-
-		cmd.connectAttr(tgtAttrPath, f='%s.%s' % (srcAnimCurveName, srcAnimCurveOut))
-
-
-def transferAdd( src, tgt, range=None, tgtTime=None, matchRo=False ):
-	'''
-	this is the core proc for copy/paste animation transfers. like the transfer command, this proc only
-	works with a single source, single target
-	'''
-	#if there are no keys, quit
-	try:
-		if cmd.keyframe(src, q=True, kc=True):
-			return
-	except RuntimeError: return
-
-	time = tgtTime
-	if tgtTime is None:
-		time = cmd.currentTime(q=True)
-
-	#match the rotation orders of the objects.
-	if matchRo:
-		try:
-			cmd.setAttr(tgt +".ro", cmd.getAttr(src +".ro"))
-		except RuntimeError:
-			pass
-
-	#finally, perform the copy - this may fail as we still haven't validated the existence of tgt...
-	try:
-		cmd.copyKey(src, time=range, hierarchy='none', animation='objects', o='curve')
-		cmd.pasteKey(tgt, time=time, option='merge', animation='objects')
-	except RuntimeError:
-		return
-
-
-@api.d_noAutoKey
-@api.d_disableViews
-def trace( srcList, tgtList, keysOnly=True, keysOnlyRotate=False, matchRo=False, processPostCmds=True, sortByHeirarchy=True, start=None, end=None ):
+def trace( srcs, tgts, traceMode=TRACE_KEYFRAMES, keysOnlyRotate=True, matchRotationOrder=True, processPostCmds=True, sortByHeirarchy=True, start=None, end=None ):
 	'''
 	given a list of source objects, and a list of targets, trace all source objects to the corresponding
 	objects in the target array
@@ -166,116 +89,102 @@ def trace( srcList, tgtList, keysOnly=True, keysOnlyRotate=False, matchRo=False,
 	unlike the core functions for the transfer and add function, the trace
 	function takes an array of source objects and an array of target objects. this is because the proc
 	steps through all frames specified by the user. knowing all the objects in advance allows the proc
-	to trace each object on a single frame before advancing to the next. this saves having to step through
-	all frames once for each object
+	to trace each object on a single frame before advancing to the next. this saves having to step
+	through all frames once for each object
 	'''
+
+	global Transform
+
+	if start is None:
+		start = playbackOptions( q=True, min=True )
+
+	if end is None:
+		end = playbackOptions( q=True, max=True )
+
 	#first, make sure the src and tgt lists contain only valid items
-	cleanSrc = []
-	cleanTgt = []
-	for src, tgt in zip(srcList, tgtList):
-		if cmd.objExists(src) and cmd.objExists(tgt):
-			cleanSrc.append( src )
-			cleanTgt.append( tgt )
+	cleanSrcs = []
+	cleanTgts = []
+	for src, tgt in zip( srcs, tgts ):
+		if objExists( src ) and objExists( tgt ):
+			cleanSrcs.append( src )
+			cleanTgts.append( tgt )
 
-	srcList = cleanSrc
-	tgtList = cleanTgt
+	srcs = cleanSrcs
+	tgts = cleanTgts
 
-	try:
-		timeList = cmd.keyframe(srcList, q=True, tc=True)
-	except RuntimeError:
-		print 'no src objects to trace'
-		return
+	if not srcs and not tgts:
+		print "xferAnim.trace()  no objects to trace"
 
-	progress = 0
-	numSrcs = len( srcList )
-	numTgts = len( tgtList )
-	increment = 100 / float( numSrcs )
+	timeList = keyframe( srcs, q=True, tc=True )
+	numSrcs = len( srcs )
+	numTgts = len( tgts )
 
 	#make sure the start time is smaller than the end time, and turn off autokey
-	start = min(start, end)
-	end = max(start, end)
+	start, end = sorted( [start, end] )
 
 	#sort the targets properly - we want the targets sorted heirarchically - but we also need to sort the source objects the exact same way
 	if sortByHeirarchy:
-		orderList = api.mel.zooGetHeirarchyLevels( tgtList )
-		srcList = api.mel.zooOrderArrayUsing_str( srcList, orderList )
-		tgtList = api.mel.zooOrderArrayUsing_str( tgtList, orderList )
+		sortByTgtHierarchy = [ (len( list( api.iterParents( t ) ) ), s, t) for s, t in zip( srcs, tgts ) ]
+		sortByTgtHierarchy.sort()
 
-	cmd.progressWindow(title="Trace in progress", progress=int( progress ), isInterruptable=True)
+		srcs, tgts = [], []
+		for n, s, t in sortByTgtHierarchy:
+			srcs.append( s )
+			tgts.append( t )
 
 	#if keys only is non-zero, the create an array with all key times
-	if keysOnly > 0:
-		timeList = set( timeList )
+	if traceMode:
 		timeList.sort()
+		timeList = removeDupes( timeList )
+
+	#if keys only is 2, this means trace only keys within a given time range - so crop the key time array to suit
+	if traceMode == TRACE_KEYFRAMES:
+		timeList = [ t for t in timeList if t >= start and t <= end ]
 
 	#if its not keys only, build a list of each frame to trace
-	if keysOnly == 0:
-		timeList = range(start, end+1)
-	#if keys only is 2, this means trace only keys within a given time range - so crop the key time array to suit
-	elif keysOnly == 2:
-		#timeList = api.mel.zooCropArray_float(timeList, start, end)
-		timeList = [t for t in set( timeList ) if start <= t <= end]
-		timeList.sort()
+	elif keysOnly == TRACE_ALL_FRAMES:
+		timeList = range( end - start + 1 )
 
 	#if there are no keys in the key list, issue a warning
-	try:
-		timeList[0]
-	except IndexError:
-		cmd.progressWindow(ep=True)
+	if not timeList:
 		print "no keys on source"
 		return
 
 	#match the rotation orders of the objects.
-	if matchRo:
-		for src, tgt in zip( srcList, tgtList ):
-			try:
-				cmd.setAttr( tgt +".ro", cmd.getAttr( src +".ro" ))
-			except RuntimeError: continue
+	if matchRotationOrder:
+		for src, tgt in zip( srcs, tgts ):
+			if isinstance( src, Transform ) and isinstance( tgt, Transform ):
+				tgt.ro.set( src.ro.get() )
 
 	#create an array with post cmd state
 	postCmds = []
-	for src, tgt in zip( srcList, tgtList ):
-		cmd = api.mel.zooGetPostTraceCmd( tgt )
-		if cmd:
-			postCmds.append( api.mel.zooPopulateCmdStr(tgt, cmd, [src]) )
+	for src, tgt in zip( srcs, tgts ):
+		cmd = mel.zooGetPostTraceCmd( tgt )
+		postCmds.append( mel.zooPopulateCmdStr( tgt, cmd, [src] ) )
 
-	for t in timeList:
-		if cmd.progressWindow(q=True, isCancelled=True):
-			break
-
-		cmd.currentTime(t)
-		for src, tgt, postCmd in zip( srcList, tgtList, postCmds ):
-			#update progress window
-			progress += increment
-			cmd.progressWindow(e=True, progress=int( progress ), status=tgt)
-
+	for i, t in enumerate( timeList ):
+		currentTime( t )
+		for src, tgt, postCmd in zip( srcs, tgts, postCmds ):
 			#if we're doing keys only, make sure there is a key on the current frame of the src object before doing the trace
-			didTrace = 0
-			if keysOnly:
-				if cmd.keyframe(src, t=t, q=True, kc=True):
-					traceTime( src, tgt, t, keysOnly, keysOnlyRotate )
-					didTrace = 1
+			didTrace = False
+			if traceMode:
+				if keyframe( src, t=(t,), q=True, kc=True ):
+					traceTime( src, tgt, t, traceMode, keysOnlyRotate )
+					didTrace = True
 
 			#otherwise, just do the trace
 			else:
 				traceTime( src, tgt, t, keysOnly, keysOnlyRotate )
-				didTrace = 1
+				didTrace = True
 
 			#execute any post trace commands on the tgt object
 			if processPostCmds and didTrace:
-				if postCmd != "":
-					try:
-						api.mel.eval( postCmd )
-					except:
-						print "the post trace command failed"
+				if postCmd:
+					#if( catch(eval($cmd))) warning "the post trace command failed";
+					pass
 
-	cmd.progressWindow(endProgress=True)
-
-
-transformAttrs_t = set([ "translateX", "translateY", "translateZ" ])
-transformAttrs_r = set([ "rotateX", "rotateY", "rotateZ" ])
-transformAttrs = transformAttrs_t.union( transformAttrs_r )
-def traceTime( src, tgt, time, keysOnly, keysOnlyRotate ):
+TRANSFORM_ATTRS = ('tx', 'ty', 'tz', 'rx', 'ry', 'rz')
+def traceTime( src, tgt, time, traceMode, keysOnlyRotate ):
 	'''
 	this proc snaps the target to the source object, and matches any attributes on the target to
 	corresponding attributes on the source if they exist. this proc is called for each object on each
@@ -284,42 +193,49 @@ def traceTime( src, tgt, time, keysOnly, keysOnlyRotate ):
 	keysOnlyRotate only creates keys on rotation channels if there is a key on the source rotation channel - if its on then
 	its possible that rotations won't be the same orientation
 	'''
-	align(src, tgt, False, False)
+	global AXES, TRANSFORM_ATTRS, Transform
 
-	#so now go and set a keyframe for the transform attributes that are keyed on the source object for this frame
-	if keysOnly:
-		for tAttr in transformAttrs_t:
-			if cmd.keyframe('%s.%s' % (src, tAttr), t=time, q=True, kc=True):
-				cmd.setKeyframe('%s.%s' % (tgt, tAttr))
+	attrsToTrace = listAttr( src, shortNames=True, keyable=True, visible=True, scalar=True, multi=True )
 
-		if keysOnlyRotate:
-			for rAttr in transformAttrs_r:
-				if cmd.keyframe('%s.%s' % (src, rAttr), t=time, q=True, kc=True):
-					cmd.setKeyframe('%s.%s' % (tgt, rAttr))
+	for attr in attrsToTrace:
+		#skip transform attributes
+		if attr in TRANSFORM_ATTRS:
+			continue
 
-		elif cmd.keyframe(src +'.r', t=time, q=True, kc=True):
-			for rAttr in transformAttrs_r:
-				cmd.setKeyframe('%s.%s' % (tgt, rAttr))
-
-	#if keysonly is off, then just set keys on all transform attrs
-	else:
-		cmd.setKeyframe( tgt +".t", tgt +".r" )
-
-	#remove all transform attrs from the list of keyable attrs...
-	attrs = set( cmd.listAttr(src, keyable=True, visible=True, scalar=True, multi=True) )
-	attrs = attrs.difference( transformAttrs )
-	for attr in attrs:
-		try:
-			tgtAttrpath = '%s.%s' % (tgt, attr)
-			if cmd.getAttr(tgtAttrpath, settable=True, keyable=True):
+		if tgt.hasAttr( attr ):
+			tgtAttr = tgt.attr( attr )
+			if tgtAttr.isSettable() and tgtAttr.isKeyable():
 				#if keysOnly is on, check to see if there is a key on the source attr
-				if keysOnly:
-					if cmd.keyframe('%s.%s' % (src, attr), q=True, kc=True):
-						cmd.setKeyframe(tgt, at=attr, v=cmd.getAttr( '%s.%s' % (src, attr)))
+				srcAttr = src.attr( attr )
+				if traceMode:
+					if keyframe( srcAttr, q=True, kc=True ):
+						setKeyframe( tgtAttr, v=srcAttr.get() )
+
 				#otherwise just set a key anyway
 				else:
-					cmd.setKeyframe(tgt, at=attr, v=cmd.getAttr( '%s.%s' % (src, attr)))
-		except: continue
+					setKeyframe( tgtAttr, v=srcAttr.get() )
+
+	if isinstance( src, Transform ) and isinstance( tgt, Transform ):
+		align( src, tgt )
+
+		#so now go and set a keyframe for the transform attributes that are keyed on the source object for this frame
+		if traceMode:
+			for ax in AXES:
+				if keyframe( src.attr( 't'+ ax ), t=(time,), q=True, kc=True ):
+					setKeyframe( tgt.attr( 't'+ ax ) )
+
+			if keysOnlyRotate:
+				for ax in AXES:
+					if keyframe( src.attr( 'r'+ ax ), t=(time,), q=True, kc=True ):
+						setKeyframe( tgt.attr( 'r'+ ax ) )
+
+			elif keyframe( src.r, t=(time,), q=True, kc=True ):
+				for ax in AXES:
+					setKeyframe( tgt.attr( 'r'+ ax ) )
+
+		#if traceMode is off, then just set keys on all transform attrs
+		else:
+			setKeyframe( tgt.t, tgt.r )
 
 
 #end
