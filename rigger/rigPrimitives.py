@@ -121,6 +121,9 @@ def buildContainer( typeClass, kwDict, nodes, controls ):
 	#and now hook up all the controls
 	controlNames = typeClass.CONTROL_NAMES or []  #CONTROL_NAMES can validly be None, so in this case just call it an empty list
 	for idx, control in enumerate( controls ):
+		if control is None:
+			continue
+
 		connectAttr( control.message, theContainer._rigPrimitive.controls[ idx ], f=True )
 		triggered.setKillState( control, True )
 
@@ -281,6 +284,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		newNodes, controls = getNodesCreatedBy( buildFunc, skeletonPart, **kw )
 		if cls.ADD_CONTROLS_TO_QSS:
 			for c in controls:
+				if c is None: continue
 				qss.add( c )
 
 
@@ -747,7 +751,7 @@ def ikFk( bicep, elbow, wrist, nameScheme=ARM_NAMING_SCHEME, alignEnd=True, **kw
 
 
 	### BUILD THE POLE CONTROL
-	polePos = api.mel.zooFindPolePosition( "-multiplier 5 -end %s" % str( driverLower ) )
+	polePos = mel.zooFindPolePosition( "-multiplier 5 -end %s" % str( driverLower ) )
 	poleControl = buildControl( "%s_poleControl%s" % (nameScheme[ 0 ], suffix), PlaceDesc( elbow, PlaceDesc.WORLD ), shapeDesc=ShapeDesc( 'sphere', None ), colour=colour, constrain=False, parent=worldControl, scale=scale*0.5 )
 	poleControlSpace = poleControl.getParent()
 	attrState( poleControlSpace, 'v', lock=False, show=True )
@@ -1191,6 +1195,7 @@ def ikFkArm( bicep, elbow, wrist, clavicle=None, stretchy=True, **kw ):
 		parent( fkArmSpace, clavControl )
 		attrState( clavControl, 't', *LOCK_HIDE )
 	else:
+		clavControl = None
 		parent( fkArmSpace, parentControl )
 
 
@@ -1439,8 +1444,11 @@ def ikFkLeg( thigh, knee, ankle, stretchy=True, **kw ):
 	ikHandle = ikFkPart.ikHandle
 	kneeControl = ikFkPart.poleControl
 	kneeControlSpace = kneeControl.getParent()
-	toe = listRelatives( ankle, type='joint' )[ 0 ]
+	toe = listRelatives( ankle, type='joint' ) or None
 	toeTip = None
+
+	if toe:
+		toe = toe[0]
 
 	fkControls = driverThigh, driverKnee, driverAnkle
 
@@ -1840,6 +1848,212 @@ def hand( bases, wrist=None, num=0, names=FINGER_IDX_NAMES, taper=0.8, **kw ):
 
 
 	return allCtrls
+
+
+
+class IkFkSpine(PrimaryRigPart):
+	__version__ = 0
+	SKELETON_PRIM_ASSOC = ( skeletonBuilderCore.Spine, skeletonBuilderCore.ArbitraryChain )
+	CONTROL_NAMES = 'control', 'poses', 'qss'
+
+	ADD_CONTROLS_TO_QSS = False
+
+	@classmethod
+	def _build( cls, skeletonPart, taper=0.8, **kw ):
+		worldPart = WorldPart.Create()
+		qss = worldPart.qss
+
+		controls = ikFkSpine( spineBase, spineEnd, taper=taper, **kw )
+		for c, n in zip( controls, cls.CONTROL_NAMES ):
+			qss.add( c )
+
+		return controls
+
+
+def ikFkSpine( spineBase, spineEnd, taper=0.8, **kw ):
+	if wrist is None:
+		wrist = bases[ 0 ].getParent()
+
+	scale = kw[ 'scale' ]
+
+	idx = kw[ 'idx' ]
+	parity = Parity( idx )
+	colour = ColourDesc( 'orange' )
+
+	suffix = parity.asName()
+	parityMult = parity.asMultiplier()
+
+	worldPart = WorldPart.Create()
+	partsControl = worldPart.parts
+	partParent, rootControl = getParentAndRootControl( bases[ 0 ] )
+
+
+	//------
+	//create the root and hips controls
+	//------
+		string $roots[] = `zooCSTBuildRoot $prefix $root ( "-hips "+ $hips +" -buildhips "+ $buildhips +" -scale "+ $scale +" -colour "+ $colour )`;
+		string $rootControl = $roots[0];
+		string $hipsControl = $roots[1];
+		string $rootSpace = $roots[2];
+		string $rootGimbal = $roots[3];
+
+		parent $rootSpace $worldControl;
+		parentConstraint -mo $rootControl $root;
+		if( `objExists $hipsControl` ) parentConstraint -mo $hipsControl $hips;
+
+
+	#find the names of relevant joints
+	joints = [ j for j in iterParents( spineEnd, spineBase ) ]
+		$joints = zooAddArray_str($joints, `zooGetInBTweenJoints $spineBase $spineEnd` );
+		$joints = `zooAddArray_str $joints { $spineBase }`;
+		$joints = `zooReverseArray_str $joints`;
+
+
+	#build the sub primitive
+	string $subPrim[] = `zooCSTBuildMPath $prefix $joints ""`;
+
+
+	//------
+	//build the controls
+	//------
+		$scale *= 1.25;  //increase the size of the spine controls - the global size is usually too small for the spine controls
+		string $axis = zooVectorAsAxis(`zooAxisInDirection $subPrim[2] {0.,0.,-1.}`);print( $axis +"\n" );
+
+		string $chestControl = `zooBuildControl ( $prefix + "_chestControl" ) ( "-type "+ $type +" -place "+ $subPrim[2] +" -align %p -orient 1 -axis "+ $axis +" -scale "+ (1.5*$scale) +" -colour "+ $colour )`;
+		string $chestSpace = zooGetElement_str(0,`listRelatives -p $chestControl`);// ( $prefix + "_chestSpace" ) ( "-type null -place "+ $subPrim[2] )`;
+		string $midControl = `zooBuildControl ( $prefix + "_spine_midControl" ) ( "-type "+ $type +" -place "+ $subPrim[1] +" -align %p -orient 1 -axis "+ $axis +" -scale "+ (1.5*$scale) +" -colour "+ $colour )`;
+		string $midSpace = zooGetElement_str(0,`listRelatives -p $midControl`);//`zooBuildControl ( $prefix + "_spine_midSpace" ) ( "-type null -place "+ $subPrim[1] )`;
+		string $baseControl = `zooBuildControl ( $prefix + "_baseControl" ) ( "-type "+ $type +" -place "+ $subPrim[0] +" -align %p -axis "+ $axis +" -scale "+ (1.5*$scale) +" -colour "+ $colour )`;
+
+		parent $baseControl $rootGimbal;
+		parent $midSpace $rootGimbal;
+		parent $chestSpace $midControl;
+		parentConstraint -mo $baseControl $subPrim[0];
+		parentConstraint -mo $midControl $subPrim[1];
+		parentConstraint -mo $chestControl $subPrim[2];
+
+		addAttr -at "float" -ln affect -min 0 -max 5 -dv 1 $rootControl;
+		addAttr -at "float" -ln affect -min 0 -max 5 -dv 1 $midControl;
+		addAttr -at "float" -ln affect -min 0 -max 5 -dv 1 $chestControl;
+
+		//setAttr -k 1 ( $rootControl +".affect" );
+		//setAttr -k 1 ( $midControl +".affect" );
+		//setAttr -k 1 ( $chestControl +".affect" );
+		//setAttr ( $baseControl +".v" ) 0;
+		connectAttr -f ( $rootControl +".affect" ) ( $subPrim[0] +".scaleX" );
+		connectAttr -f ( $rootControl +".affect" ) ( $subPrim[0] +".scaleY" );
+		connectAttr -f ( $rootControl +".affect" ) ( $subPrim[0] +".scaleZ" );
+		connectAttr -f ( $midControl +".affect" ) ( $subPrim[1] +".scaleX" );
+		connectAttr -f ( $midControl +".affect" ) ( $subPrim[1] +".scaleY" );
+		connectAttr -f ( $midControl +".affect" ) ( $subPrim[1] +".scaleZ" );
+		connectAttr -f ( $chestControl +".affect" ) ( $subPrim[2] +".scaleX" );
+		connectAttr -f ( $chestControl +".affect" ) ( $subPrim[2] +".scaleY" );
+		connectAttr -f ( $chestControl +".affect" ) ( $subPrim[2] +".scaleZ" );
+
+
+	//------
+	//add right click menu to turn on extra spine base control
+	//------
+		int $spineConnects[] = {};
+		int $cmdANum = `zooObjMenuAddCmd $rootControl`;
+		int $cmdBNum = `zooObjMenuAddCmd $rootControl`;
+		int $baseConnectIdx = `zooAddConnect $rootControl $baseControl`;
+		string $cmdAStr =  "int $vis = !`getAttr %"+ $baseConnectIdx +".v`;\nsetAttr %"+ $baseConnectIdx +".v $vis;";
+
+		for( $n=0; $n<`size $joints`; $n++ ) $spineConnects[$n] = `zooAddConnect $rootControl $joints[$n]`;
+		string $cmdBStr = "zooLineOfAction;\nzooLineOfAction_multi { \"%"+ `zooArrayToStr_int $spineConnects "\", \"%"` +"\" } \"\";";
+		zooSetObjMenuCmdName $rootControl "toggle base rotation control" $cmdANum;
+		zooSetObjMenuCmdName $rootControl "draw line of action" $cmdBNum;
+		zooSetObjMenuCmdStr $rootControl $cmdAStr $cmdANum;
+		zooSetObjMenuCmdStr $rootControl $cmdBStr $cmdBNum;
+
+
+	//------
+	//build space switching expressions
+	//------
+		string $chestParents[] = { $midControl, $baseControl, $worldControl };
+		string $midParents[] = { $baseControl, $worldControl };
+		string $spaceNodes[] = {};
+
+		if( `size $parents` ) $chestParents = `zooAddArray_str $chestParents $parents`;
+		if( `size $parents` ) $midParents = `zooAddArray_str $midParents $parents`;
+		if( $spaceswitching ) {
+			$spaceNodes = `zooBuildSpaceSwitch $chestControl $chestSpace $chestParents { "parent", "root", "world" } "-mo"`;
+			$spaceNodes = `zooBuildSpaceSwitch $midControl $midSpace $midParents { "parent", "world" } "-mo"`;
+			}
+
+
+	//------
+	//build pickwalking if required
+	//------
+		if( $pickwalking ) {
+			zooPickwalk "-load";
+			zooSetPickwalkObj $rootControl $worldControl "-dir up -reciprocal 1";
+			zooSetPickwalkObj $rootControl $midControl "-dir down -reciprocal 1";
+			zooSetPickwalkObj $baseControl $midControl "-dir down -reciprocal 0";
+			zooSetPickwalkObj $baseControl $rootControl "-dir up -reciprocal 0";
+			zooSetPickwalkObj $midControl $chestControl "-dir down -reciprocal 1";
+			}
+
+
+	//------
+	//now cleanup the top level
+	//------
+		//     deform1     deform2     deform3     basecurve   curve
+		parent $subPrim[0] $subPrim[1] $subPrim[2] $subPrim[3] $subPrim[4] $partsControl;
+		for( $n=6; $n<`size $subPrim`; $n++ ) {
+			if( !`objExists $subPrim[$n]` ) continue;
+			if( `nodeType $subPrim[$n]` != "transform" ) break;
+			parent $subPrim[$n] $partsControl;
+			}
+
+
+	//------
+	//turn unwanted transforms off, so that they are locked, and no longer keyable
+	//------
+		string $controllers[] = { $rootControl, $baseControl, $midControl, $chestControl };
+		if( $buildhips ) $controllers[( `size $controllers` )] = $hipsControl;
+		for( $obj in $controllers ) zooAttrState "-attrs s -k 0 -l 1" $obj;
+		for( $obj in $controllers ) zooAttrState "-attrs v -k 0" $obj;
+		zooAttrState "-attrs t -k 0 -l 1" $baseControl;
+
+
+	//------
+	//tidy up
+	//------
+		for( $n=0; $n<5; $n++ ) setAttr ( $subPrim[$n] +".v" ) 0;
+		for( $n=6; $n<`size $subPrim`; $n++ ) zooAttrState "-attrs t r s v -k 0 -l 1" $subPrim[$n];
+
+
+	//------
+	//add the controls to the qss
+	//------
+		for( $obj in $controllers ) sets -add $qss $obj;
+
+
+	//------
+	//build the primitive record
+	//------
+		string $id = `zooCSTGetPrimId ikSpine "" $prefix`;
+		string $primitive = `zooCSTCreatePrimRecord ikSpine $id $prefix`;
+		zooCSTRegisterInput $spineBase $primitive;
+		zooCSTRegisterInput $spineEnd $primitive;
+		zooCSTPrimOutputs { $chestSpace, $midSpace } $primitive;
+		zooCSTPrimOutputs $spaceNodes $primitive;
+		zooCSTPrimOutputs $subPrim $primitive;
+		zooBrandObject options $optionStr $primitive;
+		zooBrandObject version "5" $primitive;
+		zooBrandObject chest $prefix $chestControl;
+		for( $obj in $controllers ) zooCSTRegisterControl $obj $primitive;
+
+		zooCSTUtilsRigVis -h;
+		for( $n=0; $n<`size $controllers`; $n++ ) $controllers[$n] = `zooRenamerFunctions replace "[0-9]+$" "" $controllers[$n]`;
+		select $controllers[2];
+
+	return $controllers;
+
+
+
 
 
 #now populate the

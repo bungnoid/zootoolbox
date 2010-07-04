@@ -246,6 +246,23 @@ def sortByHierarchy( objs ):
 	return [ o[ 1 ] for o in sortedObjs ]
 
 
+def getTopMostNodes( objs ):
+	'''
+	returns a list of the top most objects who don't have parents in the given list of objects
+	'''
+	topObjs = []
+
+	objsSet = set( objs )
+	for obj in objs:
+		objParent = obj.getParent()
+		if objParent in objsSet:
+			continue
+
+		topObjs.append( obj )
+
+	return topObjs
+
+
 def pyArgToMelArg(arg):
 	#given a python arg, this method will attempt to convert it to a mel arg string
 	if isinstance(arg, basestring): return '"%s"' % cmd.encodeString(arg)
@@ -454,125 +471,6 @@ def checkIfp4Edit( sceneName ):
 
 		if ans == "Yes" or ans == "always":
 			sceneName.edit()
-
-
-def importSmdAnimationAndSkeleton( smdFilepath, namespace=None, startTime=0, angles=(-90, 0, 0) ):
-	'''
-	imports animation from an smd file without the need for a reference skeleton - just take note
-	that in general smd animation data contains a crap load of junk...  so the skeletons built by
-	this procedure are a lot more verbose.  sometimes this is desireable of course...
-
-	the top nodes that are created are returned
-	'''
-	smdFilepath = Path( smdFilepath )
-
-	fHandle = open( smdFilepath )
-	lineIter = iter( fHandle )
-
-	if namespace is None:
-		namespace = ''
-	else:
-		if not cmd.namespace( exists=namespace ):
-			namespace = cmd.namespace( addNamespace=namespace )
-
-		namespace = namespace +':'
-
-	skelDict = {}
-	prefix = ''
-	try:
-		while True:
-			line = lineIter.next().strip()
-			if line == 'nodes':
-				while True:
-					line = lineIter.next().strip()
-					if line == 'end':
-						raise BreakException
-
-					idx, name, parentIdx = line.split( ' ' )
-					idx = int( idx )
-					parentIdx = int( parentIdx )
-					name = name.replace( '"', '' )
-
-					#build the actual joint and store its name in the dict - we parent them later
-					cmd.select( cl=True )
-					nameToks = name.split( "." )
-					if len( nameToks ) > 1:
-						prefix = nameToks[ 0 ]
-
-					name = namespace + nameToks[ -1 ]
-					joint = cmd.joint( name=name )
-
-					skelDict[ idx ] = joint, parentIdx
-	except StopIteration:
-		melError( "EOF reached unexpectedly - attempting to build skeleton with data obtained thus far" )
-	except BreakException:
-		pass
-
-
-	#build the skeleton
-	for idx, (joint, parentIdx) in skelDict.iteritems():
-		if parentIdx < 0:
-			continue
-
-		parent, grandParentIdx = skelDict[ parentIdx ]
-		cmd.parent( joint, parent )
-
-
-	#turn the skeleton dict into a list
-	joints = []
-
-	jointIdxs = range( len( skelDict ) )
-	for idx in jointIdxs:
-		joints.append( skelDict[ idx ][ 0 ] )
-
-	times = []
-	attrs = 'tx', 'ty', 'tz', 'rx', 'ry', 'rz'
-	degrees = math.degrees
-	try:
-		while True:
-			line = lineIter.next().strip()
-			if line.startswith( 'skeleton' ):
-				while True:
-					line = lineIter.next().strip()
-					while not line.startswith( 'time' ):
-						line = lineIter.next().strip()
-
-					time = int( line.split()[ -1 ] ) + startTime
-					times.append( time )
-					for idx in jointIdxs:
-						line = lineIter.next().strip()
-						toks = line.split()
-						assert idx == int( toks[ 0 ] )
-						toks = list( map( float, toks[ 1: ] ) )
-						transRot = toks[ :3 ] + list( map( degrees, toks[ 3: ] ) )
-
-						for attr, value in zip( attrs, transRot ):
-							cmd.setKeyframe( joints[ idx ], time=time, attribute=attr, value=value )
-	except StopIteration: pass
-	finally:
-		fHandle.close()
-
-
-	#set initial time ranges
-	numFrames = len( times ) - 1 + startTime
-	cmd.playbackOptions( e=True, min=startTime, animationStartTime=startTime, max=numFrames, animationEndTime=numFrames )
-
-
-	#get the list of joints that have no parents and perform the rotation correction
-	topNodes = [ joint for idx, (joint, parentIdx) in skelDict.iteritems() if parentIdx < 0 ]
-	rotCorrectionGrp = cmd.group( empty=True, name=namespace + smdFilepath.name() )
-	for j in topNodes:
-		cmd.parent( j, rotCorrectionGrp )
-
-	cmd.setAttr( '%s.r' % rotCorrectionGrp, *angles )
-	#for time in times:
-		#cmd.currentTime( time )
-		#for j in topNodes:
-			#cmd.rotate( angles[ 0 ], angles[ 1 ], angles[ 2 ], j, r=True, ws=True, pivot=(0, 0, 0) )
-			#cmd.setKeyframe( j, at=attrs )
-
-
-	return joints
 
 
 #there are here to follow the convention specified in the filesystem writeExportDict method
@@ -833,7 +731,7 @@ def addPerforceMenuItems( filepath, **kwargs ):
 	def doReload():
 		if thisScene in files:
 			ans = cmd.confirmDialog( m="Do you want to reload the file?", b=("Yes", "No"), db="No" )
-			if ans == "Yes": cmd.file( thisScene, f=True, o=True )
+			if ans == "Yes": cmd.file( thisScene, f=True, o=True, ignoreVersion=True )
 
 	if exists:
 		if isManaged:
@@ -849,44 +747,42 @@ def addPerforceMenuItems( filepath, **kwargs ):
 				isEdit = True
 
 			headRev, haveRev = int(status.get('headRev', 0)), int(status.get('haveRev', 0))
-			def onEdit(*x):
-				p4 = P4Data()
-				for f in files: p4.edit(f)
-			cmd.menuItem( l='Open for Add' if headRev==0 else 'Open for Edit', cb=isEdit, c=onEdit, ann='open the file for add')
 
-			def onSync(*x):
+
+			def onRevert(*x):
 				p4 = P4Data()
-				for f in files: p4.sync(f)
+				for f in files: p4.revert(f)
 				doReload()
-			cmd.menuItem(en=headRev!=haveRev, l='Sync %s/%s' % (haveRev, headRev), c=onSync, ann='sync to the head revision for this file')
+			otherStr = ''
+			if isEdit:
+				if headRev==0: otherStr = ' (Open for Add)'
+				else: otherStr = ' (Open for Edit)'
+			if isEdit:
+				cmd.menuItem( l='Revert%s' % otherStr, c=onRevert, ann='open the file for add')
+
 
 			#build the previous revisions menu if desired
 			if DEF_SHOW_PREV and headRev>1:
-				cmd.menuItem(l='Sync to previous...', sm=True, ann='sync to a previous revision for this file')
-				num = min( headRev - 1, kwargs.get( 'numPrev', DEF_NUM_PREV ) )
+				cmd.menuItem(l='Sync to...', sm=True, ann='sync to a previous revision for this file')
+				num = min( headRev, kwargs.get( 'numPrev', DEF_NUM_PREV ) )
 				for n in range( num ):
-					nRev = headRev - n - 1
+					nRev = headRev - n
 					def onSyncRev( files, rev ):
 						p4 = P4File()
 						for f in files: p4.sync( f, rev=rev )
 						doReload()
-					cmd.menuItem(cb=haveRev==nRev, l='Sync to rev %s' % nRev, c=Callback(onSyncRev, files, nRev), ann='sync to revision %s' % nRev)
+					cmd.menuItem(cb=haveRev==nRev, l='Sync to rev %s/%s' % (nRev, headRev), c=Callback(onSyncRev, files, nRev), ann='sync to revision %s of %s' % (nRev, headRev))
 				cmd.menuItem(d=True)
 
 				def onSyncRev(*x):
 					ans, num = doPrompt(t='Enter revision number', m='Enter revision number', db=OK)
-					if ans == DB and num:
+					if ans == OK and num:
 						p4 = P4Data()
 						for f in files: p4.sync(f, rev=num)
 						doReload()
 				cmd.menuItem(l='Sync to rev...', c=onSyncRev, ann='opens a window for you to specify which revision to sync to')
 				cmd.setParent('..', m=True)
 
-			def onRevert(*x):
-				p4 = P4Data()
-				for f in files: p4.revert(f)
-				doReload()
-			cmd.menuItem(en=isEdit, l='Revert', c=onRevert, ann='revert all changes')
 		elif p4.isUnderClient():
 			def onAdd(*x):
 				p4 = P4Data()
@@ -912,16 +808,7 @@ def addExploreToMenuItems( filepath ):
 
 	cmd.menuItem(l="Explore to location...", c=lambda x: mel.zooExploreTo( filepath ), ann='open an explorer window to the location of this file/directory')
 
-	gameLoc = Path()
-	if filepath.isUnder( content() ):
-		gameLoc = game() / (filepath - content())
-		gameLoc = gameLoc.getClosestExisting()
-
-	if gameLoc.exists:
-		cmd.menuItem(l="Explore to corresponding game location...", c=lambda x: mel.zooExploreTo( gameLoc ), ann='open an explorer window to the location of this file/directory')
-
 	cmd.menuItem(l="CMD prompt to location...", c=lambda x: mel.zooCmdTo( filepath ), ann='open a command prompt to the location of this directory')
-	cmd.menuItem(l="Perforce to location...", c=lambda x: mel.openp4At( filepath ), ann='open p4win to the location of this file/directory')
 
 
 def p4buildMenu( parent, file=None ):

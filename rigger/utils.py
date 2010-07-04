@@ -160,7 +160,7 @@ def betweenVector( obj1, obj2 ):
 
 
 def getAimVector( obj ):
-	children = cmd.listRelatives(obj, path=True, typ='transform')
+	children = cmd.listRelatives( obj, path=True, typ='transform' ) or []
 	if len( children ) == 1:
 		return betweenVector(obj, children[0])
 	else:
@@ -398,31 +398,31 @@ def resetSkinCluster( skinCluster ):
 	splats the current pose of the skeleton into the skinCluster - ie whatever
 	the current pose is becomes the bindpose
 	'''
-	nInf = len( listConnections( skinCluster.matrix, destination=False ) )
-	for n in range( nInf ):
-		try:
-			cons = listConnections( skinCluster.matrix[ n ], destination=False )
-			slotNJoint = cons[ 0 ]
-		except IndexError: continue
 
-		matrixAsStr = ' '.join( map( str, cmd.getAttr( '%s.worldInverseMatrix' % slotNJoint ) ) )
-		melStr = 'setAttr -type "matrix" %s.bindPreMatrix[ %d ] %s' % (skinCluster, n, matrixAsStr)
+	skinInputMatrices = listConnections( skinCluster.matrix, plugs=True, connections=True, destination=False )
+
+	#get a list of dag pose nodes connected to the skin cluster
+	dagPoseNodes = listConnections( skinCluster, d=False, type='dagPose' )
+
+	for dest, src in skinInputMatrices:
+		matrixAsStr = ' '.join( map( str, cmd.getAttr( '%s.worldInverseMatrix' % src.node() ) ) )
+		melStr = 'setAttr -type "matrix" %s.bindPreMatrix[ %d ] %s' % (skinCluster, dest.index(), matrixAsStr)
 		mel.eval( melStr )
 
 		#reset the stored pose in any dagposes that are conn
-		for dPose in listConnections( skinCluster, d=False, type='dagPose' ):
-			dagPose( slotNJoint, reset=True, n=dPose )
+		for dPose in dagPoseNodes:
+			dagPose( src.node(), reset=True, n=dPose )
 
 
 def enableSkinClusters():
 	for c in ls( type='skinCluster' ):
 		resetSkinCluster( c )
-		c.nodeState = 0
+		c.nodeState.set( 0 )
 
 
 def disableSkinClusters():
 	for c in ls( type='skinCluster' ):
-		c.nodeState = 1
+		c.nodeState.set( 1 )
 
 
 def getSkinClusterEnableState():

@@ -11,8 +11,10 @@ class PresetForm(MelForm):
 	ALLOW_MULTI_SELECTION = True
 
 	def __new__( cls, parent, *a, **kw ):
-		return BaseMelWidget.__new__( cls, parent )
+		return MelForm.__new__( cls, parent )
 	def __init__( self, parent, tool, locale=LOCAL, ext=DEFAULT_XTN ):
+		MelForm.__init__( self, parent )
+
 		self.tool = tool
 		self.locale = locale
 		self.ext = ext
@@ -114,7 +116,8 @@ class PresetForm(MelForm):
 			return selected
 		except TypeError: return []
 	def getSelectedPresetNames( self ):
-		selected = cmd.textScrollList( self.UI_tsl_presets, q=True, si=True)
+		selected = cmd.textScrollList( self.UI_tsl_presets, q=True, si=True ) or []
+		return [ Path( s ).name() for s in selected ]
 	def getSelectedPresetName( self ):
 		try: return self.getSelectedPresetNames()[ 0 ]
 		except IndexError:

@@ -6,13 +6,28 @@ import api
 import presetsUI
 
 
-TOOL_NAME = 'zoo'
+TOOL_NAME = 'valve'
 TOOL_VER = 1
 EXT = 'mapping'
 ui = None
 
 
-class MappingForm(MelForm):
+def findItem( itemName, knownNamespace=None ):
+	itemName = str( itemName )
+	if cmd.objExists( itemName ):
+		return itemName
+
+	if knownNamespace is None:
+		knownNamespace = '*'
+
+	match = names.matchNames( [ itemName ], cmd.ls( knownNamespace, r=True, typ='transform' ) )[ 0 ]
+	if match:
+		return match
+
+	return None
+
+
+class MappingForm(BaseMelWidget):
 	'''
 	Acts as a generic UI for editing "mappings".  A mapping is basically just a dictionaries in maya,
 	but they're used for things like animation transfer and weight transfer between one or more
@@ -21,12 +36,17 @@ class MappingForm(MelForm):
 	Mappings can be stored out to presets.
 	'''
 
+	WIDGET_CMD = cmd.formLayout
+
 	#args for controlling the name mapping algorithm - see the names.matchNames method for documentation on what these variables actually control
 	STRIP_NAMESPACES = True
 	PARITY_MATCH = True
 	UNIQUE_MATCHING = False
 	MATCH_OPPOSITE_PARITY = False
 	THRESHOLD = names.DEFAULT_THRESHOLD
+
+	#defines whether namespaces are hidden from the list view of the data - defaults to True.  the namespaces are still stored, they just aren't displayed
+	HIDE_NAMESPACES = True
 
 	#if this is set to True, then sources can be mapped to multiple targets
 	ALLOW_MULTIPLE_TGTS = True
@@ -47,28 +67,48 @@ class MappingForm(MelForm):
 		cmd.popupMenu( p=self.UI_tgtButton, b=1, pmc=self.build_tgtMenu )
 
 		cmd.setParent( self )
-		self.UI_tsl_src = cmd.textScrollList( sc=self.on_selectItemSrc, allowMultiSelection=False, deleteKeyCommand=self.on_delete, doubleClickCommand=self.on_selectSrc )
-		self.UI_tsl_tgt = cmd.textScrollList( sc=self.on_selectItemTgt, allowMultiSelection=self.ALLOW_MULTIPLE_TGTS, deleteKeyCommand=self.on_delete, doubleClickCommand=self.on_selectTgt )
 
-		cmd.popupMenu( p=self.UI_tsl_src, pmc=self.build_srcMenu )
-		cmd.popupMenu( p=self.UI_tsl_tgt, pmc=self.build_tgtMenu )
+		self.UI_but_srcUp = MelButton( self, label='up', vis=True, width=15, c=self.on_src_up )
+		self.UI_but_srcDn = MelButton( self, label='dn', vis=True, width=15, c=self.on_src_dn )
+		self.UI_srcs = MelObjectScrollList( self, deleteKeyCommand=self.on_delete, doubleClickCommand=self.on_selectSrc )
+		self.UI_srcs.setChangeCB( self.on_selectItemSrc )
+
+		self.UI_but_tgtUp = MelButton( self, label='up', vis=False, width=1, c=self.on_tgt_up )
+		self.UI_but_tgtDn = MelButton( self, label='dn', vis=False, width=1, c=self.on_tgt_dn )
+		self.UI_tgts = MelObjectScrollList( self, deleteKeyCommand=self.on_delete, doubleClickCommand=self.on_selectTgt, ams=True )
+		self.UI_tgts.setChangeCB( self.on_selectItemTgt )
+
+		MelPopupMenu( self.UI_srcs, pmc=self.build_srcMenu )
+		MelPopupMenu( self.UI_tgts, pmc=self.build_tgtMenu )
 
 		cmd.formLayout( self, e=True,
 						af=((self.UI_srcButton, "top", 0),
 							(self.UI_srcButton, "left", 0),
 							(self.UI_tgtButton, "top", 0),
 							(self.UI_tgtButton, "right", 0),
-							(self.UI_tsl_src, "left", 2),
-							(self.UI_tsl_src, "bottom", 2),
-							(self.UI_tsl_tgt, "top", 3),
-							(self.UI_tsl_tgt, "right", 2),
-							(self.UI_tsl_tgt, "bottom", 2)),
-						ap=((self.UI_tsl_src, "right", 1, 50),
+		                    (self.UI_but_srcUp, "left", 0),
+		                    (self.UI_but_srcDn, "left", 0),
+		                    (self.UI_but_srcDn, "bottom", 0),
+							(self.UI_srcs, "bottom", 2),
+							(self.UI_tgts, "top", 3),
+							(self.UI_tgts, "bottom", 2),
+		                    (self.UI_but_tgtUp, "right", 0),
+		                    (self.UI_but_tgtDn, "right", 0),
+		                    (self.UI_but_tgtDn, "bottom", 0)),
+						ap=((self.UI_srcs, "right", 1, 50),
 							(self.UI_srcButton, "right", 1, 50),
-							(self.UI_tsl_tgt, "left", 1, 50),
-							(self.UI_tgtButton, "left", 1, 50)),
-						ac=((self.UI_tsl_src, "top", 3, self.UI_srcButton),
-							(self.UI_tsl_tgt, "top", 3, self.UI_tgtButton)) )
+		                    (self.UI_but_srcUp, "bottom", 0, 50),
+		                    (self.UI_but_srcDn, "top", 0, 50),
+							(self.UI_tgts, "left", 1, 50),
+							(self.UI_tgtButton, "left", 1, 50),
+		                    (self.UI_but_tgtUp, "bottom", 0, 50),
+		                    (self.UI_but_tgtDn, "top", 0, 50)),
+						ac=((self.UI_srcs, "top", 3, self.UI_srcButton),
+		                    (self.UI_but_srcUp, "top", 0, self.UI_srcButton),
+		                    (self.UI_but_tgtUp, "top", 0, self.UI_tgtButton),
+		                    (self.UI_srcs, "left", 3, self.UI_but_srcUp),
+							(self.UI_tgts, "top", 3, self.UI_tgtButton),
+		                    (self.UI_tgts, "right", 3, self.UI_but_tgtUp)) )
 
 		if srcItems is not None:
 			self.addSrcItems( srcItems )
@@ -77,18 +117,10 @@ class MappingForm(MelForm):
 			self.addTgtItems( tgtItems )
 	@property
 	def srcs( self ):
-		srcs = cmd.textScrollList( self.UI_tsl_src, q=True, ai=True )
-		if srcs is None:
-			return []
-
-		return srcs
+		return self.UI_srcs.getItems()
 	@property
 	def tgts( self ):
-		tgts = cmd.textScrollList( self.UI_tsl_tgt, q=True, ai=True )
-		if tgts is None:
-			return []
-
-		return tgts
+		return self.UI_tgts.getItems()
 	def getUnmappedSrcs( self ):
 		return list( set( self.srcs ).difference( self.getMapping().srcs ) )
 	def getUnmappedTgts( self ):
@@ -110,10 +142,10 @@ class MappingForm(MelForm):
 		returns the name of the src item selected.  None if nothing is selected
 		'''
 		try:
-			return cmd.textScrollList( self.UI_tsl_src, q=True, selectItem=True )[ 0 ]
-		except TypeError: return None
+			return self.UI_srcs.getSelectedItems()[ 0 ]
+		except IndexError: return None
 	def getSelectedTgts( self ):
-		return cmd.textScrollList( self.UI_tsl_tgt, q=True, selectItem=True )
+		return self.UI_tgts.getSelectedItems()
 	def mapSrcItem( self, src ):
 		self._srcToTgtDict[ src ] = names.matchNames( [ src ], self.tgts, self.STRIP_NAMESPACES, self.PARITY_MATCH, self.UNIQUE_MATCHING, self.MATCH_OPPOSITE_PARITY, self.THRESHOLD )
 	def mapAllSrcItems( self ):
@@ -121,24 +153,20 @@ class MappingForm(MelForm):
 			self.mapSrcItem( src )
 	def addSrcItems( self, items ):
 		if items:
-			cmd.textScrollList( self.UI_tsl_src, e=True, append=list( sorted( items ) ) )
+			self.UI_srcs.appendItems( list( sorted( items ) ) )
 			for i in items:
 				self.mapSrcItem( i )
 	def replaceSrcItems( self, items ):
-		cmd.textScrollList( self.UI_tsl_src, e=True, ra=True )
+		self.UI_tgts.clear()
 		self.addSrcItems( items )
 	def addTgtItems( self, items ):
-		performMapping = cmd.textScrollList( self.UI_tsl_tgt, q=True, allItems=True ) is None
 		if items:
-			cmd.textScrollList( self.UI_tsl_tgt, e=True, append=items )
+			self.UI_tgts.appendItems( items )
+
+			performMapping = bool( self.UI_tgts.getItems() )
 			if performMapping:
 				self.mapAllSrcItems()
 	def refresh( self ):
-		#remove all items
-		cmd.textScrollList( self.UI_tsl_src, e=True, ra=True )
-		cmd.textScrollList( self.UI_tsl_tgt, e=True, ra=True )
-
-		#add the data to the UI
 		theSrcs = []
 		theTgts = []
 		for src in sorted( self._srcToTgtDict.keys() ):
@@ -148,8 +176,8 @@ class MappingForm(MelForm):
 		theSrcs = utils.removeDupes( theSrcs )
 		theTgts = utils.removeDupes( theTgts )
 
-		cmd.textScrollList( self.UI_tsl_src, e=True, append=theSrcs )
-		cmd.textScrollList( self.UI_tsl_tgt, e=True, append=theTgts )
+		self.UI_srcs.setItems( theSrcs )
+		self.UI_tgts.setItems( theTgts )
 	def saveMappingToFile( self, filepath ):
 		filepath = Path( filepath ).setExtension( EXT )
 		filedata = api.writeExportDict( TOOL_NAME, TOOL_VER ), self.getMapping()
@@ -178,10 +206,9 @@ class MappingForm(MelForm):
 
 		cmd.menuItem( l='Add Selected Objects', c=self.on_addSrc )
 		cmd.menuItem( l='Replace With Selected Objects', c=self.on_replaceSrc )
-		cmd.menuItem( d=True)
-		cmd.menuItem( l='Edit Name', c=self.on_editSrcItem )
-		cmd.menuItem( l='Edit All Names', c=self.on_editSrcItems )
-		cmd.menuItem( d=True)
+		cmd.menuItem( d=True )
+		cmd.menuItem( l='Remove Highlighted Item', c=self.on_removeSrcItem )
+		cmd.menuItem( d=True )
 		cmd.menuItem( l='Select All Objects', c=self.on_selectAllSrc )
 		cmd.menuItem( d=True )
 		cmd.menuItem( l='Save Mapping...', c=self.on_saveMapping )
@@ -206,53 +233,29 @@ class MappingForm(MelForm):
 
 		cmd.menuItem( l='Add Selected Objects', c=self.on_addTgt )
 		cmd.menuItem( l='Replace With Selected Objects', c=self.on_replaceTgt )
-		cmd.menuItem( d=True)
+		cmd.menuItem( d=True )
 		cmd.menuItem( l='Select All Objects', c=self.on_selectAllTgt )
 		cmd.menuItem( l='Select Highlighted Objects', c=self.on_selectTgt )
+		cmd.menuItem( d=True )
+		cmd.menuItem( l='Remove Highlighted Items', c=self.on_removeTgtItem )
 		cmd.menuItem( d=True)
 		cmd.menuItem( l='Swap Mapping', c=self.on_swap )
 
 	### EVENT CALLBACKS ###
 	def on_selectAllSrc( self, *a ):
 		cmd.select( cl=True )
-		for s in cmd.textScrollList( self.UI_tsl_src, q=True, ai=True ):
+		for s in self.UI_srcs.getItems():
+			s = str( s )
 			if cmd.objExists( s ):
 				cmd.select( s, add=True )
 	def on_selectAllTgt( self, *a ):
 		cmd.select( cl=True )
-		for t in cmd.textScrollList( self.UI_tsl_tgt, q=True, ai=True ):
+		for t in self.UI_tgts.getItems():
+			t = str( t )
 			if cmd.objExists( t ):
 				cmd.select( t, add=True )
-	def on_editSrcItem( self, *a ):
-		src = self.getSelectedSrc()
-		if not src:
-			return
-
-		selectedItemIdx = cmd.textScrollList( self.UI_tsl_src, q=True, selectIndexedItem=True )[ 0 ]
-
-		bOK, bCANCEL = 'OK', 'Cancel'
-		ret = cmd.promptDialog( t="Enter New Name", m="Enter a new item name", tx=src, b=(bOK, bCANCEL), db=bOK )
-		if ret == bOK:
-			newName = cmd.promptDialog( q=True, tx=True )
-			value = self._srcToTgtDict.pop( src )
-			self._srcToTgtDict[ newName ] = value
-
-			cmd.textScrollList( self.UI_tsl_src, e=True, removeIndexedItem=selectedItemIdx )
-			cmd.textScrollList( self.UI_tsl_src, e=True, appendPosition=(selectedItemIdx, newName) )
-	def on_editSrcItems( self, *a ):
-		bOK, bCANCEL = 'OK', 'Cancel'
-		ret = cmd.promptDialog( t="Enter New Names", m="Enter a new item name template (%s to insert old name)", tx='%s', b=(bOK, bCANCEL), db=bOK )
-		if ret == bOK:
-			newNameTemplate = cmd.promptDialog( q=True, tx=True )
-			oldNames = self._srcToTgtDict.keys()
-			for oldName in oldNames:
-				newName = newNameTemplate % oldName
-				value = self._srcToTgtDict.pop( oldName )
-				self._srcToTgtDict[ newName ] = value
-
-		self.refresh()
 	def on_selectItemSrc( self, *a ):
-		cmd.textScrollList( self.UI_tsl_tgt, e=True, deselectAll=True )
+		self.UI_tgts.clearSelection()
 		src = self.getSelectedSrc()
 		if src:
 			try: tgts = self._srcToTgtDict[ src ]
@@ -260,29 +263,39 @@ class MappingForm(MelForm):
 				return
 
 			for t in tgts:
-				if t: cmd.textScrollList( self.UI_tsl_tgt, e=True, si=t )
+				if t: self.UI_tgts.selectByValue( t )
 	def on_addSrc( self, *a ):
 		self.addSrcItems( cmd.ls( sl=True ) )
 	def on_replaceSrc( self, *a ):
 		self._srcToTgtDict = {}
-		cmd.textScrollList( self.UI_tsl_src, e=True, ra=True )
+		self.UI_srcs.clear()
 		self.on_addSrc()
+	def on_removeSrcItem( self, *a ):
+		sel = self.getSelectedSrc()
+		try:
+			self._srcToTgtDict.pop( sel )
+		except KeyError: pass
+
+		try:
+			self.UI_srcs.removeByValue( sel )
+		except IndexError: pass
 	def on_selectSrc( self, *a ):
 		src = self.getSelectedSrc()
 		if src:
 			#if the object doesnt' exist in teh scene - try to find it
-			if not cmd.objExists( src ):
-				src = names.matchNames( [ src ], cmd.ls( typ='transform' ) )[ 0 ]
-
-			if cmd.objExists( src ):
+			src = findItem( src )
+			if src is not None:
 				cmd.select( src )
+	def on_src_up( self, *a ):
+		self.UI_srcs.moveSelectedItemsUp()
+	def on_src_dn( self, *a ):
+		self.UI_srcs.moveSelectedItemsDown()
 	def on_selectItemTgt( self, *a ):
 		src = self.getSelectedSrc()
 		if src:
-			tgts = cmd.textScrollList( self.UI_tsl_tgt, q=True, si=True )
-			self._srcToTgtDict[ src ] = tgts
+			self._srcToTgtDict[ src ] = self.UI_tgts.getSelectedItems()
 		else:
-			cmd.textScrollList( self.UI_tsl_tgt, e=True, deselectAll=True )
+			self.UI_tgts.clearSelection()
 	def on_delete( self, *a ):
 		src = self.getSelectedSrc()
 		if src:
@@ -292,23 +305,33 @@ class MappingForm(MelForm):
 		self.addTgtItems( cmd.ls( sl=True ) )
 	def on_replaceTgt( self, *a ):
 		self._srcToTgtDict = {}
-		cmd.textScrollList( self.UI_tsl_tgt, e=True, ra=True )
+		self.UI_tgts.clear()
 		self.on_addTgt()
 		self.mapAllSrcItems()
+	def on_removeTgtItem( self, *a ):
+		selTgts = self.getSelectedTgts()
+		for aSrc, tgts in self._srcToTgtDict.iteritems():
+			newTgts = [ tgt for tgt in tgts if tgt not in selTgts ]
+			self._srcToTgtDict[ aSrc ] = newTgts
+
+		idxs = self.UI_tgts.getSelectedIdxs()
+		for idx in reversed( sorted( idxs ) ):
+			self.UI_tgts.removeByIdx( idx )
 	def on_selectTgt( self, *a ):
 		tgts = self.getSelectedTgts()
 		if tgts:
-			toSearch = cmd.ls( typ='transform' )
 			existingTgts = []
 			for t in tgts:
-				if not cmd.objExists( t ):
-					t = names.matchNames( [ t ], toSearch )[ 0 ]
-
-				if cmd.objExists( t ):
+				t = findItem( t )
+				if t is not None:
 					existingTgts.append( t )
 
 			if existingTgts:
 				cmd.select( existingTgts )
+	def on_tgt_up( self, *a ):
+		self.UI_tgts.moveSelectedItemsUp()
+	def on_tgt_dn( self, *a ):
+		self.UI_tgts.moveSelectedItemsDown()
 	def on_swap( self, *a ):
 		curMapping = names.Mapping.FromDict( self._srcToTgtDict )
 		curMapping.swap()

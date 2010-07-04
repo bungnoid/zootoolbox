@@ -67,10 +67,17 @@ def getDefaultScale():
 	return utils.getObjsScale( visibleSkinnedMeshes )
 
 
-def iterParents( obj ):
+def iterParents( obj, breakObj=None ):
+	'''
+	walks up the dag hierarchy until either the top is reached, or the breakObj is found if one is specified
+	'''
 	parent = obj.getParent()
 	while parent is not None:
 		yield parent
+		if breakObj is not None:
+			if parent == breakObj:
+				break
+
 		parent = parent.getParent()
 
 
@@ -429,7 +436,9 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 
 		baseItem = None
 		if item.hasAttr( '_skeletonPart' ):
-			baseItem = listConnections( item._skeletonPart, t='joint', source=True )[ 0 ]
+			try: baseItem = listConnections( item._skeletonPart, t='joint', source=True )[ 0 ]
+			except IndexError:
+				baseItem = item
 		elif item.hasAttr( '_skeletonPartName' ):
 			baseItem = item
 		else:
@@ -557,6 +566,49 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		allParts = sortPartsByHierarchy( allParts )
 
 		return iter( allParts )
+	@classmethod
+	def IterAllParts2( cls ):
+		'''
+		for some completely unknown reason, this causes maya to hang - strangely enough, on the selection of joints.  i have no idea why.
+
+		anyhoo - this versoin of the method doesn't use connection tracing, but instead walks teh scene and builds a dictionary of instantiated
+		parts.  so its not really an iterator as it has to build up the entire dictionary before it can be sure the list is comprehensive...
+		but its presented as an iterator so it can replace the existing connection tracer iterator.
+
+		this method has the advantage that it will work even when connections have been deleted - which can happen when part roots no longer
+		exist
+		'''
+		partsDict = {}
+
+		for joint in ls( typ='joint' ):
+			if not joint.hasAttr( '_skeletonPartName' ):
+				continue
+
+			partClassName = joint._skeletonPartName.get()
+
+			buildArgDict = eval( joint._skeletonPartArgs.get() )
+			idx = buildArgDict.get( 'idx', None )
+			if idx is None:
+				print 'NO IDX FOUND FOR PART %s (%s) - SKIPPING' % (joint, partClassName)
+				continue
+
+			partClass = SkeletonPart.GetNamedSubclass( partClassName )
+			if partClass is None:
+				print 'NO SUCH PART TYPE: %s' % partClassName
+				continue
+
+			if not issubclass( partClass, cls ):
+				continue
+
+			partKey = partClass, idx
+			partsDict.setdefault( partKey, ([], buildArgDict) )
+			partsDict[ partKey ][ 0 ].append( joint )
+
+		for (partClass, partIdx), (items, buildArgDict) in partsDict.iteritems():
+			part = partClass( items )
+			part.buildKwargs = buildArgDict
+
+			yield part
 	@classmethod
 	def FindParts( cls, partClass, withKwargs=None ):
 		'''
@@ -761,7 +813,7 @@ class BaseSkeletonPart(SkeletonPart):
 		removes any visualization on the part
 		'''
 		for i in self.selfAndOrphans():
-			children = listRelatives( i )
+			children = listRelatives( i, shapes=True )
 			for c in children:
 				try:
 					if isinstance( c, Joint ): continue

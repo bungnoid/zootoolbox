@@ -23,7 +23,7 @@ class XferAnimForm(MelForm):
 		self.sortBySrcs = True  #otherwise it sorts by tgts when doing traces
 		self._clipPreset = None
 		self.UI_mapping = mappingEditor.MappingForm( self )
-		self.UI_options = MelFrame( self, l="xfer options", labelVisible=1, collapsable=0, borderStyle='etchedIn' )
+		self.UI_options = MelFrame( self, l="xfer options", labelVisible=True, collapsable=False, collapse=False, h=115, borderStyle='etchedIn' )  #need to specify the height for 2011 coz its ghey!
 
 		cmd.columnLayout( adjustableColumn=True, rowSpacing=5 )
 		cmd.rowLayout( numberOfColumns=2,
