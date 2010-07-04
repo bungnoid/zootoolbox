@@ -3,6 +3,7 @@ from triggered import Trigger
 from pymel.core import *
 from names import camelCaseToNice
 from filesystem import removeDupes
+from control import getNiceName
 
 import re
 import pymel.core as pymelCore
@@ -56,7 +57,9 @@ def add( src, tgt,
 		nodeWithParentAttr = src
 
 	if not name:
-		name = camelCaseToNice( str( tgt ) )
+		name = getNiceName( tgt )
+		if name is None:
+			name = camelCaseToNice( str( tgt ) )
 
 
 	#if there is an existing constraint, check to see if the target already exists in its target list - if it does, return the condition used it uses
@@ -73,7 +76,7 @@ def add( src, tgt,
 		if tgt in targetsOnConstraint:
 			idx = targetsOnConstraint.index( tgt )
 			aliases = constraintFunc( existingConstraint, q=True, weightAliasList=True )
-			cons = listConnections( existingConstraint.attr( aliases[ idx ] ), type='condition', d=False )
+			cons = listConnections( aliases[ idx ], type='condition', d=False )
 			return cons[ 0 ]
 
 

@@ -1,0 +1,207 @@
+from rigPrim_base import *
+
+
+class IkFkBase(RigSubPart):
+	'''
+	this is a subpart, not generally exposed directly to the user
+	'''
+	__version__ = 0
+	CONTROL_NAMES = 'control', 'fkUpper', 'fkMid', 'fkLower', 'poleControl', 'ikSpace', 'fkSpace', 'ikHandle', 'endOrient', 'poleTrigger'
+
+	@classmethod
+	def _build( cls, skeletonPart, **kw ):
+		return ikFk( skeletonPart.bicep, skeletonPart.elbow, skeletonPart.wrist, **kw )
+
+
+ARM_NAMING_SCHEME = 'arm', 'bicep', 'elbow', 'wrist'
+LEG_NAMING_SCHEME = 'leg', 'thigh', 'knee', 'ankle'
+
+def ikFk( bicep, elbow, wrist, nameScheme=ARM_NAMING_SCHEME, alignEnd=True, **kw ):
+	'''
+	'''
+
+	idx = kw[ 'idx' ]
+	scale = kw[ 'scale' ]
+
+	parity = Parity( idx )
+	suffix = parity.asName()
+
+	if not isinstance( bicep, PyNode ): bicep = PyNode( bicep )
+	if not isinstance( elbow, PyNode ): elbow = PyNode( elbow )
+	if not isinstance( wrist, PyNode ): wrist = PyNode( wrist )
+
+
+	worldPart = WorldPart.Create()
+	worldControl = worldPart.control
+	partsControl = worldPart.parts
+
+	colour = ColourDesc( 'green' ) if parity == Parity.LEFT else ColourDesc( 'red' )
+
+
+	#grab a list of 'bicep joints' - these are the child joints of the bicep that aren't the elbow or any of its
+	#children.  these joints are usually involved in deformation related to the bicep so we want to capture them
+	#to use for geometry extraction for the control representation
+	bicepJoints = [ bicep ]
+	for child in bicep.getChildren( type='joint' ):
+		if child == elbow: continue
+		bicepJoints.append( child )
+		bicepJoints += child.getChildren( type='joint', ad=True )
+
+	#grab the 'elbow joints' as per the above description
+	elbowJoints = [ elbow ]
+	for child in elbow.getChildren( type='joint' ):
+		if child == wrist: continue
+		elbowJoints.append( child )
+		elbowJoints += child.getChildren( type='joint', ad=True )
+
+
+	#print 'THE BIPS', bicepJoints
+	#print 'THE BOWS', elbowJoints
+
+
+	### BUILD THE FK CONTROLS
+	ikArmSpace = buildAlignedNull( wrist, "ik_%sSpace%s" % (nameScheme[ 0 ], suffix), parent=worldControl )
+	fkArmSpace = buildAlignedNull( bicep, "fk_%sSpace%s" % (nameScheme[ 0 ], suffix) )
+
+	BONE_AXIS = AIM_AXIS + 3 if parity else AIM_AXIS
+	driverUpper = buildControl( "fk_%sControl%s" % (nameScheme[ 1 ], suffix), bicep, PivotModeDesc.MID, Shape_Skin( bicepJoints, axis=BONE_AXIS ), colour=colour, asJoint=True, oriented=False, scale=scale, parent=fkArmSpace )
+	driverMid = buildControl( "fk_%sControl%s" % (nameScheme[ 2 ], suffix), elbow, PivotModeDesc.MID, Shape_Skin( elbowJoints, axis=BONE_AXIS ), colour=colour, asJoint=True, oriented=False, scale=scale, parent=driverUpper )
+	driverLower = buildControl( "fk_%sControl%s" % (nameScheme[ 3 ], suffix), PlaceDesc( wrist, wrist if alignEnd else None ), shapeDesc=Shape_Skin( wrist, axis=BONE_AXIS ), colour=colour, asJoint=True, oriented=False, constrain=False, scale=scale )
+
+	#don't parent the driverLower in the buildControl command otherwise the control won't be in worldspace
+	parent( driverLower, driverMid )
+	makeIdentity( driverLower )
+
+
+	### BUILD THE POLE CONTROL
+	polePos = mel.zooFindPolePosition( "-multiplier 5 -end %s" % str( driverLower ) )
+	poleControl = buildControl( "%s_poleControl%s" % (nameScheme[ 0 ], suffix), PlaceDesc( elbow, PlaceDesc.WORLD ), shapeDesc=ShapeDesc( 'sphere', None ), colour=colour, constrain=False, parent=worldControl, scale=scale*0.5 )
+	poleControlSpace = poleControl.getParent()
+	attrState( poleControlSpace, 'v', lock=False, show=True )
+
+	move( poleControlSpace, a=True, ws=True, rpr=True, *polePos )
+	move( poleControl, a=True, ws=True, rpr=True, *polePos )
+	makeIdentity( poleControlSpace, a=True, t=True )
+	poleControl.v = False
+
+
+	### BUILD THE POLE SELECTION TRIGGER
+	lineNode = buildControl( "%s_poleSelectionTrigger%s" % (nameScheme[ 0 ], suffix), shapeDesc=ShapeDesc( 'sphere', None ), colour=ColourDesc( 'darkblue' ), scale=scale, constrain=False, oriented=False, parent=ikArmSpace )
+	lineStart, lineEnd, lineShape = map( PyNode, utils.buildAnnotation( lineNode ) )
+
+	parent( lineStart, poleControl )
+	delete( pointConstraint( poleControl, lineStart ) )
+	pointConstraint( elbow, lineNode )
+	attrState( lineNode, ('t', 'r'), *LOCK_HIDE )
+
+	lineStart.template.set( 1 )  #make the actual line unselectable
+
+
+	#build the IK handle
+	ikHandle = pymelCore.ikHandle( fs=1, sj=driverUpper, ee=driverLower, solver='ikRPsolver' )[ 0 ]
+	limbControl = buildControl( '%sControl%s' % (nameScheme[ 0 ], suffix), PlaceDesc( wrist, wrist if alignEnd else None ), shapeDesc=Shape_Skin( wrist, axis=BONE_AXIS ), colour=colour, scale=scale, constrain=False, parent=ikArmSpace )
+
+	xform( limbControl, p=True, rotateOrder='yzx' )
+	ikHandle.snapEnable = False
+	ikHandle.v = False
+
+	limbControl.addAttr( 'ikBlend', shortName='ikb', dv=1, min=0, max=1, at='double' )
+	limbControl.ikBlend.setKeyable( True )
+	connectAttr( limbControl.ikBlend, ikHandle.ikBlend )
+
+	attrState( ikHandle, 'v', *LOCK_HIDE )
+	parent( ikHandle, partsControl )
+	parentConstraint( limbControl, ikHandle )
+	#parent( ikHandle, limbControl )  #
+
+	poleVectorConstraint( poleControl, ikHandle )
+
+
+	#setup constraints to the wrist - it is handled differently because it needs to blend between the ik and fk chains (the other controls are handled by maya)
+	wristOrient = buildAlignedNull( wrist, "%s_follow%s" % (nameScheme[ 3 ], suffix), parent=partsControl )
+
+	pointConstraint( driverLower, wrist )
+	orientConstraint( wristOrient, wrist, mo=True )
+	setItemRigControl( wrist, wristOrient )
+	wristSpaceOrient = parentConstraint( limbControl, wristOrient, weight=0, mo=True )
+	wristSpaceOrient = parentConstraint( driverLower, wristOrient, weight=0, mo=True )
+	wristSpaceOrient.interpType.set( 2 )
+
+
+	#connect the ikBlend of the arm controller to the orient constraint of the fk wrist - ie turn it off when ik is off...
+	weightRevNode = shadingNode( 'reverse', asUtility=True )
+	connectAttr( limbControl.ikBlend, weightRevNode.inputX, f=True )
+	connectAttr( limbControl.ikBlend, wristSpaceOrient.listAttr( ud=True )[ 0 ], f=True )
+	connectAttr( weightRevNode.outputX, wristSpaceOrient.listAttr( ud=True )[ 1 ], f=True )
+
+
+	#build expressions for fk blending and control visibility
+	fkVisCond = shadingNode( 'condition', asUtility=True )
+	poleVisCond = shadingNode( 'condition', asUtility=True )
+	connectAttr( limbControl.ikBlend, fkVisCond.firstTerm, f=True )
+	connectAttr( limbControl.ikBlend, poleVisCond.firstTerm, f=True )
+	connectAttr( fkVisCond.outColorR, driverUpper.v, f=True )
+	connectAttr( poleVisCond.outColorG, poleControlSpace.v, f=True )
+	connectAttr( poleVisCond.outColorG, limbControl.v, f=True )
+	fkVisCond.secondTerm.set( 1 )
+
+
+	#add set pole to fk pos command to pole control
+	fkControls = driverUpper, driverMid, driverLower
+	poleTrigger = Trigger( poleControl )
+	poleConnectNums = [ poleTrigger.connect( c ) for c in fkControls ]
+
+	idx_toFK = poleTrigger.setMenuInfo( None,
+	                                    "move to FK position",
+	                                    'zooVectors;\nfloat $pos[] = `zooFindPolePosition "-start %%%s -mid %%%s -end %%%s"`;\nmove -rpr $pos[0] $pos[1] $pos[2] #;' % tuple( poleConnectNums ) )
+	poleTrigger.setMenuInfo( None,
+	                         "move to FK pos for all keys",
+	                         'source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd "eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\",%%%d)),{}))";' % idx_toFK )
+
+
+	##build the post trace commands for the pole vectors - once they've been placed after a trace, its safe and almost always
+	##desireable to place the pole vectors a little more sensibly
+	#zooSetPostTraceCmd $poleControl ( "zooVectors; zooPlacePole \"-obj # -start %"+ $poleConnectNums[0] +" -mid %"+ $poleConnectNums[1] +" -end %"+ $poleConnectNums[2] +" -key 1 -removeKey 1 -invalidMode 1\";" );
+
+
+	#add IK/FK switching commands
+	limbTrigger = Trigger( limbControl )
+	handleNum = limbTrigger.connect( ikHandle )
+	poleNum = limbTrigger.connect( poleControl )
+	fkIdx = limbTrigger.createMenu( "switch to FK",
+	                                "zooAlign \"\";\nzooAlignFK \"-ikHandle %%%d -offCmd setAttr #.ikBlend 0;\";" % handleNum )
+	limbTrigger.createMenu( "switch to FK for all keys",
+	                        'source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd "eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\",%%%d)),{}))";' % fkIdx )
+	ikIdx = limbTrigger.createMenu( "switch to IK",
+	                                'zooAlign "";\nzooAlignIK "-ikHandle %%%d -pole %%%d -offCmd setAttr #.ikBlend 1;";' % (handleNum, poleNum) )
+	limbTrigger.createMenu( "switch to IK for all keys",
+	                        'source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd "eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\",%%%d)),{}))";' % ikIdx )
+
+
+	#add all zooObjMenu commands to the fk controls
+	for fk in fkControls:
+		fkTrigger = Trigger( fk )
+		c1 = fkTrigger.connect( ikHandle )
+		c2 = fkTrigger.connect( poleControl )
+
+		#"zooFlags;\nzooAlign \"\";\nzooAlignIK \"-ikHandle %%%d -pole %%%d\";\nselect %%%d;" % (c1, c2, c1) )
+		fkTrigger.createMenu( 'switch to IK',
+		                      'zooAlign "";\nstring $cs[] = `listConnections %%%d.ikBlend`;\nzooAlignIK ("-ikHandle %%%d -pole %%%d -control "+ $cs[0] +" -offCmd setAttr "+ $cs[0] +".ikBlend 1;" );' % (c1, c1, c2) )
+
+	createLineOfActionMenu( [limbControl] + list( fkControls ), (elbow, wrist) )
+
+
+	#add trigger commands
+	Trigger.CreateTrigger( lineNode, Trigger.PRESET_SELECT_CONNECTED, [ poleControl ] )
+	lineNode.displayHandle.set( True )
+
+
+	#turn unwanted transforms off, so that they are locked, and no longer keyable
+	attrState( fkControls, ('t', 'radi'), *LOCK_HIDE )
+	attrState( poleControl, 'r', *LOCK_HIDE )
+
+
+	return limbControl, driverUpper, driverMid, driverLower, poleControl, ikArmSpace, fkArmSpace, ikHandle, wristOrient, lineNode
+
+
+#end

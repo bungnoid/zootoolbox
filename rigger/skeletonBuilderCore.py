@@ -292,6 +292,12 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		this is merely a "hook" that can be used to fix anything up should the way
 		skeleton parts are defined change
 		'''
+
+		#make sure all items in self are PyNode instances
+		for n, item in enumerate( self ):
+			if not isinstance( item, PyNode ):
+				self[ n ] = PyNode( item )
+
 		baseItem = self[ 0 ]
 		for n, item in enumerate( self ):
 			item.segmentScaleCompensate.set( False )
@@ -520,7 +526,7 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		baseItem._skeletonPartName.set( partClass.__name__ )
 		baseItem._skeletonPartArgs.set( str( newKw ) )
 
-		for i in items[ 1: ]:
+		for i in newPart[ 1: ]:
 			i.addAttr( '_skeletonPart', at='message' )
 			baseItem.message.connect( i._skeletonPart, f=True )
 
@@ -528,8 +534,8 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 
 
 		#turn of segment scale compensate - not sure why it defaults to on.
-		for item in items:
-			item.segmentScaleCompensate = False
+		for item in newPart:
+			item.segmentScaleCompensate.set( False )
 
 
 		#are we doing visualizations?
@@ -1089,15 +1095,15 @@ class BaseSkeletonPart(SkeletonPart):
 			return
 
 		#pop the rig method name out of the kwarg dict, and look it up
-		try: rigTypeName = kw.pop( 'rigTypeName', self.RigTypes[ 0 ].__name__ )
+		try: rigMethodName = kw.pop( 'rigMethodName', self.RigTypes[ 0 ].__name__ )
 		except IndexError:
 			print "No rig method defined for %s" % self
 			return
 
 		#discover the rigging method - it should be defined in the
-		rigType = self.GetRigMethod( rigTypeName )
+		rigType = self.GetRigMethod( rigMethodName )
 		if rigType is None:
-			print 'ERROR :: there is no such rig method with the name %s' % rigTypeName
+			print 'ERROR :: there is no such rig method with the name %s' % rigMethodName
 			return
 
 		rigType.Create( self, **kw )

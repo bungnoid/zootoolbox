@@ -25,10 +25,10 @@ AX_X, AX_Y, AX_Z, AX_X_NEG, AX_Y_NEG, AX_Z_NEG = map( Axis, range( 6 ) )
 DEFAULT_AXIS = AX_X
 
 AXIS_ROTATIONS = { AX_X: (0, 0, -90),
-                   AX_Y: (0, 0, -180),
+                   AX_Y: (0, 0, 0),
                    AX_Z: (90, 0, 0),
                    AX_X_NEG: (0, 0, 90),
-                   AX_Y_NEG: (0, 0, 180),
+                   AX_Y_NEG: (180, 0, 0),
                    AX_Z_NEG: (-90, 0, 0) }
 
 
@@ -240,7 +240,8 @@ def buildControl( name,
                   size=Vector( 1, 1, 1 ), scale=1.0, autoScale=False,
                   parent=None, qss=None,
                   asJoint=False, freeze=True,
-                  lockAttrs=( 'scale', ), hideAttrs=( 'scale', 'visibility' ) ):
+                  lockAttrs=( 'scale', ), hideAttrs=( 'scale', 'visibility' ),
+                  niceName=None ):
 	'''
 	this rather verbosely called function deals with creating control objects in
 	a variety of ways.
@@ -381,10 +382,10 @@ def buildControl( name,
 	shapeStrs = getShapeStrs( obj )
 	if pivotModeDesc == PivotModeDesc.TOP:
 		for s in shapeStrs:
-			move( s, 0, scale/2.0, 0, r=True )
+			move( s, 0, -scale/2.0, 0, r=True )
 	elif pivotModeDesc == PivotModeDesc.BASE:
 		for s in shapeStrs:
-			move( s, 0, -scale/2.0, 0, r=True )
+			move( s, 0, scale/2.0, 0, r=True )
 
 
 	#rotate it accordingly
@@ -415,7 +416,7 @@ def buildControl( name,
 
 	#do the size scaling...
 	if shapeDesc.surfaceType != ShapeDesc.SKIN:
-		for s in shapeStrs:
+		for s in getShapeStrs( obj ):
 			pymelCore.scale( s, size )
 
 
@@ -425,12 +426,13 @@ def buildControl( name,
 
 
 	#do offset
-	for s in shapeStrs:
+	for s in getShapeStrs( obj ):
 		mkw = { 'r': True }
 		if offsetSpace == utils.OBJECT: mkw[ 'os' ] = True
 		elif offsetSpace == utils.LOCAL: mkw[ 'ls' ] = True
 		elif offsetSpace == utils.WORLD: mkw[ 'ws' ] = True
-		move( s, *offset, **mkw )
+		if offset:
+			move( s, *offset, **mkw )
 
 	if freeze:
 		makeIdentity( obj, a=1, r=1 )
@@ -458,7 +460,7 @@ def buildControl( name,
 	#constrain the target object to this control?
 	if constrain:
 		#check to see if the transform is constrained already - if so, bail.  buildControl doesn't do multi constraints
-		if not listConnections( pivot, s=0, type='constraint' ):
+		if not listConnections( pivot, d=0, type='constraint' ):
 			if place:
 				parentConstraint( obj, pivot, mo=True )
 				setItemRigControl( pivot, obj )
@@ -505,6 +507,9 @@ def buildControl( name,
 	#hide and lock attributes
 	attrState( obj, lockAttrs, lock=True )
 	attrState( obj, hideAttrs, show=False )
+
+	if niceName:
+		setNiceName( obj, niceName )
 
 
 	return obj
@@ -558,6 +563,20 @@ def getItemRigControl( item ):
 			return cons[ 0 ]
 
 	return None
+
+
+def getNiceName( obj ):
+	if obj.hasAttr( '_NICE_NAME' ):
+		return obj._NICE_NAME.get()
+
+	return None
+
+
+def setNiceName( obj, niceName ):
+	if not obj.hasAttr( '_NICE_NAME' ):
+		obj.addAttr( '_NICE_NAME', dt='string' )
+
+	obj._NICE_NAME.set( niceName )
 
 
 SHAPE_TO_COMPONENT_NAME = { 'nurbsSurface': 'cv',

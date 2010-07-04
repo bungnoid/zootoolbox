@@ -37,6 +37,13 @@ kTransform = MSpace.kTransform
 kObject = MSpace.kObject
 
 
+def range2( count, start=0 ):
+	n = start
+	while n < count:
+		yield n
+		n += 1
+
+
 class Axis(int):
 	BASE_AXES = 'x', 'y', 'z'
 	AXES = ['x', 'y', 'z',\
@@ -153,8 +160,8 @@ def betweenVector( obj1, obj2 ):
 	'''
 	returns the vector between two objects
 	'''
-	posA = Vector( cmd.xform(obj1, q=True, ws=True, rp=True) )
-	posB = Vector( cmd.xform(obj2, q=True, ws=True, rp=True) )
+	posA = Vector( xform( obj1, q=True, ws=True, rp=True ) )
+	posB = Vector( xform( obj2, q=True, ws=True, rp=True ) )
 
 	return posB - posA
 
