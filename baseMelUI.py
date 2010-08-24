@@ -12,7 +12,6 @@ import re
 import maya
 import names
 import maya.cmds as cmd
-import filesystem
 
 from maya.OpenMaya import MGlobal
 
@@ -21,6 +20,77 @@ displayWarning = MGlobal.displayWarning
 displayError = MGlobal.displayError
 
 _DEBUG = False
+
+
+def trackableClassFactory( superClass=object ):
+	'''
+	returns a class that tracks subclasses.  for example, if you had classB(classA)
+	ad you wanted to track subclasses, you could do this:
+
+	class classB(trackableClassFactory( classA )):
+		...
+
+	a classmethod called GetSubclasses is created in the returned class for
+	querying the list of subclasses
+	'''
+	subclassList = []
+	class TrackableType(type):
+		def __new__( cls, name, bases, attrs ):
+			new = type.__new__( cls, name, bases, attrs )
+			subclassList.append( new )
+
+			return new
+
+	class TrackableClass(superClass): __metaclass__ = TrackableType
+	def IterSubclasses( cls ):
+		'''
+		returns an iterator for subclasses
+		'''
+		for c in subclassList:
+			if c is cls:
+				continue
+
+			if issubclass( c, cls ):
+				yield c
+	def GetSubclasses( cls ):
+		'''
+		returns a list of subclasses
+		'''
+		return list( cls.IterSubclasses() )
+	def GetNamedSubclass( cls, name ):
+		'''
+		returns the first subclass found with the given name
+		'''
+		for c in cls.IterSubclasses():
+			if c.__name__ == name: return c
+
+	TrackableClass.IterSubclasses = classmethod( IterSubclasses )
+	TrackableClass.GetSubclasses = classmethod( GetSubclasses )
+	TrackableClass.GetNamedSubclass = classmethod( GetNamedSubclass )
+
+	return TrackableClass
+
+
+def iterBy( iterable, count ):
+	'''
+	returns an generator which will yield "chunks" of the iterable supplied of size "count".  eg:
+	for chunk in iterBy( range( 7 ), 3 ): print chunk
+
+	results in the following output:
+	[0, 1, 2]
+	[3, 4, 5]
+	[6]
+	'''
+	cur = 0
+	i = iter( iterable )
+	while True:
+		try:
+			toYield = []
+			for n in range( count ): toYield.append( i.next() )
+			yield toYield
+		except StopIteration:
+			if toYield: yield toYield
+			break
 
 
 class MelUIError(Exception): pass
@@ -35,7 +105,7 @@ TYPE_NAMES_TO_CMDS = { u'staticText': cmd.text,
 WIDGETS_WITHOUT_DOC_TAG_SUPPORT = [ cmd.popupMenu ]
 
 
-class BaseMelUI(filesystem.trackableClassFactory( unicode )):
+class BaseMelUI(trackableClassFactory( unicode )):
 	'''
 	This is a wrapper class for a mel widget to make it behave a little more like an object.  It
 	inherits from str because thats essentially what a mel widget is - a name coupled with a mel
@@ -687,7 +757,7 @@ class MelPaneLayout(BaseMelLayout):
 		if self.PREF_OPTION_VAR:
 			if cmd.optionVar( ex=self.PREF_OPTION_VAR ):
 				storedSize = cmd.optionVar( q=self.PREF_OPTION_VAR )
-				for idx, size in enumerate( filesystem.iterBy( storedSize, 2 ) ):
+				for idx, size in enumerate( iterBy( storedSize, 2 ) ):
 					self.setPaneSize( idx, size )
 	def __getitem__( self, idx ):
 		idx += 1  #indices are 1-based...  fuuuuuuu alias!
@@ -1503,7 +1573,7 @@ def buildUIForObject( obj, parent, typeMapping=None ):
 	return ui
 
 
-class BaseMelWindow(BaseMelUI):#filesystem.trackableClassFactory( unicode )):
+class BaseMelWindow(BaseMelUI):
 	'''
 	This is a wrapper class for a mel window to make it behave a little more like an object.  It
 	inherits from str because thats essentially what a mel widget is.
