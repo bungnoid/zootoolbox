@@ -200,7 +200,7 @@ class BaseMelUI(trackableClassFactory( unicode )):
 		uniqueName = formatStr % (baseName, n)
 		while WIDGET_CMD( uniqueName, q=True, exists=True ):
 			n += 1
-			uniqueName = formatTokens % (baseName, n)
+			uniqueName = formatStr % (baseName, n)
 
 		WIDGET_CMD( uniqueName, **kw )
 
@@ -492,7 +492,27 @@ class MelSingleLayout(MelForm):
 		self( e=True, af=((theChild, 'top', padding), (theChild, 'left', padding), (theChild, 'right', padding), (theChild, 'bottom', padding)) )
 
 
-class MelHLayout(MelForm):
+class _AlignedFormLayout(MelForm):
+	_EDGES = 'left', 'right'
+
+	def layoutExpand( self, children ):
+		edge1, edge2 = self._EDGES
+
+		try:
+			padding = self.padding
+		except AttributeError:
+			padding = 0
+
+		otherEdges = list( MelFormLayout.ALL_EDGES )
+		otherEdges.remove( edge1 )
+		otherEdges.remove( edge2 )
+		otherEdge1, otherEdge2 = otherEdges
+
+		for child in children:
+			self( e=True, af=((child, otherEdge1, padding), (child, otherEdge2, padding)) )
+
+
+class MelHLayout(_AlignedFormLayout):
 	'''
 	emulates a horizontal layout sizer - the only caveat is that you need to explicitly call
 	the layout method to setup sizing.
@@ -509,7 +529,6 @@ class MelHLayout(MelForm):
 
 		row.layout()
 	'''
-	_EDGES = 'left', 'right'
 	_INSTANCE_VARIABLES = { '_weights': {},
 	                        'padding': 0,
 
@@ -543,30 +562,65 @@ class MelHLayout(MelForm):
 		for n, child in enumerate( children ):
 			self( e=True, ap=((child, edge1, padding, positions[n]), (child, edge2, padding, positions[n+1])) )
 
-		if self.expand:
-			otherEdges = list( MelFormLayout.ALL_EDGES )
-			otherEdges.remove( edge1 )
-			otherEdges.remove( edge2 )
-			otherEdge1, otherEdge2 = otherEdges
+		#if any children have a weight of zero, set the next item in the list to attach to the widget instead of a position
+		for n, weight in enumerate( weightsList ):
+			if weight == 0:
+				thisW = children[ n ]
+				try:
+					nextW = children[ n+1 ]
+					self( e=True, ac=(nextW, edge1, padding, thisW), an=(thisW, edge2) )
+				except IndexError:
+					prevW = children[ n+1 ]
+					self( e=True, ac=(prevW, edge2, padding, thisW), an=(thisW, edge1) )
 
-			for child in children:
-				self( e=True, af=((child, otherEdge1, padding), (child, otherEdge2, padding)) )
+		if self.expand:
+			self.layoutExpand( children )
 
 
 class MelVLayout(MelHLayout):
 	_EDGES = 'top', 'bottom'
 
 
-class MelHSingleStretchLayout(MelForm):
+class MelHRowLayout(_AlignedFormLayout):
+	'''
+	Simple row layout - the rowLayout mel command isn't so hot because you have to know ahead
+	of time how many columns to build, and dynamic sizing is rubbish.  This makes writing a
+	simple row of widgets super easy.
+
+	NOTE: like all subclasses of MelFormLayout, make sure to call .layout() after children
+	have been built
+	'''
+	_INSTANCE_VARIABLES = { 'padding': 5,
+
+	                        #if True the layout will expand to fill the layout in the "other" direction.  Ie HLayouts will expand vertically and VLayouts will expand horizontally to the extents of the layout
+	                        'expand': False }
+
+	def layout( self ):
+		padding = self.padding
+		children = self.getChildren()
+
+		edge1, edge2 = self._EDGES
+		for n, child in enumerate( children ):
+			if n:
+				self( e=True, ac=(child, edge1, padding, children[ n-1 ]) )
+			else:
+				self( e=True, af=(child, edge1, 0) )
+
+		if self.expand:
+			self.layoutExpand( children )
+
+
+class MelVRowLayout(MelHRowLayout):
+	_EDGES = 'top', 'bottom'
+
+
+class MelHSingleStretchLayout(_AlignedFormLayout):
 	'''
 	Provides an easy interface to a common layout pattern where a single widget in the
 	row/column is stretchy and the others are statically sized.
 
 	Make sure to call setStretchWidget() before calling layout()
 	'''
-
-	_EDGES = 'left', 'right'
-
 	_stretchWidget = None
 	_INSTANCE_VARIABLES = { 'padding': 5,
 
@@ -616,13 +670,7 @@ class MelHSingleStretchLayout(MelForm):
 			self( e=True, af=(stretchWidget, edge1, 0), ac=(stretchWidget, edge2, padding, rightChildren[0]) )
 
 		if self.expand:
-			otherEdges = list( MelFormLayout.ALL_EDGES )
-			otherEdges.remove( edge1 )
-			otherEdges.remove( edge2 )
-			otherEdge1, otherEdge2 = otherEdges
-
-			for child in children:
-				self( e=True, af=((child, otherEdge1, 0), (child, otherEdge2, 0)) )
+			self.layoutExpand( children )
 
 
 class MelVSingleStretchLayout(MelHSingleStretchLayout):
