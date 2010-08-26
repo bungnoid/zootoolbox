@@ -15,7 +15,7 @@ import maya.cmds as cmd
 
 from maya.OpenMaya import MGlobal
 
-mayaVer = int( float( maya.mel.eval( 'mayaVer()' ) ) )
+mayaVer = int( cmd.about( v=True )[:4] )
 displayWarning = MGlobal.displayWarning
 displayError = MGlobal.displayError
 
