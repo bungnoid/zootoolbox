@@ -5,7 +5,10 @@ comprehensive/mature is found
 '''
 
 import math, random
+from math import cos, sin, tan, acos, asin, atan2
 
+
+sqrt = math.sqrt
 zeroThreshold = 1e-8
 
 class MatrixException(Exception):
@@ -25,58 +28,43 @@ class Angle(object):
 
 class Vector(list):
 	'''
-	provides a bunch of common vector functionality.  Vectors can be instantiated with either an iterable, or
-	with individual components, but using an iterable is faster.
-
-	ie: Vector([1, 2, 3]) is faster than Vector(1, 2, 3).
-
-	using an iterable is roughly twice as fast...
+	provides a bunch of common vector functionality.  Vectors must be instantiated a list/tuple of values.
+	If you need to instantiate with items, use the Vector.FromValues like so:
+	Vector.FromValues(1,2,3)
 	'''
-	INDEX_NAMES = 'xyzw'
-	def __init__(self, *a):
-		try:
-			list.__init__(self, *a)
-		except TypeError:
-			super(Vector, self).__init__(a)
+
+	@classmethod
+	def FromValues( cls, *a ):
+		return cls( a )
+
 	def __repr__( self ):
-		return '<%s>' % ', '.join( map(str, self ) )
+		return '<%s>' % ', '.join( '%0.3g' % v for v in self )
 	__str__ = __repr__
-	def getNamedIndex( self, name ):
-		idx = self.INDEX_NAMES.index( name )
-		return self[ idx ]
-	def setNamedIndex( self, name, value ):
-		idx = self.INDEX_NAMES.index( name )
+	def setIndex( self, idx, value ):
 		self[ idx ] = value
 	def __add__( self, other ):
-		return self.__class__( map(lambda *x: sum(x), self, other) )
+		return self.__class__( [x+y for x, y in zip(self, other)] )
+	__iadd__ = __add__
+	def __radd__( self, other ):
+		return self.__class__( [x+y for x, y in zip(other, self)] )
 	def __sub__( self, other ):
-		return self.__add__( -other )
+		return self.__class__( [x-y for x,y in zip(self, other)] )
 	def __mul__( self, factor ):
-		if isinstance(factor, Matrix):
-			size = len( self )
-			new = self.__class__( [0] * size )
+		'''
+		supports either scalar multiplication, or vector multiplication (dot product).  for cross product
+		use the .cross( other ) method which is bound to the rxor operator.  ie: a ^ b == a.cross( b )
+		'''
+		if isinstance( factor, (int, float) ):
+			return self.__class__( [x * factor for x in self] )
+		elif isinstance( factor, Matrix ):
+			return multVectorMatrix( self, factor )
 
-			for i in xrange(size):
-				element = 0
-				col = factor.getCol(i)
-				for j in xrange( size ):
-					element += self[j] * col[j]
+		#assume its another vector then
+		value = self[0] * factor[0]
+		for x, y in zip( self[1:], factor[1:] ):
+			value += x*y
 
-				new[i] = element
-
-			return new
-
-		#test whether the object is iterable or not
-		isIterable = False
-		try:
-			iter(factor)
-			isIterable = True
-		except TypeError: pass
-
-		if isIterable:
-			return self.dot( factor )
-
-		return self.__class__( [x * factor for x in self] )
+		return value
 	def __div__( self, denominator ):
 		return self.__class__( [x / denominator for x in self] )
 	def __neg__( self ):
@@ -87,27 +75,26 @@ class Vector(list):
 		overrides equality test - can specify a tolerance if called directly.
 		NOTE: other can be any iterable
 		'''
-		for thisItem, otherItem in zip(self, other):
-			if abs( thisItem - otherItem ) > tolerance:
+		for a, b in zip(self, other):
+			if abs( a - b ) > tolerance:
 				return False
 
 		return True
 	within = __eq__
 	def __ne__( self, other, tolerance=1e-5 ):
-		return not self.__eq__(other, tolerance)
+		return not self.__eq__( other, tolerance )
 	def __mod__( self, other ):
 		return self.__class__( [x % other for x in self] )
 	def __int__( self ):
 		return int( self.get_magnitude() )
 	def __hash__( self ):
-		return tuple( self ).__hash__()
+		return hash( tuple( self ) )
 	@classmethod
-	def Zero( cls, size=4 ):
-		return cls( *([0] * size) )
+	def Zero( cls, size=3 ):
+		return cls( ([0] * size) )
 	@classmethod
-	def Random( cls, size=4, range=(0,1) ):
-		rands = [random.uniform( *range ) for n in xrange( size )]
-		return cls( *rands )
+	def Random( cls, size=3, valueRange=(0,1) ):
+		return cls( [random.uniform( *valueRange ) for n in range( size )] )
 	@classmethod
 	def Axis( cls, axisName, size=3 ):
 		'''
@@ -115,18 +102,17 @@ class Vector(list):
 		list.  you can also use a - sign in front of the axis name
 		'''
 		axisName = axisName.lower()
-		isNegative = axisName.startswith('-')
+		isNegative = axisName.startswith('-') or axisName.startswith('_')
 
 		if isNegative:
 			axisName = axisName[1:]
 
 		new = cls.Zero( size )
-		idx = cls.INDEX_NAMES.index( axisName )
 		val = 1
 		if isNegative:
 			val = -1
 
-		new[ idx ] = val
+		new.__setattr__( axisName, val )
 
 		return new
 	def dot( self, other, preNormalize=False ):
@@ -135,7 +121,7 @@ class Vector(list):
 			a = self.normalize()
 			b = other.normalize()
 
-		dot = sum( [s[0] * s[1] for s in zip(a, b)] )
+		dot = sum( [x*y for x,y in zip(a, b)] )
 
 		return dot
 	def __rxor__( self, other ):
@@ -149,25 +135,47 @@ class Vector(list):
 
 		return self.__class__( [x, y, z] )
 	cross = __rxor__
+	def get_squared_magnitude( self ):
+		'''
+		returns the square of the magnitude - which is about 20% faster to calculate
+		'''
+		m = 0
+		for val in self:
+			m += val**2
+
+		return m
 	def get_magnitude( self ):
-		return math.sqrt( sum( [x**2 for x in self] ) )
+
+		#NOTE: this implementation is faster than sqrt( sum( [x**2 for x in self] ) ) by about 20%
+		m = 0
+		for val in self:
+			m += val**2
+
+		return sqrt( m )
 	__float__ = get_magnitude
 	__abs__ = get_magnitude
+	length = magnitude = get_magnitude
 	def set_magnitude( self, factor ):
 		'''
 		changes the magnitude of this instance
 		'''
 		factor /= self.get_magnitude()
-		for n, val in enumerate(self):
+		for n in range( len( self ) ):
 			self[n] *= factor
-	mag = length = magnitude = property(get_magnitude, set_magnitude)
 	def normalize( self ):
 		'''
 		returns a normalized vector
 		'''
-		mag = self.get_magnitude()
+
+		#inline the code for the SPEEDZ - its about 8% faster by inlining the code to calculate the magnitude
+		mag = 0
+		for v in self:
+			mag += v**2
+
+		mag = sqrt( mag )
+
 		return self.__class__( [v / mag for v in self] )
-	def change_space( self, basisX, basisY, basisZ=None ):
+	def change_space( self, basisX, basisY, basisZ=None, inPlace=True ):
 		'''
 		will re-parameterize this vector to a different space
 		NOTE: the basisZ is optional - if not given, then it will be computed from X and Y
@@ -175,13 +183,16 @@ class Vector(list):
 		'''
 		if basisZ is None:
 			basisZ = basisX ^ basisY
-			basisZ.normalize()
+			basisZ = basisZ.normalize()
 
-		newX = self.dot( basisX )
-		newY = self.dot( basisY )
-		newZ = self.dot( basisZ )
+		dot = self.dot
+		new = dot( basisX ), dot( basisY ), dot( basisZ )
 
-		self[0], self[1], self[2] = newX, newY, newZ
+		if inPlace:
+			self[0], self[1], self[2] = new
+			return self
+
+		return self.__class__( new )
 	def rotate( self, quat ):
 		'''
 		Return the rotated vector v.
@@ -212,10 +223,10 @@ class Vector(list):
 		return self.__class__( [ v.conjugate() for v in tuple(self.complex()) ] )
 
 	#this is kinda dumb - it'd be nice if this could be auto-derived from the value of INDEX_NAMES but I couldn't get it working so...  meh
-	x = property( lambda self: self.getNamedIndex( 'x' ), lambda self, value: self.setNamedIndex( 'x', value ) )
-	y = property( lambda self: self.getNamedIndex( 'y' ), lambda self, value: self.setNamedIndex( 'y', value ) )
-	z = property( lambda self: self.getNamedIndex( 'z' ), lambda self, value: self.setNamedIndex( 'z', value ) )
-	w = property( lambda self: self.getNamedIndex( 'w' ), lambda self, value: self.setNamedIndex( 'w', value ) )
+	x = property( lambda self: self[ 0 ], lambda self, value: self.setIndex( 0, value ) )
+	y = property( lambda self: self[ 1 ], lambda self, value: self.setIndex( 1, value ) )
+	z = property( lambda self: self[ 2 ], lambda self, value: self.setIndex( 2, value ) )
+	w = property( lambda self: self[ 3 ], lambda self, value: self.setIndex( 3, value ) )
 
 
 def findMatchingVectors( theVector, vectors, tolerance=1e-6 ):
@@ -265,7 +276,7 @@ def findMatchingVectors( theVector, vectors, tolerance=1e-6 ):
 	return matching
 
 
-def findBestVector( theVector, vectors, tolerance=1e-6 ):
+def getClosestVector( theVector, vectors, tolerance=1e-6 ):
 	'''
 	given a list of vectors, this method will return the one with the best match based
 	on the distance between any two vectors
@@ -279,9 +290,9 @@ def findBestVector( theVector, vectors, tolerance=1e-6 ):
 
 	#now iterate over the matching vectors and return the best match
 	best = matching.pop()
-	diff = (best - theVector).mag
+	diff = (best - theVector).magnitude()
 	for match in matching:
-		curDiff = (match - theVector).mag
+		curDiff = (match - theVector).magnitude()
 		if curDiff < diff:
 			best = match
 			diff = curDiff
@@ -300,33 +311,35 @@ def sortByIdx( vectorList, idx=0 ):
 
 class Quaternion(Vector):
 	def __init__( self, x=0, y=0, z=0, w=1 ):
-		'''initialises a vector from either x,y,z,w args or a Matrix instance'''
+		'''
+		initialises a vector from either x,y,z,w args or a Matrix instance
+		'''
 		if isinstance(x, Matrix):
 			#the matrix is assumed to be a valid rotation matrix
 			matrix = x
 			d1, d2, d3 = matrix.getDiag()
 			t = d1 + d2 + d3 + 1.0
 			if t > zeroThreshold:
-				s = 0.5 / math.sqrt( t )
+				s = 0.5 / sqrt( t )
 				w = 0.25 / s
 				x = ( matrix[2][1] - matrix[1][2] )*s
 				y = ( matrix[0][2] - matrix[2][0] )*s
 				z = ( matrix[1][0] - matrix[0][1] )*s
 			else:
 				if d1 >= d2 and d1 >= d3:
-					s = math.sqrt( 1.0 + d1 - d2 - d3 ) * 2.0
+					s = sqrt( 1.0 + d1 - d2 - d3 ) * 2.0
 					x = 0.5 / s
 					y = ( matrix[0][1] + matrix[1][0] )/s
 					z = ( matrix[0][2] + matrix[2][0] )/s
 					w = ( matrix[1][2] + matrix[2][1] )/s
 				elif d2 >= d1 and d2 >= d3:
-					s = math.sqrt( 1.0 + d2 - d1 - d3 ) * 2.0
+					s = sqrt( 1.0 + d2 - d1 - d3 ) * 2.0
 					x = ( matrix[0][1] + matrix[1][0] )/s
 					y = 0.5 / s
 					z = ( matrix[1][2] + matrix[2][1] )/s
 					w = ( matrix[0][2] + matrix[2][0] )/s
 				else:
-					s = math.sqrt( 1.0 + d3 - d1 - d2 ) * 2.0
+					s = sqrt( 1.0 + d3 - d1 - d2 ) * 2.0
 					x = ( matrix[0][2] + matrix[2][0] )/s
 					y = ( matrix[1][2] + matrix[2][1] )/s
 					z = 0.5 / s
@@ -368,18 +381,18 @@ class Quaternion(Vector):
 	def AxisAngle( cls, axis, angle, normalize=False ):
 		'''angle is assumed to be in radians'''
 		if normalize:
-			axis.normalize()
+			axis = axis.normalize()
 
 		angle /= 2.0
-		newW = math.cos( angle )
+		newW = cos( angle )
 		x, y, z = axis
-		s = math.sin( angle ) / math.sqrt( x**2 + y**2 + z**2 )
+		s = sin( angle ) / sqrt( x**2 + y**2 + z**2 )
 
 		newX = x * s
 		newY = y * s
 		newZ = z * s
 		new = cls(newX, newY, newZ, newW)
-		new.normalize()
+		new = new.normalize()
 
 		return new
 	def toAngleAxis( self ):
@@ -393,8 +406,8 @@ class Quaternion(Vector):
 		# to numerical inaccuracies)
 		w = max( min(nself.w, 1.0), -1.0 )
 
-		w = math.acos( w )
-		s = math.sin( w )
+		w = acos( w )
+		s = sin( w )
 		if s < 1e-12:
 			return (0.0, Vector(0, 0, 0))
 
@@ -404,7 +417,7 @@ class Quaternion(Vector):
 	def log( self ):
 		global zeroThreshold
 
-		b = math.sqrt(self.x**2 + self.y**2 + self.z**2)
+		b = sqrt(self.x**2 + self.y**2 + self.z**2)
 		res = self.__class__()
 		if abs( b ) <= zeroThreshold:
 			if self.w <= zeroThreshold:
@@ -412,12 +425,12 @@ class Quaternion(Vector):
 
 			res.w = math.log( self.w )
 		else:
-			t = math.atan2(b, self.w)
+			t = atan2(b, self.w)
 			f = t / b
 			res.x = f * self.x
 			res.y = f * self.y
 			res.z = f * self.z
-			ct = math.cos( t )
+			ct = cos( t )
 			if abs( ct ) <= zeroThreshold:
 				raise ValueError, "math domain error"
 
@@ -430,12 +443,15 @@ class Quaternion(Vector):
 		return res
 
 
-class Matrix(object):
+class Matrix(list):
 	'''deals with square matricies'''
 	def __init__( self, values=(), size=4 ):
-		'''initialises a matrix from either an iterable container of values or a quaternion.  in the
-		case of a quaternion the matrix is 3x3'''
-		if isinstance(values,Matrix):
+		'''
+		initialises a matrix from either an iterable container of values
+		or a quaternion.  in the case of a quaternion the matrix is 3x3
+		'''
+		if isinstance( values, Matrix ):
+			size = values.size
 			values = values.as_list()
 		elif isinstance( values, Quaternion ):
 			#NOTE: quaternions result in a 4x4 matrix
@@ -458,24 +474,23 @@ class Matrix(object):
 		if len(values) > size*size:
 			raise MatrixException('too many args: the size of the matrix is %d and %d values were given'%(size,len(values)))
 		self.size = size
-		self.rows = []
 
-		for n in xrange(size):
+		for n in range(size):
 			row = [ 0 ] * size
 			row[ n ] = 1
-			self.rows.append( row )
+			self.append( row )
 
-		for n in xrange( len(values) ):
-			self.rows[ n / size ][ n % size ] = values[ n ]
+		for n in range( len(values) ):
+			self[ n / size ][ n % size ] = values[ n ]
 	def __repr__( self ):
-		fmt = '%9.4f'
+		fmt = '%6.3g'
 		asStr = []
-		for row in self.rows:
+		for row in self:
 			rowStr = []
 			for r in row:
 				rowStr.append( fmt % r )
 
-			asStr.append( '[%s]' % ','.join( rowStr ) )
+			asStr.append( '[%s ]' % ','.join( rowStr ) )
 
 		return '\n'.join( asStr )
 	def __str__( self ):
@@ -499,35 +514,27 @@ class Matrix(object):
 			for i in xrange(self.size):
 				for j in xrange(self.size):
 					new[i][j] = self[i][j] * other
+
 		elif isinstance( other, Vector ):
-			new = Vector()
-			for i in xrange(self.size):
-				#vector indicies
-				for j in xrange(4):
-					#matrix indicies
-					new[i] += other[j] * self[i][j]
+			return multMatrixVector( self, other )
 		else:
 			#otherwise assume is a Matrix instance
-			new = self.__class__.Zero(self.size)
+			new = self.__class__.Zero( self.size )
 
 			cur = self
 			if self.size != other.size:
 				#if sizes are differnet - shoehorn the smaller matrix into a bigger matrix
-				if self.size < other.size: cur = self.__class__(self,other.size)
-				else: other = self.__class__(other,self.size)
-			for i in xrange(self.size):
-				for j in xrange(self.size):
-					new[i][j] = Vector( *cur.getRow(i) ) * Vector( *other.getCol(j) )
+				if self.size < other.size:
+					cur = self.__class__( self, other.size )
+				else:
+					other = self.__class__( other, self.size )
+			for i in range( self.size ):
+				for j in range( self.size ):
+					new[i][j] = Vector( cur[i] ) * Vector( other.getCol(j) )
 
 		return new
 	def __div__( self, other ):
 		return self.__mul__(1.0/other)
-	def __getitem__( self, item ):
-		'''matrix is indexed as: self[row][column]'''
-		return self.rows[item]
-	def __setitem__( self, item, newRow ):
-		if len(newRow) != self.size: raise MatrixException( 'row length not of correct size' )
-		self.rows[item] = newRow
 	def __eq__( self, other ):
 		return self.isEqual(other)
 	def __ne__( self, other ):
@@ -543,6 +550,12 @@ class Matrix(object):
 		return True
 	def copy( self ):
 		return self.__class__(self,self.size)
+	def crop( self, newSize ):
+		new = self.__class__( size=newSize )
+		for n in range( newSize ):
+			new.setRow( n, self[ n ][ :newSize ] )
+
+		return new
 	#some alternative ways to build matrix instances
 	@classmethod
 	def Zero( cls, size=4 ):
@@ -570,7 +583,7 @@ class Matrix(object):
 		The generated rotation matrix will rotate the vector from into
 		the vector to. from and to must be unit vectors'''
 		e = fromVec*toVec
-		f = e.mag
+		f = e.magnitude()
 
 		if f > 1.0-zeroThreshold:
 			#from and to vector almost parallel
@@ -617,140 +630,134 @@ class Matrix(object):
 	@classmethod
 	def FromEulerXYZ( cls, x, y, z, fromdeg=False ):
 		if fromdeg: x,y,z = map(math.radians,(x,y,z))
-		A = math.cos(x)
-		B = math.sin(x)
-		C = math.cos(y)
-		D = math.sin(y)
-		E = math.cos(z)
-		F = math.sin(z)
-		AE = A*E
-		AF = A*F
-		BE = B*E
-		BF = B*F
+		cx = cos(x)
+		sx = sin(x)
+		cy = cos(y)
+		sy = sin(y)
+		cz = cos(z)
+		sz = sin(z)
 
-		row0 = ( C*E, -C*F, D )
-		row1 = ( AF+BE*D, AE-BF*D, -B*C )
-		row2 = ( BF-AE*D, BE+AF*D, A*C )
-
-		return cls( row0+row1+row2, 3 )
-	@classmethod
-	def FromEulerYZX( cls, x, y, z, fromdeg=False ):
-		if fromdeg: x,y,z = map(math.radians,(x,y,z))
-		A = math.cos(x)
-		B = math.sin(x)
-		C = math.cos(y)
-		D = math.sin(y)
-		E = math.cos(z)
-		F = math.sin(z)
-		AC = A*C
-		AD = A*D
-		BC = B*C
-		BD = B*D
-
-		row0 = ( C*E, BD-AC*F, BC*F+AD )
-		row1 = ( F, A*E, -B*E )
-		row2 = ( -D*E, AD*F+BC, AC-BD*F )
-
-		return cls( row0+row1+row2, 3 )
-	@classmethod
-	def FromEulerZXY( cls, x, y, z, fromdeg=False ):
-		if fromdeg: x,y,z = map(math.radians,(x,y,z))
-		A = math.cos(x)
-		B = math.sin(x)
-		C = math.cos(y)
-		D = math.sin(y)
-		E = math.cos(z)
-		F = math.sin(z)
-		CE = C*E
-		CF = C*F
-		DE = D*E
-		DF = D*F
-
-		row0 = ( CE-DF*B, -A*F, DE+CF*B )
-		row1 = ( CF+DE*B, A*E, DF-CE*B )
-		row2 = ( -A*D, B, A*C )
+		row0 = cy*cz, sx*sy*cz-cx*sz, cx*sy*cz+sx*sz
+		row1 = cy*sz, sx*sy*sz+cx*cz, cx*sy*sz-sx*cz
+		row2 = -sy,   sx*cy, cx*cy
 
 		return cls( row0+row1+row2, 3 )
 	@classmethod
 	def FromEulerXZY( cls, x, y, z, fromdeg=False ):
+		'''
+		[cy*cz,cy*-sz*cx + sy*sx,cy*-sz*-sx + sy*cx ]
+		[sz,cz*cx,cz*-sx ]
+		[-sy*cz,-sy*-sz*cx + cy*sx,-sy*-sz*-sx + cy*cx ]
+		'''
 		if fromdeg: x,y,z = map(math.radians,(x,y,z))
-		A = math.cos(x)
-		B = math.sin(x)
-		C = math.cos(y)
-		D = math.sin(y)
-		E = math.cos(z)
-		F = math.sin(z)
-		AC = A*C
-		AD = A*D
-		BC = B*C
-		BD = B*D
+		cx = cos(x)
+		sx = sin(x)
+		cy = cos(y)
+		sy = sin(y)
+		cz = cos(z)
+		sz = sin(z)
 
-		row0 = ( C*E, -F, D*E )
-		row1 = ( AC*F+BD, A*E, AD*F-BC )
-		row2 = ( BC*F-AD, B*E, BD*F+AC )
+		row0 = cy*cz, sy*sx - cy*sz*cx, cy*sz*sx + sy*cx
+		row1 = sz, cz*cx, -cz*sx
+		row2 = -sy*cz, sy*sz*cx + cy*sx, cy*cx - sy*sz*sx
 
 		return cls( row0+row1+row2, 3 )
 	@classmethod
 	def FromEulerYXZ( cls, x, y, z, fromdeg=False ):
+		'''
+		[cz*cy + -sz*-sx*-sy,-sz*cx,cz*sy + -sz*-sx*cy ]
+		[sz*cy + cz*-sx*-sy,cz*cx,sz*sy + cz*-sx*cy ]
+		[cx*-sy,sx,cx*cy ]
+		'''
 		if fromdeg: x,y,z = map(math.radians,(x,y,z))
-		A = math.cos(x)
-		B = math.sin(x)
-		C = math.cos(y)
-		D = math.sin(y)
-		E = math.cos(z)
-		F = math.sin(z)
-		CE = C*E
-		CF = C*F
-		DE = D*E
-		DF = D*F
+		cx = cos(x)
+		sx = sin(x)
+		cy = cos(y)
+		sy = sin(y)
+		cz = cos(z)
+		sz = sin(z)
 
-		row0 = ( CE+DF*B, DE*B-CF, A*D )
-		row1 = ( A*F, A*E, -B )
-		row2 = ( CF*B-DE, DF+CE*B, A*C )
+		row0 = cz*cy -sz*sx*sy, -sz*cx, cz*sy + sz*sx*cy
+		row1 = sz*cy + cz*sx*sy, cz*cx, sz*sy - cz*sx*cy
+		row2 = -cx*sy, sx, cx*cy
+
+		return cls( row0+row1+row2, 3 )
+	@classmethod
+	def FromEulerYZX( cls, x, y, z, fromdeg=False ):
+		'''
+		[cz*cy, -sz, cz*sy ]
+		[cx*sz*cy + -sx*-sy, cx*cz, cx*sz*sy + -sx*cy ]
+		[sx*sz*cy + cx*-sy, sx*cz, sx*sz*sy + cx*cy ]
+		'''
+		if fromdeg: x,y,z = map(math.radians,(x,y,z))
+		cx = cos(x)
+		sx = sin(x)
+		cy = cos(y)
+		sy = sin(y)
+		cz = cos(z)
+		sz = sin(z)
+
+		row0 = cz*cy, -sz, cz*sy
+		row1 = cx*sz*cy + sx*sy, cx*cz, cx*sz*sy - sx*cy
+		row2 = -sy, sx*cy, cx*cy
+
+		return cls( row0+row1+row2, 3 )
+	@classmethod
+	def FromEulerZXY( cls, x, y, z, fromdeg=False ):
+		'''
+		[cy*cz + sy*sx*sz,cy*-sz + sy*sx*cz,sy*cx ]
+		[cx*sz,cx*cz,-sx ]
+		[-sy*cz + cy*sx*sz,-sy*-sz + cy*sx*cz,cy*cx ]
+		'''
+		if fromdeg: x,y,z = map(math.radians,(x,y,z))
+		cx = cos(x)
+		sx = sin(x)
+		cy = cos(y)
+		sy = sin(y)
+		cz = cos(z)
+		sz = sin(z)
+
+		row0 = cy*cz + sy*sx*sz, sy*sx*cz - cy*sz, sy*cx
+		row1 = cx*sz, cx*cz, -sx
+		row2 = cy*sx*sz - sy*cz, sy*sz + cy*sx*cz, cy*cx
 
 		return cls( row0+row1+row2, 3 )
 	@classmethod
 	def FromEulerZYX( cls, x, y, z, fromdeg=False ):
-		if fromdeg: x,y,z = map(math.radians,(x,y,z))
-		A = math.cos(x)
-		B = math.sin(x)
-		C = math.cos(y)
-		D = math.sin(y)
-		E = math.cos(z)
-		F = math.sin(z)
-		AE = A*E
-		AF = A*F
-		BE = B*E
-		BF = B*F
 
-		row0 = ( C*E, BE*D-AF, AE*D+BF )
-		row1 = ( C*F, BF*D+AE, AF*D-BE )
-		row2 = ( -D, B*C, A*C )
+		if fromdeg: x,y,z = map(math.radians,(x,y,z))
+		cx = cos(x)
+		sx = sin(x)
+		cy = cos(y)
+		sy = sin(y)
+		cz = cos(z)
+		sz = sin(z)
+
+		row0 = cy*cz, -cy*sz, sy
+		row1 = sx*sy*cz + cx*sz, cx*cz - sx*sy*sz, -sx*cy
+		row2 = sx*sz - cx*sy*cz, cx*sy*sz + sx*cz, cx*cy
 
 		return cls( row0+row1+row2, 3 )
 	def getRow( self, row ):
-		return self.rows[row]
+		return self[row]
 	def setRow( self, row, newRow ):
 		if len(newRow) > self.size: newRow = newRow[:self.size]
 		if len(newRow) < self.size:
 			newRow.extend( [0] * (self.size-len(newRow)) )
 
-		self.rows = newRow
+		self[ row ] = newRow
 
 		return newRow
 	def getCol( self, col ):
 		column = [0]*self.size
 		for n in xrange(self.size):
-			column[n] = self.rows[n][col]
+			column[n] = self[n][col]
 
 		return column
 	def setCol( self, col, newCol ):
 		newColActual = []
-		for n in xrange(min(self.size,len(newCol))):
-			self.rows[n] = newCol[n]
-			newColActual.append(newCol[n])
-
-		return newColActual
+		for row, newVal in zip( self, newCol ):
+			row[ col ] = newVal
 	def getDiag( self ):
 		diag = []
 		for i in xrange(self.size):
@@ -787,24 +794,37 @@ class Matrix(object):
 
 		return new
 	def det( self ):
-		'''calculates the determinant for an arbitrarily sized square matrix'''
+		'''
+		calculates the determinant
+		'''
 		d = 0
-		if self.size <= 0: return 1
-		for i in xrange(self.size):
+		if self.size <= 0:
+			return 1
+
+		if self.size == 2:
+			#ad - bc
+			a, b, c, d = self.as_list()
+			return (a*d) - (b*c)
+
+		for i in range( self.size ):
 			sign = (1,-1)[ i % 2 ]
-			cofactor = self.cofactor(i,0)
+			cofactor = self.cofactor( i, 0 )
 			d += sign * self[i][0] * cofactor.det()
 
 		return d
 	determinant = det
 	def cofactor( self, aI, aJ ):
-		cf = self.__class__(size=self.size-1)
+		cf = self.__class__( size=self.size-1 )
 		cfi = 0
-		for i in xrange(self.size):
-			if i == aI: continue
+		for i in range( self.size ):
+			if i == aI:
+				continue
+
 			cfj = 0
-			for j in xrange(self.size):
-				if j == aJ: continue
+			for j in range( self.size ):
+				if j == aJ:
+					continue
+
 				cf[cfi][cfj] = self[i][j]
 				cfj += 1
 			cfi += 1
@@ -846,12 +866,12 @@ class Matrix(object):
 		y = Vector(self[1][:3])
 		z = Vector(self[2][:3])
 
-		xl = x.mag
+		xl = x.magnitude()
 		xl *= xl
 		y = y - ((x*y)/xl)*x
 		z = z - ((x*z)/xl)*x
 
-		yl = y.mag
+		yl = y.magnitude()
 		yl *= yl
 		z = z - ((y*z)/yl)*y
 
@@ -869,9 +889,9 @@ class Matrix(object):
 		x = dummy[0]
 		y = dummy[1]
 		z = dummy[2]
-		xl = x.mag
-		yl = y.mag
-		zl = z.mag
+		xl = x.magnitude()
+		yl = y.magnitude()
+		zl = z.magnitude()
 		scale = xl,yl,zl
 
 		x/=xl
@@ -885,150 +905,150 @@ class Matrix(object):
 			scale.x = -scale.x
 
 		return (dummy, scale)
+	def getEigenValues( self ):
+		m = self
+
+		a, b, c = m[0]
+		d, e, f = m[1]
+		g, h, i = m[2]
+
+		flA = -1
+		flB = a + e + i
+		flC = ( d * b + g * c + f * h - a * e - a * i - e * i )
+		flD = ( a * e * i - a * f * h - d * b * i + d * c * h + g * b * f - g * c * e )
+
+		return cardanoCubicRoots( flA, flB, flC, flD )
 	def get_position( self ):
 		return Vector( *self[3][:3] )
 	def set_position( self, pos ):
 		pos = Vector( pos )
 		self[3][:3] = pos
-	pos = property(get_position,set_position)
 
-	def ToEulerXYZ2( self, asdeg=False ):
-		#get basis vectors
-		fwd = Vector( [1, 0, 0] ) * self
-		left = Vector( [0, 1, 0] ) * self
-		up = Vector( [0, 0, 1] ) * self
-
-		xyDist = math.sqrt( fwd[0]**2 + fwd[1]**2 )
-		angles = [0, 0, 0]
-
-		if xyDist > 0.001:
-			angles[0] = math.atan2( left[2], up[2] )
-			angles[1] = math.atan2( -fwd[2], xyDist )
-			angles[2] = math.atan2( fwd[1], fwd[0] )
-		else:
-			angles[0] = 0
-			angles[1] = math.atan2( fwd[2], xyDist )
-			angles[2] = math.atan2( left[0], left[1] )
-
-		if asdeg: return map(math.degrees, angles)
-		return angles
 	#the following methods return euler angles of a rotation matrix
 	def ToEulerXYZ( self, asdeg=False ):
-		r1 = self[0]
-		r2 = self[1]
-		r3 = self[2]
+		'''
+		cy*cz,  sx*sy*cz-cx*sz, cx*sy*cz+sx*sz
+		cy*sz,  sx*sy*sz+cx*cz, cx*sy*sz-sx*cz
+		-sy,    sx*cy,          cx*cy
+		'''
+		easy = self[2][0]
+		y = -asin( easy )
+		cosY = cos( y )
 
-		D = r1[2]
-		y = math.asin(D)
-		C = math.cos(y)
-
-		if C > zeroThreshold:
-			try: x = math.acos(r3[2]/C)
-			except ValueError: x = 180
-
-			try: z = math.acos(r1[0]/C)
-			except ValueError: z = 180
+		if easy != 1:
+			x = atan2( self[2][1] * cosY, self[2][2] * cosY )
+			z = atan2( self[1][0] * cosY, self[0][0] * cosY )
 		else:
-			z = 0.0
-			x = math.acos(r2[1])
+			z = 0
+			if easy == 1:
+				y = math.pi / 2.0
+				x = z + atan2( self[0][1], self[0][2] )
+			else:  #assert easy == -1
+				y = -math.pi / 2.0
+				x = -z + atan2( -self[0][1], -self[0][2] )
 
-		angles = [-x, -y, -z]
-		if asdeg: return map(math.degrees, angles)
-		return angles
-	def ToEulerYZX( self, asdeg=False ):
-		r1 = self[0]
-		r2 = self[1]
-		r3 = self[2]
+		angles = x, y, z
 
-		F = r2[0]
-		z = math.asin(F)
-		E = math.cos(z)
+		if asdeg:
+			return map( math.degrees, angles )
 
-		if E > zeroThreshold:
-			x = math.acos(r2[1]/E)
-			y = math.acos(r1[0]/E)
-		else:
-			y = 0.0
-			x = math.asin(r3[1])
-
-		angles = [-x, -y, -z]
-		if asdeg: return map(math.degrees, angles)
-		return angles
-	def ToEulerZXY( self, asdeg=False ):
-		r1 = self[0]
-		r2 = self[1]
-		r3 = self[2]
-
-		B = r3[1]
-		x = math.asin(B)
-		A = math.cos(x)
-
-		if A > zeroThreshold:
-			y = math.acos(r3[2]/A)
-			z = math.acos(r2[1]/A)
-		else:
-			z = 0.0
-			y = math.acos(r1[0])
-
-		angles = [-x, -y, -z]
-		if asdeg: return map(math.degrees, angles)
 		return angles
 	def ToEulerXZY( self, asdeg=False ):
-		r1 = self[0]
-		r2 = self[1]
-		r3 = self[2]
+		'''
+		cy*cz,   cy*-sz*cx + sy*sx,  cy*sz*sx + sy*cx
+		sz,      cz*cx,              cz*-sx
+		-sy*cz,  -sy*-sz*cx + cy*sx, -sy*-sz*-sx + cy*cx
+		'''
+		easy = self[1][0]
+		z = asin( easy )
+		cosZ = cos( z )
 
-		F = -r1[1]
-		z = math.asin(F)
-		E = math.cos(z)
-
-		if E > zeroThreshold:
-			x = math.acos(r2[1]/E)
-			y = math.acos(r1[0]/E)
+		if easy != 1:
+			x = atan2( -self[1][2] * cosZ, self[1][1] * cosZ )
+			y = atan2( -self[2][0] * cosZ, self[0][0] * cosZ )
 		else:
-			y = 0.0
-			x = math.acos(r3[2])
+			pass
 
-		angles = [-x, -y, -z]
-		if asdeg: return map(math.degrees, angles)
+		angles = x, y, z
+
+		if asdeg:
+			return map( math.degrees, angles )
+
 		return angles
 	def ToEulerYXZ( self, asdeg=False ):
-		r1 = self[0]
-		r2 = self[1]
-		r3 = self[2]
+		'''
+		cz*cy + -sz*sx*sy, -sz*cx, cz*sy + sz*sx*cy
+		sz*cy + cz*sx*sy,  cz*cx,  sz*sy -cz*sx*cy
+		-cx*sy,              sx,     cx*cy
+		'''
+		easy = self[2][1]
+		x = asin( easy )
+		cosX = cos( x )
 
-		B = -r2[2]
-		x = math.asin(B)
-		A = math.cos(x)
-
-		if A > zeroThreshold:
-			y = math.acos(r3[2]/A)
-			z = math.acos(r2[1]/A)
+		if easy != 1:
+			y = atan2( -self[2][0] * cosX, self[2][2] * cosX )
+			z = atan2( -self[0][1] * cosX, self[1][1] * cosX )
 		else:
-			z = 0.0
-			y = math.acos(r1[0])
+			pass
 
-		angles = [-x, -y, -z]
-		if asdeg: return map(math.degrees, angles)
+		angles = x, y, z
+
+		if asdeg:
+			return map( math.degrees, angles )
+
+		return angles
+	def ToEulerYZX( self, asdeg=False ):
+		easy = self[0][1]
+		z = -asin( easy )
+		cosZ = cos( z )
+
+		if easy != 1:
+			y = atan2( self[0][2] * cosZ, self[0][0] * cosZ )
+			x = atan2( self[2][1] * cosZ, self[1][1] * cosZ )
+		else: pass
+
+		angles = x, y, z
+
+		if asdeg:
+			return map( math.degrees, angles )
+
+		return angles
+	def ToEulerZXY( self, asdeg=False ):
+		easy = self[1][2]
+		x = -asin( easy )
+		cosX = cos( x )
+
+		if easy != 1:
+			z = atan2( self[1][0] * cosX, self[1][1] * cosX )
+			y = atan2( self[0][2] * cosX, self[2][2] * cosX )
+		else: pass
+
+		angles = x, y, z
+
+		if asdeg:
+			return map( math.degrees, angles )
+
 		return angles
 	def ToEulerZYX( self, asdeg=False ):
-		r1 = self[0]
-		r2 = self[1]
-		r3 = self[2]
+		'''
+		cy*cz,             cy*-sz,              sy
+		sx*sy*cz + cx*sz,  -sx*-sy*-sz + cx*cz, -sx*cy
+		cx*-sy*cz + sx*sz, cx*-sy*-sz + sx*cz,  cx*cy
+		'''
+		easy = self[0][2]
+		y = asin( easy )
+		cosY = cos( y )
 
-		D = -r3[0]
-		y = math.asin(D)
-		C = math.cos(y)
+		if easy != 1:
+			x = atan2( -self[1][2] * cosY, self[2][2] * cosY )
+			z = atan2( -self[0][1] * cosY, self[0][0] * cosY )
+		else: pass
 
-		if C > zeroThreshold:
-			x = math.acos(r3[2]/C)
-			z = math.acos(r1[0]/C)
-		else:
-			z = 0.0
-			x = math.acos(-r2[1])
+		angles = x, y, z
 
-		angles = [-x, -y, -z]
-		if asdeg: return map(math.degrees, angles)
+		if asdeg:
+			return map( math.degrees, angles )
+
 		return angles
 	#some conversion routines
 	def as_list( self ):
@@ -1040,74 +1060,352 @@ class Matrix(object):
 	def as_tuple( self ):
 		return tuple( self.as_list() )
 
-def euler_from_matrix(matrix, axes='rxyz'):
-	"""Return Euler angles from rotation matrix for specified axis sequence.
 
-    axes : One of 24 axis sequences as string or encoded tuple
+def multMatrixVector( theMatrix, theVector ):
+	'''
+	multiplies a matrix by a vector - returns a Vector
+	'''
+	size = theMatrix.size  #square matrices
+	size = min( size, len( theVector ) )
+	new = theVector.Zero( size )  #init using the actual vector instance just in case its a subclass
+	for i in range( size ):
+		for j in range( size ):
+			new[i] += theMatrix[i][j] * theVector[j]
 
-    Note that many Euler angle triplets can describe one matrix.
+	return new
 
-    >>> R0 = euler_matrix(1, 2, 3, 'syxz')
-    >>> al, be, ga = euler_from_matrix(R0, 'syxz')
-    >>> R1 = euler_matrix(al, be, ga, 'syxz')
-    >>> numpy.allclose(R0, R1)
-    True
 
-    """
-	try:
-		firstaxis, parity, repetition, frame = _AXES2TUPLE[axes.lower()]
-	except (AttributeError, KeyError):
-		_TUPLE2AXES[axes]
-		firstaxis, parity, repetition, frame = axes
+def multVectorMatrix( theVector, theMatrix ):
+	'''
+	mulitplies a vector by a matrix
+	'''
+	size = theMatrix.size  #square matrices
+	size = min( size, len( theVector ) )
+	new = theVector.Zero( size )  #init using the actual vector instance just in case its a subclass
+	for i in range( size ):
+		for j in range( size ):
+			new[i] += theVector[j] * theMatrix[j][i]
 
-	i = firstaxis
-	j = _NEXT_AXIS[i+parity]
-	k = _NEXT_AXIS[i-parity+1]
+	return new
 
-	M = matrix
-	if repetition:
-		sy = math.sqrt( M[i][j] * M[i][j] + M[i][k] * M[i][k] )
-		if sy > zeroThreshold:
-			ax = math.atan2( M[i][j],  M[i][k] )
-			ay = math.atan2( sy,       M[i][i] )
-			az = math.atan2( M[j][i], -M[k][i] )
+
+def cardanoCubicRoots( flA, flB, flC, flD ):
+	'''
+	Finds the roots of a Cubic polynomial of the for ax^3 + bx^2 + cx + d = 0
+	Returns: True -  3 real roots exists, r0, r1, r2
+		False - 1 real root exists, r0, 2 complex roots exist r2, r2
+	'''
+	flSqrtThree = 1.7320508075688772  #sqrt( 3.0 )
+
+	flF = ( 3.0 * flC / flA - (flB**2) / flA**2 ) / 3.0
+	flG = ( 2.0 * (flB**3) / (flA**3) - 9.0 * flB * flC / (flA**2) + 27.0 * flD / flA) / 27.0
+	flH = flG**2 / 4.0 + flF**3 / 27.0
+
+	eigenValues = Vector.Zero( 3 )
+	if flF == 0 and flG == 0 and flH == 0:
+		#3 equal roots
+		eigenValues[0] = -( ( flD / flA )**(1/3.0) )  #cube root
+		eigenValues[1] = flRoot0
+		eigenValues[2] = flRoot1
+
+		return True, eigenValues
+
+	elif flH <= 0:
+		#3 real roots
+		flI = ( flG**2 / 4.0 - flH )**0.5
+		flJ = flI**(1/3.0)
+		flK = acos( -( flG / ( 2.0 * flI ) ) )
+		flM = cos( flK / 3 )
+		flN = flSqrtThree * sin( flK / 3.0 )
+		flP = -( flB / ( 3.0 * flA ) )
+		eigenValues[0] = 2 * flJ * flM + flP
+		eigenValues[1] = -flJ * ( flM + flN ) + flP
+		eigenValues[2] = -flJ * ( flM - flN ) + flP
+
+		return True, eigenValues
+
+	#1 Real, 2 Complex Roots
+	flR = -( flG / 2 ) + flH**0.5
+	flS = flR**(1/3.0)
+	flT = -( flG / 2.0 ) - flH**0.5
+	flU = flT**(1/3.0)
+	flP = -( flB / ( 3.0 * flA ) )
+	eigenValues[0] = ( flS + flU ) + flP
+
+	#Return the real part but if it gets here there are complex roots
+	eigenValues[1] = -( flS + flU ) / 2.0 + flP
+	eigenValues[2] = -( flS + flU ) / 2.0 + flP
+
+	return False, eigenValues
+
+
+def computeCovariantMatrix( points ):
+	centreAccum = Vector.Zero()
+	for p in points:
+		centreAccum += p
+
+	vMean = centreAccum / len( points )
+
+	nPointCount = len( points )
+	if nPointCount <= 0:
+		return Matrix.Identity( 3 )
+
+	skewedPointList = [ v-vMean for v in points ]
+
+	m = Matrix( size=3 )
+	flPointCount = float( nPointCount )
+	for i in range( 3 ):
+		for j in range( 3 ):
+			flCovariance = 0
+
+			for k in range( nPointCount ):
+				flCovariance += skewedPointList[k][i] * skewedPointList[k][j]
+
+			m[i][j] = flCovariance / flPointCount
+
+	return m
+
+
+def computeSymmetricalEigen( m ):
+
+	def isZero( f ):
+		return abs( f ) < 1e-6
+
+	def sign( f ):
+		return -1 if f < 0 else 1
+
+	numRows = 3  #len( m )
+	numCols = 3  #len( m[0] )
+
+	vEigenValues = Vector.Zero( 3 )
+	mEigenVectors = Matrix.Identity( 3 )
+	eigenVecRows = 3
+	eigenVecCols = 3
+
+	#Perform householder tri-diagonalisation, makes QR iterations better
+	#for ( uint k = 0; k < numRows - 2; ++k )
+	for k in range( numRows-2 ):
+		#Calculate householder vector, store it in the subdiagonal
+		#Replacing first value of v (Which is always 1) with beta.
+		#For off diagonal symmetric entries only fill in super-diagonal.
+		sigma = 0
+
+		x0 = m[k+1][k]
+		##for ( uint r = k + 2; r < m.Rows(); ++r )
+		for r in range( k+2, numRows ):
+			sigma += m[r][k]**2
+
+		if isZero( sigma ):
+			m[k+1][k] = 0
 		else:
-			ax = math.atan2(-M[j][k],  M[j][j] )
-			ay = math.atan2( sy,       M[i][i] )
-			az = 0.0
-	else:
-		cy = math.sqrt( M[i][i] * M[i][i] + M[j][i] * M[j][i] )
-		if cy > zeroThreshold:
-			ax = math.atan2( M[k][j],  M[k][k] )
-			ay = math.atan2(-M[k][i],  cy)
-			az = math.atan2( M[j][i],  M[i][i] )
+			mu = sqrt( m[k+1][k]**2 + sigma )
+			if m[k+1][k] <= 0:
+				m[k+1][k] = m[k+1][k] - mu
+			else:
+				m[k+1][k] = -sigma / ( m[k+1][k] + mu )
+
+			##for ( uint r = k+2; r< m.Rows(); ++r )
+			for r in range( k+2, numRows ):
+				m[r][k] /= m[k+1][k]
+
+			m[k+1][k] = 2 * ( m[k+1][k]**2 ) / ( sigma + ( m[k+1][k]**2 ) )
+
+		#Set the symmetric entry, needs info from above...
+		m[k][k+1] = sqrt( sigma + x0**2 )
+
+		#Update the matrix with the householder transform (Make use of symmetry)...
+		#Calculate p/beta, store in d...
+		##for ( uint c = k + 1; c < m.Cols(); ++c )
+		for c in range( k+1, numCols ):
+			vEigenValues[c] = m[c][k + 1]  #First entry of v is 1.
+			##for ( uint r = k + 2; r < m.Rows(); ++r )
+			for r in range( k+2, numRows ):
+				vEigenValues[c] += m[r][k] * m[c][r]
+
+		#Calculate w, replace p with it in d...
+		mult = vEigenValues[k + 1]
+		##for ( uint r = k + 2; r < m.Rows(); r++ )
+		for r in range( k+2, numRows ):
+			mult += m[r][k] * vEigenValues[r]
+
+		mult *= ( m[k+1][k]**2 ) / 2.0
+
+		vEigenValues[k + 1] = m[k + 1][k] * vEigenValues[k + 1] - mult
+		##for ( uint c = k + 2; c < m.Cols(); ++c )
+		for c in range( k+2, numCols ):
+			vEigenValues[c] = m[k + 1][k] * vEigenValues[c] - mult * m[c][k]
+
+		#Apply the update - make use of symmetry by only calculating the lower
+		#triangular set...
+		#First column where first entry of v being 1 matters...
+		m[k + 1][k + 1] -= 2.0 * vEigenValues[k + 1]
+		##for ( uint r = k + 2; r < m.Rows(); ++r )
+		for r in range( k+2, numRows ):
+			m[r][k+1] -= m[r][k] * vEigenValues[k+1] + vEigenValues[r]
+
+		#Remainning columns...
+		##for ( uint c = k + 2; c < m.Cols(); ++c )
+		for c in range( k+2, numCols ):
+			##for ( uint r = c; r < m.Rows(); ++r )
+			for r in range( c, numRows ):
+				m[r][c] -= m[r][k] * vEigenValues[c] + m[c][k] * vEigenValues[r]
+
+		#Do the mirroring...
+		##for ( uint r = k + 1; r < m.Rows(); ++r )
+		for r in range( k+1, numRows ):
+			##for ( uint c = r + 1; c< m.Cols(); ++c )
+			for c in range( r+1, numCols ):
+				m[r][c] = m[c][r]
+
+	#Use the stored sub-diagonal house-holder vectors to initialise q...
+	##for ( int k = static_cast< int >( m.Cols() ) - 3; k >=0; --k )
+	kVals = list( reversed( range( numCols-2 ) ) )
+	for k in kVals:
+		#Arrange for v to start with 1 - avoids special cases...
+		beta = m[k+1][k]
+		m[k+1][k] = 1
+
+		#Update q, column by column...
+		##for ( uint c = static_cast< uint >( k ) + 1; c< mEigenVectors.Cols(); ++c )
+		for c in range( k+1, eigenVecCols ):
+			#Copy column to tempory storage...
+			##for ( uint r = static_cast< uint >( k ) + 1; r< mEigenVectors.Rows(); ++r )
+			for r in range( k+1, eigenVecRows ):
+				vEigenValues[r] = mEigenVectors[r][c]
+
+			#Update each row in column...
+			##for ( uint r = static_cast< uint >( k ) + 1; r < mEigenVectors.Rows(); ++r )
+			for r in range( k+1, eigenVecRows ):
+				mult = beta * m[r][k]
+				##for ( uint i = static_cast< uint >( k ) + 1; i < mEigenVectors.Cols(); ++i )
+				for i in range( k+1, eigenVecCols ):
+					mEigenVectors[r][c] -= mult * m[i][k] * vEigenValues[i]
+
+	#Now perform QR iterations till we have a diagonalised - at which point it
+	#will be the eigenvalues... (Update q as we go.)
+	#These parameters decide how many iterations are required...
+	epsilon = 1e-6
+	max_iters = 64  #Maximum iters per value pair.
+	nIterations = 0  #Number of iterations done on current value pair.
+
+	bOk = True  #Return value -set ot false if iters ever reaches max_iters.
+
+	#Range of sub-matrix being processed - start is inclusive, end exclusive.
+	start = numRows  #Set to force recalculate.
+	end = numRows
+
+	#(Remember that below code ignores the sub-diagonal, as its a mirror of the super diagonal.)
+	while True:
+		#Move end up as far as possible, finish if done...
+		pend = end
+		while True:
+			em1 = end - 1
+			em2 = end - 2
+			tol = epsilon * ( abs(m[em2][em2] ) + abs( m[em1][em1] ) )
+			if abs( m[em2][em1] ) < tol:
+				end -= 1
+				if end < 2:
+					break
+			else:
+				break
+
+		if pend == end:
+			nIterations += 1
+			if nIterations == max_iters:
+				bOk = False
+				if end == 2:
+					break
+
+				nIterations = 0
+				end -= 1
+				continue
 		else:
-			ax = math.atan2(-M[j][k],  M[j][j] )
-			ay = math.atan2(-M[k][i],  cy )
-			az = 0.0
+			if end < 2:
+				break
 
-	if not parity:
-		ax, ay, az = -ax, -ay, -az
-	if frame:
-		ax, az = az, ax
+			nIterations = 0
 
-	if True: return map(math.degrees, [ax, ay, az])
-	return ax, ay, az
+		#If end has caught up with start recalculate it...
+		if start + 2 > end:
+			start = end - 2
+			while start > 0:
+				sm1 = start - 1
+				tol = epsilon * ( abs( m[sm1][sm1] ) + abs( m[start][start] ) )
+				if abs(m[sm1][start] ) >= tol:
+					start -= 1
+				else:
+					break
+
+		#Do the QR step, with lots of juicy optimisation...
+		#Calculate eigenvalue of trailing 2x2 matrix...
+		em1 = end - 1
+		em2 = end - 2
+		temp = ( m[em2][em2] - m[em1][em1] ) / 2.0
+		div = temp + sign(temp) * sqrt( temp**2 + ( m[em2][em1]**2 ) )
+		tev = m[em1][em1] - ( m[em2][em1]**2 ) / div
+
+		#Calculate and apply relevant sequence of givens transforms to
+		#flow the numbers down the super/sub-diagonals...
+		x = m[start][start] - tev
+		z = m[start][start+1]
+
+		##for ( int k = start; ; ++k )
+		for k in range( start, 1000000 ):
+			#Calculate givens transform...
+			gc = 1
+			gs = 0
+			if not isZero( z ):
+				if abs( z ) > abs( x ):
+					r = -x / z
+					gs = 1.0 / sqrt( 1 + r**2 )
+					gc = gs * r
+				else:
+					r = -z / x
+					gc = 1 / sqrt( 1 + r**2 )
+					gs = gc * r
+
+			gcc = gc**2
+			gss = gs**2
 
 
-_NEXT_AXIS = [1, 2, 0, 1] # axis sequences for Euler angles
+			#Update matrix q (Post multiply)...
+			##for ( uint r = 0; r < mEigenVectors.Rows(); ++r )
+			for r in range( eigenVecRows ):
+				ck  = mEigenVectors[r][k]
+				ck1 = mEigenVectors[r][k+1]
+				mEigenVectors[r][k]   = gc * ck - gs * ck1
+				mEigenVectors[r][k+1] = gs * ck + gc * ck1
 
-_AXES2TUPLE = { # axes string -> (inner axis, parity, repetition, frame)
-    "sxyz": (0, 0, 0, 0), "sxyx": (0, 0, 1, 0), "sxzy": (0, 1, 0, 0),
-    "sxzx": (0, 1, 1, 0), "syzx": (1, 0, 0, 0), "syzy": (1, 0, 1, 0),
-    "syxz": (1, 1, 0, 0), "syxy": (1, 1, 1, 0), "szxy": (2, 0, 0, 0),
-    "szxz": (2, 0, 1, 0), "szyx": (2, 1, 0, 0), "szyz": (2, 1, 1, 0),
-    "rzyx": (0, 0, 0, 1), "rxyx": (0, 0, 1, 1), "ryzx": (0, 1, 0, 1),
-    "rxzx": (0, 1, 1, 1), "rxzy": (1, 0, 0, 1), "ryzy": (1, 0, 1, 1),
-    "rzxy": (1, 1, 0, 1), "ryxy": (1, 1, 1, 1), "ryxz": (2, 0, 0, 1),
-    "rzxz": (2, 0, 1, 1), "rxyz": (2, 1, 0, 1), "rzyz": (2, 1, 1, 1)}
 
-_TUPLE2AXES = dict((v, k) for k, v in _AXES2TUPLE.items())
+			#Update matrix a...
+			#Conditional on not being at start of range...
+			if k != start:
+				m[k-1][k] = gc * x - gs * z
+
+			#Non-conditional...
+			e = m[k][k]
+			f = m[k+1][k+1]
+			i = m[k][k+1]
+
+			m[k][k] = gcc * e + gss * f - 2 * gc * gs * i
+			m[k+1][k+1] = gss * e + gcc * f + 2 * gc * gs * i
+			m[k][k+1] = gc * gs * ( e - f ) + ( gcc - gss ) * i
+			x = m[k][k+1]
+
+			#Conditional on not being at end of range...
+			if k != end - 2:
+				z = -gs * m[k+1][k+2]
+				m[k+1][k+2] *= gc
+			else:
+				break
+
+
+	#Fill in the diagonal...
+	##for ( uint i = 0; i < vEigenValues.Size(); ++i )
+	for i in range( len( vEigenValues ) ):
+		vEigenValues[i] = m[i][i]
+
+	return mEigenVectors, vEigenValues, bOk
 
 
 #end
