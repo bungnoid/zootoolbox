@@ -1,5 +1,4 @@
 from path import *
-from valve import gameInfo
 
 
 LOCALES = LOCAL, GLOBAL = 'local', 'global'
@@ -18,20 +17,16 @@ def getPresetDirs( locale, tool ):
 	'''
 	returns the base directory for a given tool's preset files
 	'''
-	global kLOCAL_BASE_DIR, kGLOBAL_BASE_DIR
 	if locale == LOCAL:
-		localDir = kLOCAL_BASE_DIR
-		localDir += '.%s/' % tool
+		localDir = kLOCAL_BASE_DIR / tool
 		localDir.create()
+
 		return [localDir]
 
-	dirs = []
-	mods = gameInfo.getSearchMods()
-	for mod in mods:
-		globalDir = kGLOBAL_BASE_DIR/mod/('.'+ tool)
-		globalDir.create()
-		dirs.append(globalDir)
-	return dirs
+	globalDir = kGLOBAL_BASE_DIR / tool
+	globalDir.create()
+
+	return [globalDir]
 
 
 def presetPath( locale, tool, presetName, ext=DEFAULT_XTN ):

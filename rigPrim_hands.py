@@ -15,7 +15,7 @@ class Hand(RigPart):
 
 		controls = hand( skeletonPart.bases, taper=taper, **kw )
 		for c, n in zip( controls, cls.CONTROL_NAMES ):
-			qss.add( c )
+			sets( c, add=qss )
 
 		return controls
 
@@ -24,7 +24,7 @@ FINGER_IDX_NAMES = vSkeletonBuilder.FINGER_IDX_NAMES
 
 def hand( bases, wrist=None, num=0, names=FINGER_IDX_NAMES, taper=0.8, **kw ):
 	if wrist is None:
-		wrist = bases[ 0 ].getParent()
+		wrist = getNodeParent( bases[ 0 ] )
 
 	scale = kw[ 'scale' ]
 
@@ -47,8 +47,8 @@ def hand( bases, wrist=None, num=0, names=FINGER_IDX_NAMES, taper=0.8, **kw ):
 
 
 	#get the bounds of the geo skinned to the hand and use it to determine default placement of the slider control
-	bounds = utils.getJointBounds( [ wrist ] + bases )
-	backwardAxis = utils.getObjectAxisInDirection( wrist, Vector( (0, 0, -1) ) )
+	bounds = getJointBounds( [ wrist ] + bases )
+	backwardAxis = getObjectAxisInDirection( wrist, Vector( (0, 0, -1) ) )
 	dist = bounds[ not backwardAxis.isNegative() ][ backwardAxis % 3 ]
 
 
@@ -56,10 +56,10 @@ def hand( bases, wrist=None, num=0, names=FINGER_IDX_NAMES, taper=0.8, **kw ):
 	handSliders = buildControl( "hand_sliders"+ suffix, wrist, shapeDesc=ShapeDesc( None, 'pointer', backwardAxis ), constrain=False, colour=colour, offset=(0, 0, dist*1.25), scale=scale*1.25 )
 	poseCurve = buildControl( "hand_poses"+ suffix, handSliders, shapeDesc=ShapeDesc( None, 'starCircle', AX_Y ), oriented=False, constrain=False, colour=colour, parent=handSliders, scale=scale )
 	handQss = sets( empty=True, text="gCharacterSet", n="hand_ctrls"+ suffix )
-	handGrp = handSliders.getParent()
+	handGrp = getNodeParent( handSliders )
 
 	poseCurveTrigger = Trigger( poseCurve )
-	poseCurve.v.set( False )
+	setAttr( '%s.v' % poseCurve, False )
 
 	#constrain the group to the wrist
 	parentConstraint( wrist, handGrp )
@@ -67,8 +67,8 @@ def hand( bases, wrist=None, num=0, names=FINGER_IDX_NAMES, taper=0.8, **kw ):
 
 	attrState( (handSliders, poseCurve), ('t', 'r'), *LOCK_HIDE )
 
-	poseCurve.addAttr( 'controlObject', at='message' )  #build the attribute so posesToSliders knows where to write the pose sliders to when poses are rebuilt
-	connectAttr( handSliders.message, poseCurve.controlObject )
+	addAttr( poseCurve, ln='controlObject', at='message' )  #build the attribute so posesToSliders knows where to write the pose sliders to when poses are rebuilt
+	connectAttr( '%s.message' % handSliders, '%s.controlObject' % poseCurve )
 
 
 	#now start building the controls
@@ -100,14 +100,14 @@ def hand( bases, wrist=None, num=0, names=FINGER_IDX_NAMES, taper=0.8, **kw ):
 			ctrlScale = scale * (taper ** i)
 
 			c = buildControl( "%sControl_%d%s" % (name, i, suffix), j, shapeDesc=ShapeDesc( 'sphere', 'ring', axis=AIM_AXIS ), colour=colour, parent=handGrp, scale=ctrlScale, qss=handQss )
-			c.v = False  #hidden by default
-			cParent = c.getParent()
+			setAttr( '%s.v' % c, False )  #hidden by default
+			cParent = getNodeParent( c )
 			if i:
 				parent( cParent, ctrls[ -1 ] )
 
 			ctrls.append( c )
 
-			poseCurveTrigger.connect( c.getParent() )
+			poseCurveTrigger.connect( getNodeParent( c ) )
 
 		allCtrls += ctrls
 
@@ -117,25 +117,25 @@ def hand( bases, wrist=None, num=0, names=FINGER_IDX_NAMES, taper=0.8, **kw ):
 		###------
 		driverAttr = name +"Curl"
 
-		handSliders.addAttr( driverAttr, k=True, at='double', min=minSlider, max=maxSlider, dv=0 )
-		driverAttr = handSliders.attr( driverAttr )
-		driverAttr.setKeyable( True )
-		spaces = [ c.getParent() for c in ctrls ]
+		addAttr( handSliders, ln=driverAttr, k=True, at='double', min=minSlider, max=maxSlider, dv=0 )
+		driverAttr = '%s.%s' % (handSliders, driverAttr)
+		setAttr( driverAttr, keyable=True )
+		spaces = [ getNodeParent( c ) for c in ctrls ]
 		for s in spaces:
-			setDrivenKeyframe( s.r, cd=driverAttr )
+			setDrivenKeyframe( '%s.r' % s, cd=driverAttr )
 
-		driverAttr.set( maxSlider )
+		setAttr( driverAttr, maxSlider )
 		for s in spaces:
-			rotate( s, ( 0, maxFingerRot * parityMult, 0), r=True, os=True )
-			setDrivenKeyframe( s.r, cd=driverAttr )
+			rotate( 0, maxFingerRot * parityMult, 0, s, r=True, os=True )
+			setDrivenKeyframe( '%s.r' % s, cd=driverAttr )
 
-		driverAttr.set( minSlider )
+		setAttr( driverAttr, minSlider )
 		for s in spaces:
-			rotate( s, ( 0, minFingerRot * parityMult, 0), r=True, os=True )
-			setDrivenKeyframe( s.r, cd=driverAttr )
+			rotate( 0, minFingerRot * parityMult, 0, s, r=True, os=True )
+			setDrivenKeyframe( '%s.r' % s, cd=driverAttr )
 
-		driverAttr.set( 0 )
-		slider_curl.append( driverAttr.shortName() )
+		setAttr( driverAttr, 0 )
+		slider_curl.append( driverAttr )
 
 
 		###------
@@ -143,23 +143,23 @@ def hand( bases, wrist=None, num=0, names=FINGER_IDX_NAMES, taper=0.8, **kw ):
 		###------
 		driverAttr = name +"Bend"
 
-		handSliders.addAttr( driverAttr, k=True, at='double', min=minSlider, max=maxSlider, dv=0 )
-		driverAttr = handSliders.attr( driverAttr )
-		driverAttr.setKeyable( True )
+		addAttr( handSliders, ln=driverAttr, k=True, at='double', min=minSlider, max=maxSlider, dv=0 )
+		driverAttr = '%s.%s' % (handSliders, driverAttr)
+		setAttr( driverAttr, keyable=True )
 
 		baseCtrlSpace = spaces[ 0 ]
-		setDrivenKeyframe( baseCtrlSpace.r, cd=driverAttr )
+		setDrivenKeyframe( '%s.r' % baseCtrlSpace, cd=driverAttr )
 
-		driverAttr.set( maxSlider )
-		rotate( baseCtrlSpace, ( 0, maxFingerRot * parityMult, 0), r=True, os=True )
-		setDrivenKeyframe( baseCtrlSpace.r, cd=driverAttr )
+		setAttr( driverAttr, maxSlider )
+		rotate( 0, maxFingerRot * parityMult, 0, baseCtrlSpace, r=True, os=True )
+		setDrivenKeyframe( '%s.r' % baseCtrlSpace, cd=driverAttr )
 
-		driverAttr.set( minSlider )
-		rotate( baseCtrlSpace, ( 0, minFingerRot * parityMult, 0), r=True, os=True )
-		setDrivenKeyframe( baseCtrlSpace.r, cd=driverAttr )
+		setAttr( driverAttr, minSlider )
+		rotate( 0, minFingerRot * parityMult, 0, baseCtrlSpace, r=True, os=True )
+		setDrivenKeyframe( '%s.r' % baseCtrlSpace, cd=driverAttr )
 
-		driverAttr.set( 0 )
-		slider_bend.append( driverAttr.shortName() )
+		setAttr( driverAttr, 0 )
+		slider_bend.append( driverAttr )
 
 
 	#reorder the finger sliders

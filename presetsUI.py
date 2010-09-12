@@ -7,7 +7,31 @@ from filesystem import *
 
 ui = None
 
-class PresetForm(MelForm):
+class PresetOptionMenu(MelOptionMenu):
+	def __init__( self, parent, tool, extension, *a, **kw ):
+		MelOptionMenu.__init__( self, parent, *a, **kw )
+
+		self.setChangeCB( self.on_change )
+
+		self._manager = PresetManager( tool, extension )
+		self._presets = {}
+		self.update()
+	def update( self ):
+		self.clear()
+		for locale, presets in self._manager.listAllPresets( True ).iteritems():
+			for preset in presets:
+				self.append( preset.name() )
+				self._presets[ preset.name() ] = preset
+	def getValue( self ):
+		valueStr = MelOptionMenu.getValue( self )
+		return self._presets.get( valueStr, None )
+
+	### EVENT HANDLERS ###
+	def on_change( self, *a ):
+		self.sendEvent( 'presetChanged', self.getValue() )
+
+
+class PresetLayout(MelFormLayout):
 	ALLOW_MULTI_SELECTION = True
 
 	def __new__( cls, parent, *a, **kw ):
@@ -231,8 +255,10 @@ class PresetForm(MelForm):
 		#if no files are selected, prompt the user to select files
 		if numItems == 0: cmd.menuItem(en=False, l='select a preset file')
 
+PresetForm = PresetLayout
 
-class PresetUI(BaseMelWindow):
+
+class PresetWindow(BaseMelWindow):
 	WINDOW_NAME = 'presetWindow'
 	WINDOW_TITLE = 'Preset Manager'
 
@@ -252,6 +278,8 @@ class PresetUI(BaseMelWindow):
 		cmd.menuItem(l='Sync to Global Presets', c=lambda *a: self.editor.syncall())
 
 		self.show()
+
+PresetUI = PresetWindow
 
 
 def load( tool, locale=LOCAL, ext=DEFAULT_XTN ):

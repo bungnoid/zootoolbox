@@ -1,23 +1,31 @@
-import time
-from cacheDecorators import d_initCache, d_cacheValue, d_cacheValueWithArgs
 
 parityTestsL = ["l", "left", "lft", "lf", "lik"]
 parityTestsR = ["r", "right", "rgt", "rt", "rik"]
-NOPARITY = 0
-LPARITY = 1
-RPARITY = 2
 DEFAULT_THRESHOLD = 1
 
 
-def d_resetCache(f):
-	fname = f.func_name
-	def resetCacheFunc(*args):
-		self = args[0]
-		self._CACHE_.clear()
-		retval = f(*args)
-		return retval
-	resetCacheFunc.func_name = fname
-	return resetCacheFunc
+class Parity(int):
+	PARITIES = NONE, LEFT, RIGHT = None, 0, 1
+
+	#odd indices are left sided, even are right sided
+	NAMES = [ '_L', '_R',
+	          '_A_L', '_A_R',
+	          '_B_L', '_B_R',
+	          '_C_L', '_C_R',
+	          '_D_L', '_D_R' ]
+
+	def __new__( cls, idx ):
+		return int.__new__( cls, idx )
+	def __eq__( self, other ):
+		return self % 2 == int( other ) % 2
+	def __nonzero__( self ):
+		return self % 2
+	def __ne__( self, other ):
+		return not self.__eq__( other )
+	def asMultiplier( self ):
+		return (-1) ** self
+	def asName( self ):
+		return self.NAMES[ self ]
 
 
 class Name(object):
@@ -28,28 +36,75 @@ class Name(object):
 	PREFIX_DELIMETERS = ':|'
 	PUNCTUATION = '_.'
 
-	def __init__( self, theString='' ):
+	def __init__( self, nameItem='' ):
 		#NOTE: this value should never be set directly...  instead use the set method or the string property
-		self._string = str(theString)
+		self._string = str( nameItem )
+		self.item = nameItem
 		self.prefix = None
 
 		#determines what characters denote a prefix boundary - so if it were set to ':' then apples:bananas would have the string 'apples:' as its prefix
 		self.prefixDelimeters = self.PREFIX_DELIMETERS
 		self.punctuation = self.PUNCTUATION
-		self._parity = None
 	def __str__( self ):
 		return self._string
 	__repr__ = __str__
 	def __eq__( self, other ):
-		return self.likeness(other)
+		return int( self.likeness( other ) )
+	def __ne__( self, other ):
+		return not self.__eq__( other )
 	def __getitem__( self, item ):
 		return self.split()[item]
 	def __setitem__( self, item, newItem ):
-		token = self[item]
-		nameStr = str(self)
+		token = self[ item ]
+		nameStr = str( self )
 		startIdx = nameStr.find( token )
-		endIdx = startIdx + len(token)
+		endIdx = startIdx + len( token )
+
+		#splice together a new string and we're done...
 		self._string = '%s%s%s' % ( nameStr[:startIdx], newItem, nameStr[endIdx:] )
+	def pop( self, item, stripSurroundingPunctuation=True ):
+		PUNCTUATION = self.PUNCTUATION
+
+		token = self[ item ]
+		nameStr = str( self )
+		startIdx = nameStr.find( token )
+		endIdx = startIdx + len( token )
+
+		'''
+		#now strip surrounding whitespace or punctuation
+		if stripSurroundingPunctuation:
+			puncEndOffset = 0
+			hasEndPunc = False
+			for char in nameStr[ endIdx: ]:
+				if char in PUNCTUATION:
+					puncEndOffset += 1
+					hasEndPunc = True
+				else: break
+
+			reversedStartChunk = ''.join( reversed( list( nameStr[ :startIdx ] ) ) )
+
+			puncStartOffset = 0
+			hasStartPunc = False
+
+			for char in reversedStartChunk:
+				if char in PUNCTUATION:
+					puncStartOffset -= 1
+					hasStartPunc = True
+				else: break
+
+			if hasStartPunc and hasEndPunc:
+				startIdx -= max( 0, puncStartOffset )
+				endIdx += puncEndOffset
+				'''
+
+		newNameStr = '%s%s' % ( nameStr[:startIdx], nameStr[endIdx:] )
+
+		removeStart = startIdx
+		#for n, char in enumerate( newNameStr[ startIdx: ] ):
+
+
+		#splice together a new string and we're done...
+		self._string = '%s%s' % ( nameStr[:startIdx], nameStr[endIdx:] )
 	def __nonzero__( self ):
 		try:
 			self._string[0]
@@ -57,16 +112,17 @@ class Name(object):
 		except IndexError: return False
 	def set( self, newString ):
 		self._string = newString
-		self._parity = None
 	string = property(__str__, set)
 	def get_parity( self ):
 		'''
 		doing this comparison is a little faster than using the cache lookup - and parity gets hammered on in likeness determination
 		'''
-		if self._parity is None:
-			self._parity, self._parityStr = hasParity(self.split())
+		try: return self._parity
+		except AttributeError:
+			self._parity, self._parityStr = hasParity( self.split() )
+
 		return self._parity
-	parity = property(get_parity)
+	parity = property( get_parity )
 	def swap_parity( self ):
 		return self.__class__( swapParity(self) )
 	def cache_prefix( self, delimeters=None ):
@@ -115,7 +171,7 @@ class Name(object):
 		#if stripFirst: self.cache_prefix()
 
 		#if the names match exactly, return the highest likeness
-		if str(self) == str(other): return 1.0
+		if str(self) == str(other): return 1
 
 		srcTokens = self.split()[:]
 		tgtTokens = other.split()[:]
@@ -125,7 +181,7 @@ class Name(object):
 				return 0
 
 		#if the split result is exact, early out
-		if srcTokens == tgtTokens: return 1.0
+		if srcTokens == tgtTokens: return 1
 
 		exactMatchWeight = 1.025
 		totalWeight = 0
@@ -214,10 +270,7 @@ class Name(object):
 			self._string = string
 			return self
 
-		new = self.__new__(self.__class__)
-		new.__init__(string)
-
-		return new
+		return self.__class__( string )
 	def split( self, aString=None ):
 		'''
 		retuns a list of name tokens.  tokens are delimited by either camel case separation,
@@ -270,48 +323,71 @@ def hasParity( nameToks, popParityToken=True ):
 	'''
 	returns a parity number for a given name.  parity is 0 for none, 1 for left, and 2 for right
 	'''
-	lowerToks = [tok.lower() for tok in nameToks]
-	lowerToksSet = set(lowerToks)
-	existingParityToksL = lowerToksSet.intersection( set(parityTestsL) )
-	if len(existingParityToksL):
+	lowerToks = [ tok.lower() for tok in nameToks ]
+	lowerToksSet = set( lowerToks )
+	existingParityToksL = lowerToksSet.intersection( set( parityTestsL ) )
+
+	if len( existingParityToksL ):
 		parityStr = existingParityToksL.pop()
 		if popParityToken:
 			idx = lowerToks.index( parityStr )
-			nameToks.pop(idx)
-		return LPARITY, parityStr
+			nameToks.pop( idx )
 
-	existingParityToksR = lowerToksSet.intersection( set(parityTestsR) )
-	if len(existingParityToksR):
+		return Parity.LEFT, parityStr
+
+	existingParityToksR = lowerToksSet.intersection( set( parityTestsR ) )
+	if len( existingParityToksR ):
 		parityStr = existingParityToksR.pop()
 		if popParityToken:
 			idx = lowerToks.index( parityStr )
-			nameToks.pop(idx)
-		return RPARITY, parityStr
+			nameToks.pop( idx )
 
-	return NOPARITY, None
+		return Parity.RIGHT, parityStr
+
+	return Parity.NONE, None
 
 
 def swapParity( name ):
 	nameToks = name.split()
 	lowerToks = [tok.lower() for tok in nameToks]
 	lowerToksSet = set(lowerToks)
-	parityTokensPresentL = lowerToksSet.intersection( set(parityTestsL) )
-	if len(parityTokensPresentL):
-		parityToken = parityTokensPresentL.pop()  #this is the caseless parity token
-		idxInName = lowerToks.index( parityToken )
-		idxInTokens = parityTestsL.index(parityToken)
-		parityToken = nameToks[idxInName]  #this gets us the parity token with case - so we can make sure the swapped parity token has the same case...
-		name[idxInName] = matchCase( parityTestsR[idxInTokens], parityToken )
-		return name
 
-	parityTokensPresentR = lowerToksSet.intersection( set(parityTestsR) )
-	if len(parityTokensPresentR):
-		parityToken = parityTokensPresentR.pop()
-		idxInName = lowerToks.index( parityToken )
-		idxInTokens = parityTestsR.index(parityToken)
-		parityToken = nameToks[idxInName]
-		name[idxInName] = matchCase( parityTestsL[idxInTokens], parityToken )
-		return name
+	allParityTests = [ parityTestsL, parityTestsR ]
+
+	for parityTests, otherTests in zip( allParityTests, reversed( allParityTests ) ):
+		parityTokensPresent = lowerToksSet.intersection( set(parityTestsL) )
+
+		if parityTokensPresent:
+			#this is the caseless parity token
+			parityToken = parityTokensPresent.pop()
+
+			idxInName = lowerToks.index( parityToken )
+			idxInTokens = parityTests.index( parityToken )
+
+			#this gets us the parity token with case - so we can make sure the swapped parity token has the same case...
+			parityToken = nameToks[ idxInName ]
+
+			name[ idxInName ] = matchCase( otherTests[ idxInTokens ], parityToken )
+
+			return name
+
+	return name
+
+
+def stripParity( name ):
+	nameToks = name.split()
+	lowerToks = [ tok.lower() for tok in nameToks ]
+	lowerToksSet = set( lowerToks )
+
+	for parityTests in (parityTestsL, parityTestsR):
+		parityTokensPresent = lowerToksSet.intersection( set( parityTests ) )
+
+		if parityTokensPresent:
+			parityToken = parityTokensPresent.pop()
+			idxInName = lowerToks.index( parityToken )
+			name[ idxInName ] = ''
+
+			return name
 
 	return name
 
@@ -372,7 +448,6 @@ def matchNames( srcList, tgtList, strip=True, parity=True, unique=False, opposit
 
 	nomatch: teh object used when no match occurs - defaults to Name()
 	'''
-	start = time.clock()
 	if isinstance(srcList, basestring): srcList = [srcList]
 	if isinstance(tgtList, basestring): tgtList = [tgtList]
 
@@ -421,10 +496,7 @@ def matchNames( srcList, tgtList, strip=True, parity=True, unique=False, opposit
 		else: matches.append(nomatch)
 
 	#re-apply any prefixes we stripped
-	if strip: matches = [ a.uncache_prefix() for a in matches ]
-
-	#report times...
-	#print 'match time: %0.2f secs'%(time.clock()-start)
+	if strip: matches = [ a.item for a in matches ]
 
 	return matches
 
@@ -446,6 +518,8 @@ class Mapping(object):
 		return iter( self.srcs )
 	def __len__( self ):
 		return len( self.srcs )
+	def __contains__( self, item ):
+		return item in self.asDict()
 	def __getitem__( self, item ):
 		return self.asDict()[ item ]
 	def __setitem__( self, item, value ):
@@ -476,6 +550,26 @@ class Mapping(object):
 		returns a copy of the mapping object
 		'''
 		return self.__class__.FromMapping( self )
+	def pop( self, index=-1 ):
+		src = self.srcs.pop( index )
+		tgt = self.tgts.pop( index )
+
+		return src, tgt
+	def insert( self, index, src, tgt ):
+		self.srcs.insert( index, src )
+		self.tgts.insert( index, tgt )
+	def append( self, src, tgt ):
+		self.srcs.append( src )
+		self.tgts.append( tgt )
+	def moveItem( self, index, places=1 ):
+		src, tgt = self.pop( index )
+		self.insert( index + places, src, tgt )
+	def moveItemUp( self, index, places=1 ):
+		places = abs( places )
+		return self.moveItem( index, -places )
+	def moveItemDown( self, index, places=1 ):
+		places = abs( places )
+		return self.moveItem( index, places )
 	def setFromDict( self, mappingDict, ordering=() ):
 		'''
 		Sets the mapping from a mapping dictionary.  If an ordering iterable is given then the ordering
@@ -530,10 +624,23 @@ class Mapping(object):
 ABBRVS_TO_EXPAND = {'max': 'maximum',
 				  'min': 'minimum'}
 
-def camelCaseToNice( theString ):
+def camelCaseToNice( theString, abbreviationsToExpand=None, niceParityNames=True ):
 	asName = Name( theString )
 	words = asName.split()
-	words = [ABBRVS_TO_EXPAND.get(w, w).capitalize() for w in words]
+
+	if niceParityNames:
+		#does the name have parity?  if so use the "nice" version of the parity string
+		parity = asName.get_parity()
+
+		if parity is not Parity.NONE:
+			niceParityStr = (parityTestsL, parityTestsR)[ parity ][ 1 ]
+			if abbreviationsToExpand is None: abbreviationsToExpand = {}
+			abbreviationsToExpand[ asName._parityStr ] = niceParityStr
+
+	if abbreviationsToExpand is None:
+		words = [ w.capitalize() for w in words ]
+	else:
+		words = [ abbreviationsToExpand.get(w.lower(), w).capitalize() for w in words ]
 
 	return ' '.join( words )
 

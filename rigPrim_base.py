@@ -1,26 +1,26 @@
 import filesystem
 
-from pymel.core import *
-from pymel.core.nodetypes import DagNode, Container
+from pymel.core import PyNode
+
+from maya.cmds import *
 from maya import cmds as cmd
-from utils import *
+from rigUtils import *
 from control import *
 from names import Parity, Name, camelCaseToNice, stripParity
 from skeletonBuilderCore import *
 from vectors import Vector, Matrix
 
-import pymel.core as pymelCore
+import apiExtensions
 import skeletonBuilderCore
-import exportManagerCore
-import vSkeletonBuilder
 import spaceSwitching
 import triggered
 import vectors
+import control
 import api
 
 #import wingdbstub
 
-__author__ = 'hamish@valvesoftware.com'
+__author__ = 'mel@macaronikazoo.com'
 
 Trigger = triggered.Trigger
 AXES = Axis.BASE_AXES
@@ -30,7 +30,7 @@ AIM_AXIS = AX_X
 ROT_AXIS = AX_Y
 
 #make sure all setDrivenKeys have linear tangents
-setDrivenKeyframe = lambda *a, **kw: pymelCore.setDrivenKeyframe( inTangentType='linear', outTangentType='linear', *a, **kw )
+setDrivenKeyframe = lambda *a, **kw: cmd.setDrivenKeyframe( inTangentType='linear', outTangentType='linear', *a, **kw )
 
 
 class RigPartError(Exception): pass
@@ -44,26 +44,23 @@ def getNodesCreatedBy( function, *args, **kwargs ):
 	NOTE: if any container nodes were created, their contents are omitted from the
 	resulting node list - the container itself encapsulates them
 	'''
-	preScene = ls()
-	ret = function( *args, **kwargs )
-	postScene = ls()
 
-	newNodes = set( postScene ).difference( set( preScene ) )
+	newNodes, ret = apiExtensions.getNodesCreatedBy( function, *args, **kwargs )
 
 	#now remove nodes from all containers from the newNodes list
-	newContainers = ls( newNodes, type='container' )
+	newContainers = apiExtensions.filterByType( newNodes, apiExtensions.MFn.kContainer )  #ls( newNodes, type='container' )
+	newNodes = map( str, newNodes )
 	for c in newContainers:
-		for n in c.getMembers():
+		for n in container( c, q=True, nodeList=True ):
 			newNodes.remove( n )
 
 
 	#containers contained by other containers don't need to be returned (as they're already contained by a parent)
 	newTopLevelContainers = []
 	for c in newContainers:
-		try:
-			if c.getParentContainer():
-				continue
-		except MayaNodeError: pass
+		parentContainer = container( c, q=True, parentContainer=True )
+		if parentContainer:
+			continue
 
 		newTopLevelContainers.append( c )
 		newNodes.add( c )
@@ -86,30 +83,31 @@ def buildContainer( typeClass, kwDict, nodes, controls ):
 	#build the container, and add the special attribute to it to
 	theContainer = container( name='%s_%s' % (typeClass.__name__, kwDict.get( 'idx', 'NOIDX' )) )
 
-	theContainer.addAttr( '_rigPrimitive', attributeType='compound', numberOfChildren=5 )
-	theContainer.addAttr( 'typeName', dt='string', parent='_rigPrimitive' )
-	theContainer.addAttr( 'version', at='long', parent='_rigPrimitive' )
-	theContainer.addAttr( 'skeletonPart', at='message', parent='_rigPrimitive' )
-	theContainer.addAttr( 'buildKwargs', dt='string', parent='_rigPrimitive' )
-	theContainer.addAttr( 'controls',
-	                      multi=True,
-	                      indexMatters=False,
-	                      attributeType='message',
-	                      parent='_rigPrimitive' )
+	addAttr( theContainer, ln='_rigPrimitive', attributeType='compound', numberOfChildren=5 )
+	addAttr( theContainer, ln='typeName', dt='string', parent='_rigPrimitive' )
+	addAttr( theContainer, ln='version', at='long', parent='_rigPrimitive' )
+	addAttr( theContainer, ln='skeletonPart', at='message', parent='_rigPrimitive' )
+	addAttr( theContainer, ln='buildKwargs', dt='string', parent='_rigPrimitive' )
+	addAttr( theContainer, ln='controls',
+	         multi=True,
+	         indexMatters=False,
+	         attributeType='message',
+	         parent='_rigPrimitive' )
 
 
 	#now set the attribute values...
-	theContainer._rigPrimitive.typeName.set( typeClass.__name__ )
-	theContainer._rigPrimitive.version.set( typeClass.__version__ )
-	theContainer._rigPrimitive.buildKwargs.set( str( kwDict ) )
+	setAttr( '%s._rigPrimitive.typeName' % theContainer, typeClass.__name__, type='string' )
+	setAttr( '%s._rigPrimitive.version' % theContainer, typeClass.__version__ )
+	setAttr( '%s._rigPrimitive.buildKwargs' % theContainer, str( kwDict ), type='string' )
 
 
 	#now add all the nodes
-	for node in nodes | set( controls ):
-		if isinstance( node, (DagNode, Container) ):
+	nodes = map( str, nodes )
+	controls = map( str, controls )
+	for node in set( nodes ) | set( controls ):
 
-			try: theContainer.addNode( node, force=True )
-			except: print 'PROBLEM ADDING', node, 'TO CONTAINER', theContainer
+		if objectType( node, isAType='dagNode' ) or objectType( node, isAType='container' ):
+			container( theContainer, e=True, addNode=node, f=True )
 
 
 	#and now hook up all the controls
@@ -118,7 +116,7 @@ def buildContainer( typeClass, kwDict, nodes, controls ):
 		if control is None:
 			continue
 
-		connectAttr( control.message, theContainer._rigPrimitive.controls[ idx ], f=True )
+		connectAttr( '%s.message' % control, '%s._rigPrimitive.controls[%d]' % (theContainer, idx), f=True )
 		triggered.setKillState( control, True )
 
 
@@ -142,7 +140,7 @@ class RigPart(filesystem.trackableClassFactory()):
 	ADD_CONTROLS_TO_QSS = True
 
 	def __init__( self, partContainer ):
-		self.container = PyNode( partContainer )
+		self.container = partContainer
 	def __repr__( self ):
 		return '%s_%d( %s )' % (self.__class__.__name__, self.getIdx(), self.container)
 	def __hash__( self ):
@@ -159,7 +157,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		if idx < 0:
 			raise AttributeError( "No control with the name %s" % attrName )
 
-		cons = listConnections( self.container._rigPrimitive.controls[ idx ], d=False )
+		cons = listConnections( '%s._rigPrimitive.controls[%d]' % (self.container, idx), d=False )
 		assert len( cons ) == 1, "More than one control was found!!!"
 
 		return cons[ 0 ]
@@ -170,38 +168,37 @@ class RigPart(filesystem.trackableClassFactory()):
 			except IndexError:
 				raise IndexError( "Invalid control index - %s only has %d named controls" % (self, len( self.CONTROL_NAMES )) )
 
-		return self.container._rigPrimitive.controls[ idx ]
+		return getAttr( '%s._rigPrimitive.controls[ idx ]' % self.container )
 	@classmethod
 	def InitFromItem( cls, item ):
 		'''
 		inits the rigPart from a member item - the RigPart instance returned is
 		cast to teh most appropriate type
 		'''
-		if not isinstance( item, PyNode ):
-			item = PyNode( item )
 
-		if isinstance( item, Container ):
-			typeClass = RigPart.GetNamedSubclass( item._rigPrimitive.typeName.get() )
+		if objectType( item, isAType='container' ):
+		#if isinstance( item, Container ):
+			typeClass = RigPart.GetNamedSubclass( getAttr( '%s._rigPrimitive.typeName' % item ) )
 			return typeClass( item )
 
 		theContainer = container( q=True, findContainer=[ item ] )
 		if theContainer is None:
 			return None
 
-		theContainer = PyNode( theContainer )  #for some reason the container command returns a unicode object, not a PyNode hence the explicit cast...
 		if theContainer:
-			typeClass = RigPart.GetNamedSubclass( theContainer._rigPrimitive.typeName.get() )
+			typeClassStr = getAttr( '%s._rigPrimitive.typeName' % theContainer )
+			typeClass = RigPart.GetNamedSubclass( typeClassStr )
 			return typeClass( theContainer )
 
 		return None
 	@classmethod
 	def IterAllParts( cls ):
 		'''
-		iterates over all SkeletonParts in the current scene
+		iterates over all RigParts in the current scene
 		'''
 		for c in ls( type='container', r=True ):
-			if c.hasAttr( '_rigPrimitive' ):
-				thisClsName = c._rigPrimitive.typeName.get()
+			if objExists( '%s._rigPrimitive' % c ):
+				thisClsName = getAttr( '%s._rigPrimitive.typeName' % c )
 				thisCls = RigPart.GetNamedSubclass( thisClsName )
 				if issubclass( thisCls, cls ):
 					yield cls( c )
@@ -280,7 +277,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		if cls.ADD_CONTROLS_TO_QSS:
 			for c in controls:
 				if c is None: continue
-				qss.add( c )
+				sets( c, add=qss )
 
 
 		#build the container and initialize the rigPrimtive
@@ -293,27 +290,28 @@ class RigPart(filesystem.trackableClassFactory()):
 		#and wrap them up as containers, but still publish their nodes
 		controlNames = cls.CONTROL_NAMES or []  #CONTROL_NAMES can validly be None - so just use an empty list if this is the case
 		for control in controls:
-			if isinstance( control, DagNode ):
+
+			if objectType( control, isAType='transform' ):
 				try: controlName = controlNames[ idx ]
 				except IndexError: controlName = 'c_%d' % idx
 				container( theContainer, e=True, publishAsParent=(control, controlName) )
 
 
 		#stuff the part container into the world container - we want a clean top level in the outliner
-		worldPart.container.addNode( theContainer )
+		container( worldPart.container, e=True, addNode=theContainer )
 
 
 		#make sure the container "knows" the skeleton part - its not always obvious trawling through
 		#the nodes in teh container which items are the skeleton part
-		connectAttr( skeletonPart.base.message, theContainer._rigPrimitive.skeletonPart )
+		connectAttr( '%s.message' % skeletonPart.base, '%s._rigPrimitive.skeletonPart' % theContainer )
 
 
 		#lock the parts so unpublished nodes can't be messed with
 		#if _PART_DEBUG_MODE is True, don't blackbox the container - this makes it slightly easier to debug problems
 		if _PART_DEBUG_MODE:
-			theContainer.blackBox.set( False )
+			setAttr( '%s.blackBox' % theContainer, False )
 		else:
-			theContainer.blackBox.set( True )
+			setAttr( '%s.blackBox' % theContainer, True )
 
 
 		return newPart
@@ -325,11 +323,13 @@ class RigPart(filesystem.trackableClassFactory()):
 		'''
 		cons = listConnections( control.message, s=False, p=True, type='container' )
 		for c in cons:
-			typeClass = RigPart.GetNamedSubclass( c.node()._rigPrimitive.typeName.get() )
+			typeClassStr = getAttr( '%s._rigPrimitive.typeName' % c.node() )
+			typeClass = RigPart.GetNamedSubclass( typeClassStr )
 			if typeClass.CONTROL_NAMES is None:
 				return str( control )
 
-			try: name = typeClass.CONTROL_NAMES[ c.index() ]
+			idx = c[ c.rfind( '[' )+1:-1 ]
+			try: name = typeClass.CONTROL_NAMES[ idx ]
 			except ValueError:
 				print typeClass, control
 				raise RigPartError( "Doesn't have a name!" )
@@ -362,7 +362,7 @@ class RigPart(filesystem.trackableClassFactory()):
 
 		return kwargs
 	def getBuildKwargs( self ):
-		theDict = eval( self.container._rigPrimitive.buildKwargs.get() )
+		theDict = eval( getAttr( '%s._rigPrimitive.buildKwargs' % self.container ) )
 		return theDict
 	def getIdx( self ):
 		'''
@@ -376,7 +376,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		'''
 		returns the skeleton part this rig part is driving
 		'''
-		connected = self.container._theSkeletonPart.listConnections()[ 0 ]
+		connected = listConnections( '%s._theSkeletonPart' % self.container )[ 0 ]
 		return SkeletonPart.InitFromItem( connected )
 	def getSkeletonPartParity( self ):
 		return self.getSkeletonPart().getParity()
@@ -388,7 +388,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		if self.CONTROL_NAMES is None:
 			return str( control )
 
-		cons = cmd.listConnections( str(control.message), s=False, p=True, type='container' )  #listConnections( control.message, s=False, p=True, type='container' )
+		cons = cmd.listConnections( '%s.message' % control, s=False, p=True, type='container' )  #listConnections( control.message, s=False, p=True, type='container' )
 		for c in cons:
 			try: c = PyNode( c )
 			except MayaNodeError: continue
@@ -398,7 +398,7 @@ class RigPart(filesystem.trackableClassFactory()):
 
 			return name
 
-		raise RigPartError( "The control %s isn't associated with this rig primitive %s" % (control.shortName(), self) )
+		raise RigPartError( "The control %s isn't associated with this rig primitive %s" % (control, self) )
 
 
 def generateNiceControlName( control ):
@@ -508,7 +508,7 @@ def createLineOfActionMenu( controls, joints ):
 		controls = [ controls ]
 
 	joints = list( joints )
-	jParent = joints[ 0 ].getParent()
+	jParent = getNodeParent( joints[ 0 ] )
 	if jParent:
 		joints.insert( 0, jParent )
 
@@ -529,7 +529,7 @@ class WorldPart(RigPart):
 	__version__ = 0
 	CONTROL_NAMES = [ 'control', 'parts', 'masterQss', 'qss', 'exportRelative' ]
 
-	WORLD_OBJ_MENUS = [ ('toggle rig vis', """{\nstring $childs[] = `listRelatives -type transform #`;\nint $vis = !`getAttr ( $childs[0]+\".v\" )`;\nfor($a in $childs) if( `objExists ( $a+\".v\" )`) if( `getAttr -se ( $a+\".v\" )`) setAttr ( $a+\".v\" ) $vis;\n}"""),
+	WORLD_OBJ_MENUS = [ ('toggle rig vis', """{\nstring $childs[] = `listRelatives -pa -type transform #`;\nint $vis = !`getAttr ( $childs[0]+\".v\" )`;\nfor($a in $childs) if( `objExists ( $a+\".v\" )`) if( `getAttr -se ( $a+\".v\" )`) setAttr ( $a+\".v\" ) $vis;\n}"""),
 	                    ('draw all lines of action', """string $menuObjs[] = `zooGetObjsWithMenus`;\nfor( $m in $menuObjs ) {\n\tint $cmds[] = `zooObjMenuListCmds $m`;\n\tfor( $c in $cmds ) {\n\t\tstring $name = `zooGetObjMenuCmdName $m $c`;\n\t\tif( `match \"draw line of action\" $name` != \"\" ) eval(`zooPopulateCmdStr $m (zooGetObjMenuCmdStr($m,$c)) {}`);\n\t\t}\n\t}"""),
 	                    ('show "export relative" node', """"""),
 	                    ]
@@ -547,18 +547,19 @@ class WorldPart(RigPart):
 		worldNodes, controls = getNodesCreatedBy( cls._build, **kw )
 		worldPart = buildContainer( WorldPart, { 'idx': 0 }, worldNodes, controls  )
 
-		container( worldPart.container, e=True, publishAsRoot=(controls[ 0 ], 0) )
+		worldContainer = str( worldPart.container )
+		container( worldContainer, e=True, publishAsRoot=(controls[ 0 ], 0) )
 		for c, name in zip( controls, cls.CONTROL_NAMES ):
-			if isinstance( c, DagNode ):
-				container( worldPart.container, e=True, publishAsParent=(c, name) )
+			if objectType( c, isAType='transform' ):
+				container( worldContainer, e=True, publishAsParent=(c, name) )
 
-		container( worldPart.container, e=True, publishAsRoot=(controls[ 0 ], 0) )
-		container( worldPart.container, e=True, publishAsRoot=(controls[ 1 ], 1) )
+		container( worldContainer, e=True, publishAsRoot=(controls[ 0 ], 0) )
+		container( worldContainer, e=True, publishAsRoot=(controls[ 1 ], 1) )
 
 		return worldPart
 	@classmethod
 	def _build( cls, **kw ):
-		scale = kw.get( 'scale', skeletonBuilderCore.vSkeletonBuilder.TYPICAL_HEIGHT )
+		scale = kw.get( 'scale', skeletonBuilderCore.TYPICAL_HEIGHT )
 		scale /= 1.5
 
 		world = buildControl( 'main', shapeDesc=ShapeDesc( None, 'hex', AX_Y ), oriented=False, scale=scale, niceName='The World' )
@@ -571,18 +572,18 @@ class WorldPart(RigPart):
 		parentConstraint( world, exportRelative )
 		attrState( exportRelative, ('t', 'r', 's'), *LOCK_HIDE )
 		attrState( exportRelative, 'v', *HIDE )
-		exportRelative.v.set( False )
+		setAttr( '%s.v' % exportRelative, False )
 
 		#turn scale segment compensation off for all joints in the scene
 		for j in ls( type='joint' ):
-			j.ssc.set( False )
+			setAttr( '%s.ssc' % j, False )
 
-		masterQss.add( qss )
+		sets( qss, add=masterQss )
 
 		attrState( world, 's', *NORMAL )
-		world.scale >> parts.scale
-		world.scaleX >> world.scaleY
-		world.scaleX >> world.scaleZ
+		connectAttr( '%s.scale' % world, '%s.scale' % parts )
+		connectAttr( '%s.scaleX' % world, '%s.scaleY' % world )
+		connectAttr( '%s.scaleX' % world, '%s.scaleZ' % world )
 
 		#add right click items to the world controller menu
 		worldTrigger = Trigger( str( world ) )
@@ -590,8 +591,8 @@ class WorldPart(RigPart):
 
 
 		#add world control to master qss
-		masterQss.add( world )
-		masterQss.add( exportRelative )
+		sets( world, add=masterQss )
+		sets( exportRelative, add=masterQss )
 
 
 		#turn unwanted transforms off, so that they are locked, and no longer keyable

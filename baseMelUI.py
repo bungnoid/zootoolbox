@@ -195,7 +195,7 @@ class BaseMelUI(trackableClassFactory( unicode )):
 		#this has the potential to be slow: it generates a unique name for the widget we're about to create, the benefit of doing this is that we're
 		#guaranteed the widget LEAF name will be unique.  I'm assuming maya also does this, but I'm unsure.  if there are weird ui naming conflicts
 		#it might be nessecary to uncomment this code
-		formatStr = '%s%d__'+ parentNameTok
+		formatStr = '%s%d__'#+ parentNameTok
 		baseName, n = cls.__name__, len( cls._INSTANCE_LIST )
 		uniqueName = formatStr % (baseName, n)
 		while WIDGET_CMD( uniqueName, q=True, exists=True ):
@@ -218,28 +218,21 @@ class BaseMelUI(trackableClassFactory( unicode )):
 		changeCB = self._changeCB
 		if changeCB:
 			self.setChangeCB( changeCB )
-
-		#pop out any instance variables defined in the _INSTANCE_VARIABLES dict - they've already been added to the instance in the __new__ method so we just need to pop em out of the
-		for attrName in self._INSTANCE_VARIABLES:
-			kw.pop( attrName, None )
-
-		#make sure kw args passed to init are executed as edit commands (which should have been passed
-		#to the cmd on creation, but we can't do that because we're inheriting from str, and we don't
-		#want to force all subclasses to implement a __new__ method...
-		self( edit=True, **kw )
 	def __call__( self, *a, **kw ):
 		return self.WIDGET_CMD( self, *a, **kw )
 	"""def __eq__( self, other ):
 		'''
 		compares to widgets or widget names and returns whether they both refer to the same widget
 		'''
-		if isinstance( other, BaseMelUI ):
-			return self.getFullName() == other.getFullName()
+		return str( self ) == str( other )
 
-		if isinstance( other, basestring ):
-			return self.getFullName().endswith( other )
+		#if isinstance( other, BaseMelUI ):
+			#return self.getFullName() == other.getFullName()
 
-		raise TypeError( "Cannot compare these types!" )
+		#if isinstance( other, basestring ):
+			#return self.getFullName().endswith( other )
+
+		#raise TypeError( "Cannot compare these types!" )
 	def __ne__( self, other ):
 		return not self.__eq__( other )"""
 	def getFullName( self ):
@@ -322,16 +315,23 @@ class BaseMelUI(trackableClassFactory( unicode )):
 
 		NOTE: its not possible to change a widget's parent once its been created
 		'''
-		return cmd.control( self, q=True, parent=True )
+		return self.parent  #cmd.control( self, q=True, parent=True )
 	def iterParents( self ):
 		'''
 		returns a generator that walks up the widget hierarchy
 		'''
 		try:
-			parent = cmd.control( self, q=True, parent=True )
+			parent = self.parent
 			while True:
 				yield parent
-				parent = cmd.control( parent, q=True, parent=True )
+
+				#if the parent isn't an instance of BaseMelUI (the user has mixed baseMelUI and plain old mel) this should throw an attribute error
+				try:
+					parent = parent.parent
+
+				#in which case, try to cast the widget as a BaseMelUI instance and yield that instead
+				except AttributeError:
+					parent = BaseMelUI.FromStr( cmd.control( parent, q=True, parent=True ) )
 
 		except RuntimeError: return
 	def getTopParent( self ):
@@ -343,6 +343,18 @@ class BaseMelUI(trackableClassFactory( unicode )):
 			try:
 				parent = parent.parent
 			except AttributeError: return parent
+	def getParentOfType( self, parentClass, exactMatch=False ):
+		'''
+		if exactMatch is True the class of the parent must be the parentClass, otherwise it checks
+		whether the parent is a subclass of parentClass
+		'''
+		for parent in self.iterParents():
+			if exactMatch:
+				if parent.__class__ is parentClass:
+					return parent
+			else:
+				if issubclass( parent.__class__, parentClass ):
+					return parent
 	def exists( self ):
 		return cmd.control( self, ex=True )
 	def delete( self ):
@@ -474,6 +486,8 @@ class MelSingleLayout(MelForm):
 	NOTE: make sure to call layout() after the child has been created to setup the layout data
 	'''
 
+	_INSTANCE_VARIABLES = { 'padding': 0 }
+
 	def __init__( self, parent, padding=0, *a, **kw ):
 		MelForm.__init__( self, parent, *a, **kw )
 		self._padding = padding
@@ -570,7 +584,7 @@ class MelHLayout(_AlignedFormLayout):
 					nextW = children[ n+1 ]
 					self( e=True, ac=(nextW, edge1, padding, thisW), an=(thisW, edge2) )
 				except IndexError:
-					prevW = children[ n+1 ]
+					prevW = children[ n-1 ]
 					self( e=True, ac=(prevW, edge2, padding, thisW), an=(thisW, edge1) )
 
 		if self.expand:
@@ -630,6 +644,9 @@ class MelHSingleStretchLayout(_AlignedFormLayout):
 	def setPadding( self, padding ):
 		self.padding = padding
 	def setExpand( self, expand ):
+		'''
+		make sure to call layout() after changing the expand value
+		'''
 		self.expand = expand
 	def setStretchWidget( self, widget ):
 		if not isinstance( widget, BaseMelUI ):
@@ -684,11 +701,11 @@ class MelColumnLayout(BaseMelLayout):
 	WIDGET_CMD = cmd.columnLayout
 	STRETCHY = True
 
-	def __init__( self, parent, *a, **kw ):
-		stretchy = kw.pop( 'adjustableColumn', kw.pop( 'adj', self.STRETCHY ) )
+	def __new__( cls, parent, *a, **kw ):
+		stretchy = kw.pop( 'adjustableColumn', kw.pop( 'adj', cls.STRETCHY ) )
 		kw.setdefault( 'adjustableColumn', stretchy )
 
-		BaseMelLayout.__init__( self, parent, *a, **kw )
+		return BaseMelLayout.__new__( cls, parent, *a, **kw )
 
 MelColumn = MelColumnLayout
 
@@ -701,11 +718,11 @@ class MelGridLayout(BaseMelLayout):
 	WIDGET_CMD = cmd.gridLayout
 
 	AUTO_GROW = True
-	def __init__( self, parent, **kw ):
+	def __new__( cls, parent, **kw ):
 		autoGrow = kw.pop( 'autoGrow', self.AUTO_GROW )
 		kw.setdefault( 'ag', autoGrow )
 
-		BaseMelLayout.__init__( self, parent, **kw )
+		return BaseMelLayout.__new__( cls, parent, **kw )
 
 MelGrid = MelGridLayout
 
@@ -721,20 +738,31 @@ class MelScrollLayout(BaseMelLayout):
 MelScroll = MelScrollLayout
 
 
+class MelHScrollLayout(MelScrollLayout):
+	_ORIENTATION_ATTR = 'verticalScrollBarThickness'
+	def __new__( cls, parent, *a, **kw ):
+		kw[ cls._ORIENTATION_ATTR ] = 0
+		return MelScrollLayout.__new__( cls, parent, *a, **kw )
+
+
+class MelVScrollLayout(MelHScrollLayout):
+	_ORIENTATION_ATTR = 'horizontalScrollBarThickness'
+
+
 class MelTabLayout(BaseMelLayout):
 	WIDGET_CMD = cmd.tabLayout
 
-	def __new__( cls, parent, *a, **kw ):
-		kw.setdefault( 'childResizable', kw.pop( 'cr', True ) )
-
-		return BaseMelLayout.__new__( cls, parent, *a, **kw )
 	def __init__( self, parent, *a, **kw ):
+		BaseMelLayout.__init__( self, parent, *a, **kw )
+
+		kw = {}
+		kw.setdefault( 'childResizable', kw.pop( 'cr', True ) )
 		kw.setdefault( 'selectCommand', kw.pop( 'sc', self.on_select ) )
 		kw.setdefault( 'changeCommand', kw.pop( 'cc', self.on_change ) )
 		kw.setdefault( 'preSelectCommand', kw.pop( 'psc', self.on_preSelect ) )
 		kw.setdefault( 'doubleClickCommand', kw.pop( 'dcc', self.on_doubleClick ) )
 
-		BaseMelLayout.__init__( self, parent, *a, **kw )
+		self( e=True, **kw )
 	def numTabs( self ):
 		return self( q=True, numberOfChildren=True )
 	__len__ = numTabs
@@ -789,23 +817,23 @@ class MelPaneLayout(BaseMelLayout):
 
 	KWARG_CHANGE_CB_NAME = 'separatorMovedCommand'
 
-	def __new__( cls, parent, *a, **kw ):
-		assert cls.CONFIG in cls.POSSIBLE_CONFIGS
-
-		kw[ 'configuration' ] = cls.CONFIG
-		kw.pop( 'cn', None )
-
-		return super( MelPaneLayout, cls ).__new__( cls, parent, *a, **kw )
-	def __init__( self, parent, *a, **kw ):
-		kw.pop( 'smc', None )
+	def __init__( self, parent, configuration=None, *a, **kw ):
 		kw.setdefault( 'separatorMovedCommand', self.on_resize )
 
+		if configuration is None:
+			assert self.CONFIG in self.POSSIBLE_CONFIGS
+			configuration = self.CONFIG
+
+		kw[ 'configuration' ] = configuration
+		kw.pop( 'cn', None )
+
 		super( MelPaneLayout, self ).__init__( parent, *a, **kw )
+		self( e=True, **kw )
 
 		if self.PREF_OPTION_VAR:
 			if cmd.optionVar( ex=self.PREF_OPTION_VAR ):
 				storedSize = cmd.optionVar( q=self.PREF_OPTION_VAR )
-				for idx, size in enumerate( iterBy( storedSize, 2 ) ):
+				for idx, size in enumerate( filesystem.iterBy( storedSize, 2 ) ):
 					self.setPaneSize( idx, size )
 	def __getitem__( self, idx ):
 		idx += 1  #indices are 1-based...  fuuuuuuu alias!
@@ -929,18 +957,33 @@ class MelLabel(BaseMelWidget):
 	KWARG_VALUE_NAME = 'l'
 	KWARG_VALUE_LONG_NAME = 'label'
 
-	#def __init__( self, parent, *a, **kw ):
-		#if not( 'al' in kw or 'align' in kw ):
-			#kw[ 'align' ] = '
 	def bold( self, state=True ):
 		self( e=True, font='boldLabelFont' if state else 'plainLabelFont' )
 	getLabel = BaseMelWidget.getValue
 	setLabel = BaseMelWidget.setValue
 
 
+class MelSpacer(MelLabel):
+	def __new__( cls, parent, w=0, h=0 ):
+		return MelLabel.__new__( cls, parent, w, h, l='' )
+
+
 class MelButton(MelLabel):
 	WIDGET_CMD = cmd.button
 	KWARG_CHANGE_CB_NAME = 'c'
+
+class MelIconButton(MelButton):
+	WIDGET_CMD = cmd.iconTextButton
+
+	def setImage( self, imagePath, findInPaths=True ):
+		self( e=True, image=str( imagePath ) )
+	def getImage( self ):
+		return self( q=True, image=True )
+	def refresh( self ):
+		img = self.getImage()
+		self.setImage( '' )
+		self.setImage( img )
+
 
 class MelCheckBox(BaseMelWidget):
 	WIDGET_CMD = cmd.checkBox
@@ -1016,6 +1059,8 @@ class MelObjectSelector(MelForm):
 	def __new__( cls, parent, label, obj=None, labelWidth=None ):
 		return MelForm.__new__( cls, parent )
 	def __init__( self, parent, label, obj=None, labelWidth=None ):
+		MelForm.__init__( self, parent )
+
 		self.UI_label = MelButton( self, l=label, c=self.on_setValue )
 		self.UI_obj = MelNameField( self )
 
@@ -1055,7 +1100,7 @@ class MelObjectSelector(MelForm):
 class _BaseSlider(BaseMelWidget):
 	DISABLE_UNDO_ON_DRAG = False
 
-	def __new__( cls, parent, minValue=0, maxValue=100, *a, **kw ):
+	def __new__( cls, parent, minValue=0, maxValue=100, defaultValue=None, *a, **kw ):
 		changeCB = kw.pop( 'changeCommand', kw.pop( 'cc', None ) )
 		dragCB = kw.pop( 'dragCommand', kw.pop( 'dc', None ) )
 
@@ -1068,13 +1113,17 @@ class _BaseSlider(BaseMelWidget):
 		new._changeCB = changeCB
 
 		return new
-	def __init__( self, parent, minValue=0, maxValue=100, *a, **kw ):
+	def __init__( self, parent, minValue=0, maxValue=100, defaultValue=None, *a, **kw ):
+		BaseMelWidget.__init__( self, parent, *a, **kw )
+
+		kw = {}
 		kw[ 'changeCommand' ] = self.on_change
 		kw[ 'dragCommand' ] = self.on_drag
 
-		self._initialUndoState = cmd.undoInfo( q=True, state=True )
+		self( e=True, **kw )
 
-		BaseMelWidget.__init__( self, parent, minValue=minValue, maxValue=maxValue, *a, **kw )
+		self._defaultValue = defaultValue
+		self._initialUndoState = cmd.undoInfo( q=True, state=True )
 	def setPreChangeCB( self, cb ):
 		'''
 		the callback executed when the slider is first pressed.  the preChangeCB should take no args
@@ -1091,11 +1140,17 @@ class _BaseSlider(BaseMelWidget):
 		return self._changeCB
 	def setPostChangeCB( self, cb ):
 		'''
-		the callback executed when the slider is released.  the postChangeCB should take no args
+		the callback executed when the slider is released.  the postChangeCB should take a single value arg just like the changeCB
 		'''
 		self._postChangeCB = cb
 	def getPostChangeCB( self ):
 		return self._postChangeCB
+	def reset( self, executeChangeCB=True ):
+		value = self._defaultValue
+		if value is None:
+			value = self( q=True, min=True )
+
+		self.setValue( value, executeChangeCB )
 
 	### EVENT HANDLERS ###
 	def on_change( self, value ):
@@ -1103,9 +1158,11 @@ class _BaseSlider(BaseMelWidget):
 
 		#restore undo if thats what we need to do
 		if self.DISABLE_UNDO_ON_DRAG:
-			cmd.undoInfo( stateWithoutFlush=self._initialUndoState )
+			if self._initialUndoState:
+				cmd.undoInfo( stateWithoutFlush=True )
 
-		self._postChangeCB()
+		if callable( self._postChangeCB ):
+			self._postChangeCB( value )
 	def on_drag( self, value ):
 		if self._isDragging:
 			self._changeCB( value )
@@ -1114,7 +1171,9 @@ class _BaseSlider(BaseMelWidget):
 			if self.DISABLE_UNDO_ON_DRAG:
 				cmd.undoInfo( stateWithoutFlush=False )
 
-			self._preChangeCB()
+			if callable( self._preChangeCB ):
+				self._preChangeCB()
+
 			self._isDragging = True
 
 
@@ -1136,10 +1195,12 @@ class MelTextScrollList(BaseMelWidget):
 
 	ALLOW_MULTI_SELECTION = False
 
-	def __init__( self, parent, *a, **kw ):
+	def __new__( cls, parent, *a, **kw ):
 		if 'ams' not in kw and 'allowMultiSelection' not in kw:
-			kw[ 'ams' ] = self.ALLOW_MULTI_SELECTION
+			kw[ 'ams' ] = cls.ALLOW_MULTI_SELECTION
 
+		return BaseMelWidget.__new__( cls, parent, *a, **kw )
+	def __init__( self, parent, *a, **kw ):
 		BaseMelWidget.__init__( self, parent, *a, **kw )
 		self._appendCB = None
 	def __getitem__( self, idx ):
@@ -1269,12 +1330,16 @@ class MelObjectScrollList(MelTextScrollList):
 	DISPLAY_NAMESPACES = False
 	DISPLAY_NICE_NAMES = False
 
+	#should we perform caseless filtering?
+	FILTER_CASELESS = True
+
 	def __init__( self, parent, *a, **kw ):
 		MelTextScrollList.__init__( self, parent, *a, **kw )
 
 		self._items = []
 		self._visibleItems = []
 		self._filterStr = None
+		self._compiledFilter = None
 	def __contains__( self, item ):
 		return item in self._visibleItems
 	def itemAsStr( self, item ):
@@ -1290,7 +1355,20 @@ class MelObjectScrollList(MelTextScrollList):
 	def getFilter( self ):
 		return self._filterStr
 	def setFilter( self, filterStr, updateUI=True ):
-		self._filterStr = filterStr
+		if not filterStr:
+			self._filterStr = None
+			self._compiledFilter = None
+		else:
+			self._filterStr = filterStr
+
+			#build the compiled regular expression
+			reArgs = [ filterStr ]
+			if self.FILTER_CASELESS:
+				reArgs.append( re.IGNORECASE )
+
+			self._compiledFilter = re.compile( *reArgs )
+
+		#update the UI
 		if updateUI:
 			self.update()
 	def clearilter( self ):
@@ -1301,12 +1379,19 @@ class MelObjectScrollList(MelTextScrollList):
 		if not self._filterStr:
 			return True
 
+		if self.FILTER_CASELESS:
+			itemStr = itemStr.lower()
+
 		if self._filterStr in itemStr:
 			return True
 
-		compiledFilter = re.compile( self._filterStr )
-		if compiledFilter.match( itemStr ):
+		if self._compiledFilter is None:
 			return True
+
+		try:
+			if self._compiledFilter.match( itemStr ):
+				return True
+		except: return True
 
 		return False
 	def getItems( self ):
@@ -1643,10 +1728,10 @@ class BaseMelWindow(BaseMelUI):
 	DEFAULT_MENU = 'File'
 	DEFAULT_MENU_IS_HELP = False
 
-	#set this class variable to a 3-tuple containing toolName, authorEmailAddress, wikiHelpPage to setup the bug reporter menu
-	#if you don't have a wiki page you can set the third tuple value to None
+	#set this class variable to a 3-tuple containing toolName, authorEmailAddress, helpPage
+	#if you don't have a help page you can set the third tuple value to None
 	#example:
-	#HELP_MENU = 'testTool', 'hamish@valvesoftware.com', 'https://intranet.valvesoftware.com/wiki/index.php/Space_Switching'
+	#HELP_MENU = 'testTool', 'mel@macaronikazoo.com', 'http://www.macaronikazoo.com/docs/Space_Switching'
 	HELP_MENU = None
 
 	FORCE_DEFAULT_SIZE = True
@@ -1699,11 +1784,9 @@ class BaseMelWindow(BaseMelUI):
 			MelMenu( l=cls.DEFAULT_MENU, helpMenu=cls.DEFAULT_MENU_IS_HELP )
 
 		if cls.HELP_MENU:
-			toolName, authorEmail, wikiHelpPage = cls.HELP_MENU
+			toolName, authorEmail, helpPage = cls.HELP_MENU
 			helpMenu = new.getMenu( 'Help' )
-			MelMenuItem( helpMenu, l="Help...", en=wikiHelpPage is not None, c=lambda x: cmd.showHelp(wikiHelpPage, absolute=True) )
-			MelMenuItemDiv( helpMenu )
-			bugReporterUI.addBugReporterMenuItems( toolName, assignee=authorEmail, parent=helpMenu )
+			MelMenuItem( helpMenu, l="Help...", en=helpPage is not None, c=lambda x: cmd.showHelp(helpPage, absolute=True) )
 
 		BaseMelUI.ValidateInstanceList()
 

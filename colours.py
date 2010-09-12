@@ -1,5 +1,6 @@
-from pymel.core import *
+from maya.cmds import *
 
+import maya.cmds as cmd
 import vectors
 import re
 
@@ -116,7 +117,7 @@ class Colour(Vector):
 		matches = []
 		for name, colour in cls.NAMED_PRESETS.iteritems():
 			colour = Vector( colour )
-			diff = (colour - theColour).mag
+			diff = (colour - theColour).magnitude()
 			matches.append( (diff, name) )
 
 		matches.sort()
@@ -130,31 +131,31 @@ def setShaderColour( shader, colour ):
 	if not isinstance( colour, Colour ):
 		colour = Colour( colour )
 
-	shader.outColor.set( *colour )
+	setAttr( '%s.outColor' % shader, *colour )
 	if colour[ 3 ]:
 		a = colour[ 3 ]
-		shader.outTransparency.set( a, a, a )
+		setAttr( '%s.outTransparency' % shader, a, a, a )
 
 
 def setObjShader( obj, shader ):
-	SG = shader.outColor.listConnections( s=False, type='shadingEngine' )[ 0 ]
-	shapes = obj.listRelatives( pa=True, s=True )
+	SG = listConnections( '%s.outColor' % shader, s=False, type='shadingEngine' )[ 0 ]
+	shapes = listRelatives( obj, pa=True, s=True ) or []
 
 	for shape in shapes:
-		if shape.nodeType() == 'nurbsCurve': continue
-		sets( SG, e=True, forceElement=shape )
+		if nodeType( shape ) == 'nurbsCurve': continue
+		sets( shape, e=True, forceElement=SG )
 
 
 def getObjShader( obj ):
 	'''
 	returns the shader currently assigned to the given object
 	'''
-	shapes = listRelatives( obj, s=True )
+	shapes = listRelatives( obj, s=True ) or []
 	if not shapes: return None
 
-	cons = listConnections( shapes, s=False, type='shadingEngine' )
+	cons = listConnections( shapes, s=False, type='shadingEngine' ) or []
 	for c in cons:
-		shaders = listConnections( c.surfaceShader, d=False )
+		shaders = listConnections( c.surfaceShader, d=False ) or []
 		if shaders: return shaders[ 0 ]
 
 
@@ -171,11 +172,11 @@ def getShader( colour, forceCreate=True ):
 	if not isinstance( colour, Colour ):
 		colour = Colour( colour )
 
-	shaders = ls( type='surfaceShader' )
+	shaders = ls( type='surfaceShader' ) or []
 
 	for shader in shaders:
-		thisColour = list( shader.outColor.get() )
-		alpha = shader.outTransparency.get()[ 0 ]
+		thisColour = list( getAttr( '%s.outColor' % shader )[ 0 ] )
+		alpha = getAttr( '%s.outTransparency' % shader )[ 0 ][ 0 ]
 
 		thisColour.append( alpha )
 		thisColour = Colour( thisColour )
@@ -193,19 +194,17 @@ def createShader( colour ):
 	creates a shader of a given colour - always creates a new shader
 	'''
 	name = 'rigShader_%s' % Colour.ColourToName( colour )
-	shader = shadingNode( 'surfaceShader', asShader=True )
-	shader.rename( name )
+	shader = shadingNode( 'surfaceShader', name=name, asShader=True )
 
-	SG = sets( renderable=True, noSurfaceShader=True, empty=True )
-	SG.rename( '%s_SG' % name )
+	SG = sets( name='%s_SG' % name, renderable=True, noSurfaceShader=True, empty=True )
 
-	connectAttr( shader.outColor, SG.surfaceShader, f=True )
-	shader.outColor.set( *colour[ :3 ] )
+	connectAttr( '%s.outColor' % shader, '%s.surfaceShader' % SG, f=True )
+	setAttr( '%s.outColor' % shader, *colour[ :3 ] )
 
 	a = colour[ 3 ]
-	shader.outTransparency.set( a, a, a )
+	setAttr( '%s.outTransparency' % shader, a, a, a )
 
-	shadingConnection( SG.surfaceShader, e=True, cs=False )
+	shadingConnection( '%s.surfaceShader' % SG, e=True, cs=False )
 
 	return shader
 

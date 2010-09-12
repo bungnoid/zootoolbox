@@ -5,20 +5,32 @@ of this stuff yet.  as it grows it may make sense to step back a bit and think a
 design this a little better
 '''
 
-from pymel.core import *
+from maya.cmds import *
+from maya.OpenMayaAnim import MFnSkinCluster
+from vectors import Vector, Matrix, computeCovariantMatrix, computeSymmetricalEigen
+from filesystem import Path, BreakException
 
 import maya.cmds as cmd
-import pymel.core as pymelCore
-
-from vectors import Vector
-from filesystem import Path, BreakException
+import mayaVectors
 import api
+import apiExtensions
 import maya.OpenMaya as OpenMaya
-from maya.OpenMayaAnim import MFnSkinCluster
 
 
 kMAX_INF_PER_VERT = 3
 kMIN_SKIN_WEIGHT_VALUE = 0.05
+
+
+def getASelection():
+	'''
+	returns the first object selected or None if no selection - saves having to write this logic over and over
+	'''
+	sel = ls( sl=True )
+	if not sel:
+		return None
+
+	return sel[0]
+
 
 def numVerts( mesh ):
 	return len( cmd.ls("%s.vtx[*]" % mesh, fl=True) )
@@ -245,7 +257,7 @@ def isPointInSphere( point, volumePos, volumeScale, volumeBasis ):
 	pointRel.change_space(*volumeBasis)
 
 	if -x<= pointRel.x <=x  and  -y<= pointRel.y <=y  and  -z<= pointRel.z <=z:
-		pointN = Vector(pointRel)
+		pointN = vectors.Vector(pointRel)
 		pointN.x /= x
 		pointN.y /= y
 		pointN.z /= z
@@ -254,9 +266,10 @@ def isPointInSphere( point, volumePos, volumeScale, volumeBasis ):
 		pointN.y *= y
 		pointN.z *= z
 
-		if pointRel.mag <= pointN.mag:
-			weight = 1 -(pointRel.mag / pointN.mag)
+		if pointRel.magnitude() <= pointN.mag:
+			weight = 1 -(pointRel.magnitude() / pointN.magnitude())
 			return True, weight
+
 	return False
 
 
@@ -264,9 +277,10 @@ def isPointInUniformSphere( point, volumePos, volumeRadius, UNUSED_BASIS=None ):
 	pointRel = point - volumePos
 	radius = volumeRadius[0]
 	if -radius<= pointRel.x <=radius  and  -radius<= pointRel.y <=radius  and  -radius<= pointRel.z <=radius:
-		if pointRel.mag <= radius:
-			weight = 1 -(pointRel.mag / radius)
+		if pointRel.magnitude() <= radius:
+			weight = 1 -(pointRel.magnitude() / radius)
 			return True, weight
+
 	return False
 
 
@@ -323,9 +337,9 @@ def findVertsInVolume( meshes, volume ):
 	within the given <volume>
 	'''
 	#define a super simple vector class to additionally record vert id with position...
-	class VertPos(Vector):
+	class VertPos(vectors.Vector):
 		def __init__( self, x, y, z, vertIdx=None ):
-			Vector.__init__(self, [x, y, z])
+			vectors.Vector.__init__(self, [x, y, z])
 			self.id = vertIdx
 
 	#this dict provides the functions used to determine whether a point is inside a volume or not
@@ -338,9 +352,9 @@ def findVertsInVolume( meshes, volume ):
 									ExportManager.kVOLUME_CUBE: isPointInCube}
 
 	#grab any data we're interested in for the volume
-	volumePos = Vector( cmd.xform(volume, q=True, ws=True, rp=True) )
+	volumePos = vectors.Vector( cmd.xform(volume, q=True, ws=True, rp=True) )
 	volumeScale = map(abs, cmd.getAttr('%s.s' % volume)[0])
-	volumeBasis = map(Vector, api.getBases(volume))
+	volumeBasis = map(mayaVectors.MayaVector, api.getObjectBases(volume))
 
 	#make sure the basis is normalized
 	volumeBasis = [v.normalize() for v in volumeBasis]
@@ -350,10 +364,10 @@ def findVertsInVolume( meshes, volume ):
 	try: type = int( cmd.getAttr('%s.exportVolume' % volume) )
 	except TypeError: pass
 
-	isContainedMethod = insideDeterminationMethod[ type ]
+	isContainedMethod = insideDeterminationMethod[type]
 	print 'method for interior volume determination', isContainedMethod.__name__
 	sx = volumeScale[0]
-	if Vector( volumeScale ).within((sx, sx, sx)):
+	if vectors.Vector(volumeScale).within((sx, sx, sx)):
 		try: isContainedMethod = insideDeterminationIfUniform[type]
 		except KeyError: pass
 
@@ -394,7 +408,8 @@ def jointVerts( joint, tolerance=1e-4 ):
 	newObjs = []
 	meshVerts = {}
 
-	jointMDag = api.getMDagPath( joint )
+	joint = apiExtensions.asMObject( joint )
+	jointMDag = joint.dagPath()
 	try:
 		skins = list( set( listConnections( joint, s=0, type='skinCluster' ) ) )
 	except TypeError:
@@ -407,7 +422,8 @@ def jointVerts( joint, tolerance=1e-4 ):
 	MIntArray = OpenMaya.MIntArray
 	MFnSingleIndexedComponent = OpenMaya.MFnSingleIndexedComponent
 	for skin in skins:
-		mfnSkin = MFnSkinCluster( api.getMObject( skin ) )
+		skin = apiExtensions.asMObject( skin )
+		mfnSkin = MFnSkinCluster( skin )
 
 		mSel = MSelectionList()
 		mWeights = MDoubleArray()

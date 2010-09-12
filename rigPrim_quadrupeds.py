@@ -47,10 +47,10 @@ def quadrupedIkFkLeg( thigh, knee, ankle, clavicle, **kw ):
                              ShapeDesc( 'cylinder', axis=-AIM_AXIS if parity else AIM_AXIS ),
                              colour, scale=scale )
 
-	clavCtrlSpace = clavCtrl.getParent()
-	clavCtrl.rotateOrder.set( 1 )
+	clavCtrlSpace = getNodeParent( clavCtrl )
+	setAttr( '%s.rotateOrder' % clavCtrl, 1 )
 
-	pymelCore.parent( clavCtrlSpace, partParent )
+	cmd.parent( clavCtrlSpace, partParent )
 
 
 	### BUILD THE LEG RIG PRIMITIVE ###
@@ -69,32 +69,32 @@ def quadrupedIkFkLeg( thigh, knee, ankle, clavicle, **kw ):
 	parent( dummyGrp, rootControl )
 
 	aimVector = BONE_AIM_AXIS * parityMult
-	sideClavAxis = utils.getObjectAxisInDirection( clavCtrlSpace, Vector( 1, 0, 0 ) ).asVector()
-	sideCtrlAxis = utils.getObjectAxisInDirection( legCtrl, Vector( 1, 0, 0 ) ).asVector()
+	sideClavAxis = getObjectAxisInDirection( clavCtrlSpace, Vector( (1, 0, 0) ) ).asVector()
+	sideCtrlAxis = getObjectAxisInDirection( legCtrl, Vector( (1, 0, 0) ) ).asVector()
 
-	aim = aimConstraint( legCtrl, clavCtrlSpace, aimVector=(1,0,0), upVector=sideClavAxis, worldUpVector=sideCtrlAxis, worldUpObject=legCtrl, worldUpType='objectrotation', mo=True )
-	aimNode = aimConstraint( dummyGrp, clavCtrlSpace, weight=0, aimVector=(1,0,0) )
+	aim = aimConstraint( legCtrl, clavCtrlSpace, aimVector=(1,0,0), upVector=sideClavAxis, worldUpVector=sideCtrlAxis, worldUpObject=legCtrl, worldUpType='objectrotation', mo=True )[ 0 ]
+	aimNode = aimConstraint( dummyGrp, clavCtrlSpace, weight=0, aimVector=(1,0,0) )[ 0 ]
 
 	revNode = createNode( 'reverse' )
-	clavCtrl.addAttr( 'autoMotion', at='float', min=0, max=1, dv=1 )
-	clavCtrl.autoMotion.setKeyable( True )
+	addAttr( clavCtrl, ln='autoMotion', at='float', min=0, max=1, dv=1 )
+	setAttr( '%s.autoMotion' % clavCtrl, keyable=True )
 
-	connectAttr( clavCtrl.autoMotion, aimNode.target[0].targetWeight, f=True )
-	connectAttr( clavCtrl.autoMotion, revNode.inputX, f=True )
-	connectAttr( revNode.outputX, aimNode.target[1].targetWeight, f=True )
+	connectAttr( '%s.autoMotion' % clavCtrl, '%s.target[0].targetWeight' % aimNode, f=True )
+	connectAttr( '%s.autoMotion' % clavCtrl, '%s.inputX' % revNode, f=True )
+	connectAttr( '%s.outputX' % revNode, '%s.target[1].targetWeight' % aimNode, f=True )
 
 
 	### HOOK UP A FADE FOR THE AIM OFFSET
-	mt, measure, la, lb = utils.buildMeasure( str( clavCtrlSpace ), str( legCtrl ) )
-	maxLen = utils.chainLength( clavicle, ankle )
-	curLen = getAttr( measure.distance )
+	mt, measure, la, lb = buildMeasure( str( clavCtrlSpace ), str( legCtrl ) )
+	maxLen = chainLength( clavicle, ankle )
+	curLen = getAttr( '%s.distance' % measure )
 
-	pymelCore.parent( la, rootControl )
-	pymelCore.parent( mt, rootControl )
+	cmd.parent( la, rootControl )
+	cmd.parent( mt, rootControl )
 
 	for c in [ mt, la, lb ]:
-		c.v.set( False )
-		c.v.setLocked( True )
+		setAttr( '%s.v' % c, False )
+		setAttr( '%s.v' % c, lock=True )
 
 	return legCtrl, ikFkPart.poleControl, clavCtrl
 

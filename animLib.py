@@ -3,6 +3,7 @@ import maya.cmds as cmd
 import utils
 import names
 import api
+import apiExtensions
 
 
 __author__ = 'mel@macaronikazoo.com'
@@ -17,6 +18,8 @@ kANIM = 1
 kDELTA = 2
 
 kDEFAULT_MAPPING_THRESHOLD = 1
+
+kICON_W_H = 60, 60
 
 mel = api.mel
 Mapping = names.Mapping
@@ -77,7 +80,7 @@ def generateIcon( preset ):
 	if preset.locale == GLOBAL and preset.icon.exists:
 		preset.edit()
 
-	icon = cmd.playblast(st=time, et=time, w=60, h=60, fo=True, fmt="image", v=0, p=100, orn=0, cf=str(preset.icon.resolve()))
+	icon = cmd.playblast(st=time, et=time, w=kICON_W_H[0], h=kICON_W_H[1], fo=True, fmt="image", v=0, p=100, orn=0, cf=str(preset.icon.resolve()))
 	icon = Path(icon)
 
 	if icon.exists:
@@ -122,7 +125,13 @@ class PoseBlender(BaseBlender):
 		if mapping is None:
 			mapping = self.getMapping()
 
+		mappingDict = mapping.asDict()
 		for clipAObj, attrDictA in self.clipA.iteritems():
+
+			#if the object isn't in the mapping dict, skip it
+			if clipAObj not in mappingDict:
+				continue
+
 			clipBObjs = mapping[ clipAObj ]
 			for a, valueA in attrDictA.iteritems():
 				attrpath = '%s.%s' % (clipAObj, a)
@@ -218,14 +227,16 @@ class BaseClip(dict):
 	'''
 	blender = None
 	OPTIONS =\
-			kOPT_ADDITIVE, kOPT_ADDITIVE_WORLD, kOPT_OFFSET, kOPT_CLEAR, kMULT =\
-			'additive', 'additiveWorld', 'offset', 'clear', 'mult'
+			kOPT_ADDITIVE, kOPT_ADDITIVE_WORLD, kOPT_OFFSET, kOPT_CLEAR, kMULT, kOPT_ATTRSELECTION =\
+			'additive', 'additiveWorld', 'offset', 'clear', 'mult', 'attrSelection'
 
-	kOPT_DEFAULTS = {kOPT_ADDITIVE: False,
-					 kOPT_ADDITIVE_WORLD: False,
-					 kOPT_OFFSET: 0,
-					 kOPT_CLEAR: True,
-					 kMULT: 1}
+	kOPT_DEFAULTS = { kOPT_ADDITIVE: False,
+					  kOPT_ADDITIVE_WORLD: False,
+					  kOPT_OFFSET: 0,
+					  kOPT_CLEAR: True,
+	                  kMULT: 1,
+	                  kOPT_ATTRSELECTION: False }
+
 	def __init__( self, objects=None ):
 		if objects is not None:
 			self.generate( objects )
@@ -241,6 +252,41 @@ class BaseClip(dict):
 		return self.keys()
 	def generatePreArgs( self ):
 		return tuple()
+
+
+def getObjAttrNames( obj, attrNamesToSkip=() ):
+
+	#grab attributes
+	objAttrs = cmd.listAttr( obj, keyable=True, visible=True, scalar=True ) or []
+
+	#also grab alias' - its possible to pass in an alias name, so we need to test against them as well
+	aliass = cmd.aliasAttr( obj, q=True ) or []
+
+	#because the aliasAttr cmd returns a list with the alias, attr pairs in a flat list, we need to iterate over the list, skipping every second entry
+	itAliass = iter( aliass )
+	for attr in itAliass:
+		objAttrs.append( attr )
+		itAliass.next()
+
+	filteredAttrs = []
+	for attr in objAttrs:
+		skipAttr = False
+		for skipName in attrNamesToSkip:
+			if attr == skipName:
+				skipAttr = True
+			elif attr.startswith( skipName +'[' ) or attr.startswith( skipName +'.' ):
+				skipAttr = True
+
+		if skipAttr:
+			continue
+
+		filteredAttrs.append( attr )
+
+	return filteredAttrs
+
+
+#defines a mapping between node type, and the function used to get a list of attributes from that node to save to the clip.  by default getObjAttrNames( obj ) is called
+GET_ATTR_BY_NODE_TYPE = { 'blendShape': lambda obj: getObjAttrNames( obj, ['envelope', 'weight', 'inputTarget'] ) }
 
 
 class PoseClip(BaseClip):
@@ -264,20 +310,29 @@ class PoseClip(BaseClip):
 		for obj, attrDict in self.iteritems():
 			for attr, value in attrDict.iteritems():
 				attrDict[attr] = value * other
-	def generate( self, objects ):
+	def generate( self, objects, attrs=None ):
 		'''
 		generates a pose dictionary - its basically just dict with node names for keys.  key values
 		are dictionaries with attribute name keys and attribute value keys
 		'''
 		self.clear()
+		if attrs:
+			attrs = set( attrs )
+
 		for obj in objects:
-			attrs = cmd.listAttr( obj, keyable=True, visible=True, scalar=True )
-			if attrs is None:
+			objType = cmd.nodeType( obj )
+			attrGetFunction = GET_ATTR_BY_NODE_TYPE.get( objType, getObjAttrNames )
+
+			objAttrs = set( attrGetFunction( obj ) )
+			if attrs:
+				objAttrs = objAttrs.intersection( attrs )
+
+			if objAttrs is None:
 				continue
 
 			self[ obj ] = objDict = {}
-			for attr in attrs:
-				objDict[ attr ] = cmd.getAttr('%s.%s' % (obj, attr))
+			for attr in objAttrs:
+				objDict[ attr ] = cmd.getAttr( '%s.%s' % (obj, attr) )
 	def apply( self, mapping, **kwargs ):
 		'''
 		construct a mel string to pass to eval - so it can be contained in a single undo...
@@ -317,7 +372,7 @@ class AnimClip(BaseClip):
 		for obj, attrDict in self.iteritems():
 			for attr, value in attrDict.iteritems():
 				value *= other
-	def generate( self, objects, startFrame=None, endFrame=None ):
+	def generate( self, objects, attrs=None, startFrame=None, endFrame=None ):
 		'''
 		generates an anim dictionary - its basically just dict with node names for keys.  key values
 		are lists of tuples with the form: (keyTime, attrDict) where attrDict is a dictionary with
@@ -325,6 +380,9 @@ class AnimClip(BaseClip):
 		'''
 		defaultWeightedTangentOpt = bool(cmd.keyTangent(q=True, g=True, wt=True))
 		self.clear()
+
+		if attrs:
+			attrs = set( attrs )
 
 		if startFrame is None:
 			startFrame = cmd.playbackOptions( q=True, min=True )
@@ -343,13 +401,16 @@ class AnimClip(BaseClip):
 		self.__range = allKeys[ -1 ] - offset
 
 		for obj in objects:
-			attrs = cmd.listAttr( obj, keyable=True, visible=True, scalar=True )
-			if attrs is None:
+			objAttrs = set( cmd.listAttr( obj, keyable=True, visible=True, scalar=True ) )
+			if attrs:
+				objAttrs = objAttrs.intersection( attrs )
+
+			if not objAttrs:
 				continue
 
 			objDict = {}
 			self[ obj ] = objDict
-			for attr in attrs:
+			for attr in objAttrs:
 				timeTuple = startFrame, endFrame
 
 				#so the attr value dict contains a big fat list containing tuples of the form:
@@ -387,18 +448,18 @@ class AnimClip(BaseClip):
 		additive			[False]
 		clear				[True]
 		'''
-		beginningWeightedTanState = cmd.keyTangent(q=True, g=True, wt=True)
+		beginningWeightedTanState = cmd.keyTangent( q=True, g=True, wt=True )
 
 		### gather options...
-		additive = kwargs.get(self.kOPT_ADDITIVE,
-							  self.kOPT_DEFAULTS[self.kOPT_ADDITIVE])
-		worldAdditive = kwargs.get(self.kOPT_ADDITIVE_WORLD,
-							  self.kOPT_DEFAULTS[self.kOPT_ADDITIVE_WORLD])
-		clear = kwargs.get(self.kOPT_CLEAR,
-						   self.kOPT_DEFAULTS[self.kOPT_CLEAR])
-		mult = kwargs.get(self.kMULT,
-						  self.kOPT_DEFAULTS[self.kMULT])
-		timeOffset = kwargs.get(self.kOPT_OFFSET, self.offset)
+		additive = kwargs.get( self.kOPT_ADDITIVE,
+		                       self.kOPT_DEFAULTS[self.kOPT_ADDITIVE] )
+		worldAdditive = kwargs.get( self.kOPT_ADDITIVE_WORLD,
+		                            self.kOPT_DEFAULTS[self.kOPT_ADDITIVE_WORLD] )
+		clear = kwargs.get( self.kOPT_CLEAR,
+		                    self.kOPT_DEFAULTS[self.kOPT_CLEAR] )
+		mult = kwargs.get( self.kMULT,
+		                   self.kOPT_DEFAULTS[self.kMULT] )
+		timeOffset = kwargs.get( self.kOPT_OFFSET, self.offset )
 
 		#if worldAdditive is turned on, then additive is implied
 		if worldAdditive:

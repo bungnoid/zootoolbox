@@ -7,11 +7,11 @@ class Head(RigPart):
 	CONTROL_NAMES = 'control', 'gimbal', 'neck'
 
 	@classmethod
-	def _build( cls, skeletonPart, **kw ):
-		return head( skeletonPart.head, **kw )
+	def _build( cls, skeletonPart, translateControls=False, **kw ):
+		return head( skeletonPart.head, translateControls=translateControls, **kw )
 
 
-def head( head, neckCount=1, **kw ):
+def head( head, neckCount=1, translateControls=False, **kw ):
 	scale = kw[ 'scale' ]
 
 	partParent, rootControl = getParentAndRootControl( head )
@@ -26,10 +26,10 @@ def head( head, neckCount=1, **kw ):
 
 	#build the head controls - we always need them
 	headControl = buildControl( "headControl", head,
-	                            shapeDesc=Shape_Skin( [head] + listRelatives( head, ad=True, type='joint' ) ),
+	                            shapeDesc=Shape_Skin( [head] + (listRelatives( head, ad=True, type='joint' ) or []) ),
 	                            colour=colour, scale=scale )
 
-	headControlSpace = headControl.getParent()
+	headControlSpace = getNodeParent( headControl )
 	headGimbal = buildControl( "head_gimbalControl", head, shapeDesc=ShapeDesc( None, 'starCircle' ), colour=colour, oriented=False, scale=scale, autoScale=True, parent=headControl, niceName='Head' )
 
 
@@ -37,7 +37,7 @@ def head( head, neckCount=1, **kw ):
 	neckJoints = []
 	curParent = head
 	for n in range( neckCount ):
-		curParent = curParent.getParent()
+		curParent = getNodeParent( curParent )
 		neckJoints.append( curParent )
 
 	neckJoints.reverse()
@@ -52,13 +52,14 @@ def head( head, neckCount=1, **kw ):
 	theParent = partParent
 	for n, j in enumerate( neckJoints ):
 		c = buildControl( 'neck_%d_Control' % n, j, PivotModeDesc.BASE, ShapeDesc( 'pin', axis=AX_Z ), colour=lightBlue, scale=scale*1.5, offset=neckOffset, parent=theParent, niceName='Neck %d' % n )
-		attrState( c, 't', *LOCK_HIDE )
+		if not translateControls:
+			attrState( c, 't', *LOCK_HIDE )
 
 		theParent = c
 		neckControls.append( c )
 
 	if neckCount == 1:
-		neckControls[ 0 ].rename( 'neckControl' )
+		neckControls[ 0 ] = rename( neckControls[ 0 ], 'neckControl' )
 		setNiceName( neckControls[ 0 ], 'Neck' )
 	elif neckCount >= 2:
 		setNiceName( neckControls[ 0 ], 'Neck Base' )
@@ -91,12 +92,13 @@ def head( head, neckCount=1, **kw ):
 	#turn unwanted transforms off, so that they are locked, and no longer keyable, and set rotation orders
 	gimbalShapes = listRelatives( headGimbal, s=True )
 	for s in gimbalShapes:
-		s.v.set( 0 )
+		setAttr( '%s.v' % s, 0 )
 
-	headControl.ro.set( 3 )
-	headGimbal.ro.set( 3 )
+	setAttr( '%s.ro' % headControl, 3 )
+	setAttr( '%s.ro' % headGimbal, 3 )
 
-	attrState( (headControl, headGimbal), 't', *LOCK_HIDE )
+	if not translateControls:
+		attrState( (headControl, headGimbal), 't', *LOCK_HIDE )
 
 
 	return [ headControl, headGimbal ] + neckControls

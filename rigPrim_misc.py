@@ -42,7 +42,7 @@ def controlChain( joints, controlShape=DEFAULT_SHAPE_DESC, spaceSwitchTranslatio
 
 	for item in joints:
 		ctrl = buildControl( '%s_ctrl' % item, item, PivotModeDesc.BASE, controlShape, size=AUTO_SIZE )
-		ctrlSpace = ctrl.getParent()
+		ctrlSpace = getNodeParent( ctrl )
 
 		#do parenting
 		parent( ctrlSpace, prevParent )

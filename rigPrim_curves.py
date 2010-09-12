@@ -28,11 +28,11 @@ def buildMPath( objs, squish=True, **kw ):
 	baseCurve = curve( **cmdKw )
 
 	fittedCurve = fitBspline( baseCurve, ch=True, tol=0.001 )[ 0 ]
-	curveShape = fittedCurve.getShape()
+	curveShape = listRelatives( fittedCurve, s=True, pa=True )[ 0 ]
 	infoNode = createNode( 'curveInfo' )
 
-	connectAttr( curveShape.worldSpace[ 0 ], infoNode.inputCurve, f=True )
-	knots = infoNode.knots.get()[ 2:-2 ]
+	connectAttr( '%s.worldSpace[ 0 ]' % curveShape, '%s.inputCurve' % infoNode, f=True )
+	knots = getAttr( '%s.knots' % infoNode )[ 0 ][ 2:-2 ]
 
 
 	#now build the actual motion path nodes that keep the joints attached to the curve
@@ -51,11 +51,11 @@ def buildMPath( objs, squish=True, **kw ):
 		proxy = group( em=True, n='%s_proxy' % objs[ n ] )
 
 		#connect axes individually so they can be broken easily if we need to...
-		connectAttr( curveShape.worldSpace, mpath.inputCurve )
-		connectAttr( mpath.px, proxy.tx )
-		connectAttr( mpath.py, proxy.ty )
-		connectAttr( mpath.pz, proxy.tz )
-		mpath.parameter.set( knots[ n ] )  #were using ($knots[$n]/$unitComp) but it seems this is buggy - invalid knot values are returned for a straight curve...  so it seems assuming $n is valid works in all test cases I've tried...
+		connectAttr( '%s.worldSpace' % curveShape, '%s.inputCurve' % mpath )
+		connectAttr( '%s.px' % mpath, '%s.tx' % proxy )
+		connectAttr( '%s.py' % mpath, '%s.ty' % proxy )
+		connectAttr( '%s.pz' % mpath, '%s.tz' % proxy )
+		setAttr( '%s.parameter' % mpath, knots[ n ] )  #were using ($knots[$n]/$unitComp) but it seems this is buggy - invalid knot values are returned for a straight curve...  so it seems assuming $n is valid works in all test cases I've tried...
 		delete( orientConstraint( objs[ n ], proxy ) )
 
 		mpaths[ objs[ n ] ] = mpath
@@ -67,11 +67,11 @@ def buildMPath( objs, squish=True, **kw ):
 	#build a motionpath to get positions along the path - mainly useful for finding the half way mark
 	halfWayPath = createNode( 'pointOnCurveInfo' )
 	halfWayPos = group( em=True, n="half" )
-	arcLength = curveShape.maxValue.get() - curveShape.minValue.get()
+	arcLength = getAttr( '%s.maxValue' % curveShape ) - getAttr( '%s.minValue' % curveShape )
 
-	connectAttr( curveShape.worldSpace, halfWayPath.inputCurve )
-	connectAttr( halfWayPath.p, halfWayPos.t )
-	halfWayPath.parameter.set( knots[ -1 ] / 2.0 )
+	connectAttr( '%s.worldSpace' % curveShape, '%s.inputCurve' % halfWayPath )
+	connectAttr( '%s.p' % halfWayPath, '%s.t' % halfWayPos )
+	setAttr( '%s.parameter' % halfWayPath, knots[ -1 ] / 2.0 )
 
 
 	#now build the control stucture and place then
@@ -102,9 +102,9 @@ def buildMPath( objs, squish=True, **kw ):
 		            objs[ half ],
 		            objs[ half+1 ] ]
 
-		distancesToObjs = [ betweenVector( midObjs[ 0 ], deformJoints[ 1 ] ).magnitude,
-		                    betweenVector( midObjs[ 1 ], deformJoints[ 1 ] ).magnitude,
-		                    betweenVector( midObjs[ 2 ], deformJoints[ 1 ] ).magnitude ]
+		distancesToObjs = [ betweenVector( midObjs[ 0 ], deformJoints[ 1 ] ).magnitude(),
+		                    betweenVector( midObjs[ 1 ], deformJoints[ 1 ] ).magnitude(),
+		                    betweenVector( midObjs[ 2 ], deformJoints[ 1 ] ).magnitude() ]
 
 	#but if there are an even number of objs in the chain, we only want the mid two
 	else:
@@ -112,13 +112,13 @@ def buildMPath( objs, squish=True, **kw ):
 		midObjs = [ objs[ n ],
 		            objs[ n+1 ] ]
 
-		distancesToObjs = [ betweenVector( midObjs[ 0 ], deformJoints[ 1 ] ).magnitude,
-		                    betweenVector( midObjs[ 1 ], deformJoints[ 1 ] ).magnitude ]
+		distancesToObjs = [ betweenVector( midObjs[ 0 ], deformJoints[ 1 ] ).magnitude(),
+		                    betweenVector( midObjs[ 1 ], deformJoints[ 1 ] ).magnitude() ]
 
 	total = sum( distancesToObjs )
 	distancesToObjs = [ total / d for d in distancesToObjs ]
 
-	tempConstraint = orientConstraint( midObjs, deformJoints[1] )
+	tempConstraint = orientConstraint( midObjs, deformJoints[1] )[ 0 ]
 	for obj, weight in zip( midObjs, distancesToObjs ):
 		orientConstraint( obj, tempConstraint, e=True, w=weight )
 
@@ -132,20 +132,20 @@ def buildMPath( objs, squish=True, **kw ):
 
 	#set the weights to 1 for the bottom and mid joint
 	for n in range2( half ):
-		skinPercent( theSkinCluster, baseCurve.cv[ n ], tv=(deformJoints[ 0 ], 1) )
+		skinPercent( theSkinCluster, '%s.cv[%d]' % (baseCurve, n), tv=(deformJoints[ 0 ], 1) )
 
 	for n in range2( numObjs, half ):
-		skinPercent( theSkinCluster, baseCurve.cv[ n ], tv=(deformJoints[ 1 ], 1) )
+		skinPercent( theSkinCluster, '%s.cv[%d]' % (baseCurve, n), tv=(deformJoints[ 1 ], 1) )
 
 	#now figure out the positional mid point
-	midToStart = betweenVector( deformJoints[ 1 ], deformJoints[ 0 ] ).magnitude
+	midToStart = betweenVector( deformJoints[ 1 ], deformJoints[ 0 ] ).magnitude()
 	startPos = Vector( xform( deformJoints[ 0 ], q=True, ws=True, rp=True ) )
 	halfByPos = 0
 
 	for n in range( numObjs ):
-		pointPos = Vector( pointPosition( baseCurve.cv[ n ] ) )
+		pointPos = Vector( pointPosition( '%s.cv[%d]' % (baseCurve, n) ) )
 		relToStart = pointPos - startPos
-		distFromStart = relToStart.magnitude
+		distFromStart = relToStart.magnitude()
 
 		if distFromStart > midToStart:
 			halfByPos = n
@@ -153,27 +153,25 @@ def buildMPath( objs, squish=True, **kw ):
 
 	#set the weights initially fully to the end deform joints - then figure out the of each point from the mid joint, and apply a weight falloff
 	midPos = Vector( xform( deformJoints[1], q=True, ws=True, rp=True ) )
-	midToEnd = betweenVector( deformJoints[2], deformJoints[1] ).magnitude
+	midToEnd = betweenVector( deformJoints[2], deformJoints[1] ).magnitude()
 
 	for n in range2( halfByPos ):
-		print baseCurve.cv[ n ], deformJoints[0], 1
-		skinPercent( theSkinCluster, baseCurve.cv[ n ], tv=(deformJoints[0], 1) )
+		skinPercent( theSkinCluster, '%s.cv[%d]' % (baseCurve, n), tv=(deformJoints[0], 1) )
 
 	for n in range2( numObjs, halfByPos ):
-		print baseCurve.cv[ n ], deformJoints[2], 1
-		skinPercent( theSkinCluster, baseCurve.cv[ n ], tv=(deformJoints[2], 1) )
+		skinPercent( theSkinCluster, '%s.cv[%d]' % (baseCurve, n), tv=(deformJoints[2], 1) )
 
 	for n in range2( halfByPos, 1 ):
-		pointPos = Vector( pointPosition( baseCurve.cv[ n ] ) )
+		pointPos = Vector( pointPosition( '%s.cv[%d]' % (baseCurve, n) ) )
 		pointToMid = pointPos - midPos
-		weight = 1 - (pointToMid.magnitude / midToStart)
-		skinPercent( theSkinCluster, baseCurve.cv[ n ], tv=(deformJoints[1], weight) )
+		weight = 1 - (pointToMid.magnitude() / midToStart)
+		skinPercent( theSkinCluster, '%s.cv[%d]' % (baseCurve, n), tv=(deformJoints[1], weight) )
 
 	for n in range2( numObjs, halfByPos ):
-		pointPos = Vector( pointPosition( baseCurve.cv[ n ] ) )
+		pointPos = Vector( pointPosition( '%s.cv[%d]' % (baseCurve, n) ) )
 		pointToMid = pointPos - midPos
-		weight = 1 - (pointToMid.magnitude / midToEnd)
-		skinPercent( theSkinCluster, baseCurve.cv[ n ], tv=(deformJoints[1], weight) )
+		weight = 1 - (pointToMid.magnitude() / midToEnd)
+		skinPercent( theSkinCluster, '%s.cv[%d]' % (baseCurve, n), tv=(deformJoints[1], weight) )
 
 	parentConstraint( deformJoints[0], objs[0] )
 	pointConstraint( proxiesList[-1], objs[-1] )
@@ -211,7 +209,7 @@ def buildMPath( objs, squish=True, **kw ):
 		upObjUpAxis = getLocalAxisInDirection( upObj, proxyUpVector )
 
 		#now edit the constraint to use the up vector we've determined
-		thisAim = aimConstraint( nextProxy, thisProxy, mo=True, aim=aim_float, u=up_float, wu=upObjUpAxis.asVector(), wuo=upObj, wut='objectrotation' )
+		thisAim = aimConstraint( nextProxy, thisProxy, mo=True, aim=aim_float, u=up_float, wu=upObjUpAxis.asVector(), wuo=upObj, wut='objectrotation' )[ 0 ]
 		parentConstraint( thisProxy, objProxyDict[ thisProxy ], mo=True )
 
 
@@ -251,7 +249,7 @@ def buildMPath( objs, squish=True, **kw ):
 
 		lengthMults = []
 		for n in range( numObjs, 1 ):
-			posOnCurve = mpaths[ n ].parameter.get()
+			posOnCurve = getAttr( '%s.parameter' % mpaths[ n ] )
 			lengthMults[$n] = `shadingNode -n( "length_multiplier"+ $n ) -asUtility multiplyDivide`;
 			setAttr ( $lengthMults[$n] +".input1X" ) $posOnCurve;
 			connectAttr -f ( $deformJoints[0] +".length" ) ( $lengthMults[$n] +".input2X" );
@@ -261,8 +259,8 @@ def buildMPath( objs, squish=True, **kw ):
 
 
 	#rename the curves
-	baseCurve.rename( "pointCurve" )
-	fittedCurve.rename( "mPath" )
+	baseCurve = rename( baseCurve, "pointCurve" )
+	fittedCurve = rename( fittedCurve, "mPath" )
 
 	delete( halfWayPos )
 	select( deformJoints )
@@ -273,7 +271,7 @@ def buildMPath( objs, squish=True, **kw ):
 def buildControlsForMPath( spineBase, spineEnd, squish=True, **kw ):
 	scale = kw[ 'scale' ]
 
-	spineBase, spineEnd = PyNode( spineBase ), PyNode( spineEnd )
+	spineBase, spineEnd = spineBase, spineEnd
 
 	worldPart = WorldPart.Create()
 	worldControl = worldPart.control

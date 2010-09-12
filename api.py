@@ -7,7 +7,6 @@ easier to read scripts if speed isn't a consideration
 
 import __future__
 
-from pymel.core import *
 from cacheDecorators import *
 from filesystem import *
 from vectors import *
@@ -16,7 +15,6 @@ import maya.OpenMaya as OpenMaya
 import maya.cmds as cmd
 import maya.mel
 
-import pymel.core as pymelCore
 import maya.utils
 import names, utils, filesystem
 import traceback, datetime
@@ -244,23 +242,6 @@ def sortByHierarchy( objs ):
 	sortedObjs.sort()
 
 	return [ o[ 1 ] for o in sortedObjs ]
-
-
-def getTopMostNodes( objs ):
-	'''
-	returns a list of the top most objects who don't have parents in the given list of objects
-	'''
-	topObjs = []
-
-	objsSet = set( objs )
-	for obj in objs:
-		objParent = obj.getParent()
-		if objParent in objsSet:
-			continue
-
-		topObjs.append( obj )
-
-	return topObjs
 
 
 def pyArgToMelArg(arg):

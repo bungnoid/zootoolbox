@@ -3,26 +3,23 @@ this module is simply a miscellaneous module for rigging support code - most of 
 for determining things like aimAxes, aimVectors, rotational offsets for controls etc...
 '''
 
-from pymel.core import *
+from maya.cmds import *
 from vectors import *
 
+import apiExtensions
 import maya.cmds as cmd
 import meshUtils
 import api
 import vectors
 import random
-import pymel.core as pymelCore
 
 from maya import OpenMaya
 
-#this are strings because pymel uses strings for space defines as well
-WORLD = 'world'
-LOCAL = 'transform'
-OBJECT = 'object'
+SPACES = SPACE_WORLD, SPACE_LOCAL, SPACE_OBJECT = range(3)
 
-ENGINE_FWD   = MAYA_SIDE  = MAYA_X = Vector(1, 0, 0)
-ENGINE_UP    = MAYA_FWD   = MAYA_Z = Vector(0, 0, 1)
-ENGINE_SIDE  = MAYA_UP    = MAYA_Y = Vector(0, 1, 0)
+ENGINE_FWD   = MAYA_SIDE  = MAYA_X = Vector((1, 0, 0))
+ENGINE_UP    = MAYA_FWD   = MAYA_Z = Vector((0, 0, 1))
+ENGINE_SIDE  = MAYA_UP    = MAYA_Y = Vector((0, 1, 0))
 
 #pull in some globals...
 MPoint = OpenMaya.MPoint
@@ -46,16 +43,19 @@ def range2( count, start=0 ):
 
 class Axis(int):
 	BASE_AXES = 'x', 'y', 'z'
-	AXES = ['x', 'y', 'z',\
-	        '-x', '-y', '-z']
+	AXES = ( 'x', 'y', 'z', \
+	         '-x', '-y', '-z' )
 
 	def __new__( cls, idx ):
+		if isinstance( idx, basestring ):
+			return cls.FromName( idx )
+
 		return int.__new__( cls, idx )
 	def __neg__( self ):
 		return Axis( (self + 3) % 6 )
 	@classmethod
 	def FromName( cls, name ):
-		idx = cls.AXES.index( name.lower().replace( '_', '-' ) )
+		idx = list( cls.AXES ).index( name.lower().replace( '_', '-' ) )
 		return cls( idx )
 	@classmethod
 	def FromVector( cls, vector ):
@@ -128,7 +128,7 @@ def getPlaneNormalForObjects( objA, objB, objC, defaultVector=MAYA_UP ):
 	normal = vecA.cross( vecB )
 
 	#if the normal is too small, just return world axes
-	if normal.mag < 1e-2:
+	if normal.magnitude() < 1e-2:
 		normal = defaultVector
 
 	return normal
@@ -138,7 +138,7 @@ def largestT( obj ):
 	'''
 	returns the index of the translation axis with the highest absolute value
 	'''
-	pos = cmd.getAttr( '%s.t' % obj )[0]
+	pos = getAttr( '%s.t' % obj )[0]
 	idx = indexOfLargest( pos )
 	if pos[ idx ] < 0:
 		idx += 3
@@ -254,7 +254,7 @@ def getWristToWorldRotation( wrist, performRotate=False ):
 
 	if performRotate:
 		rots.append( wrist )
-		cmd.rotate(rots[0], rots[1], rots[2], str( wrist ), a=True, ws=True)
+		rotate( rots[0], rots[1], rots[2], str( wrist ), a=True, ws=True )
 
 	return tuple( rots )
 
@@ -266,18 +266,18 @@ def isVisible( dag ):
 	'''
 	parent = dag
 	while True:
-		if not cmd.getAttr( '%s.v' % parent ):
+		if not getAttr( '%s.v' % parent ):
 			return False
 
 		#check layer membership
-		layers = cmd.listConnections( parent, t='displayLayer' )
+		layers = listConnections( parent, t='displayLayer' )
 		if layers is not None:
 			for l in layers:
-				if not cmd.getAttr( '%s.v' % l ):
+				if not getAttr( '%s.v' % l ):
 					return False
 
 		try:
-			parent = cmd.listRelatives( parent, p=True, pa=True )[0]
+			parent = listRelatives( parent, p=True, pa=True )[0]
 		except TypeError:
 			break
 
@@ -327,7 +327,7 @@ def getObjsScale( objs ):
 	return (x + y + z) / 3.0 * 0.75  #this is kinda arbitrary
 
 
-def getJointBounds( joints, threshold=0.65, space=OBJECT ):
+def getJointBounds( joints, threshold=0.65, space=SPACE_OBJECT ):
 	'''
 	if useLocalSpace is True then the b
 	'''
@@ -345,11 +345,11 @@ def getJointBounds( joints, threshold=0.65, space=OBJECT ):
 
 	jointDag = api.getMDagPath( theJoint )
 
-	if space == OBJECT:
+	if space == SPACE_OBJECT:
 		jointMatrix = jointDag.inclusiveMatrix()
-	elif space == LOCAL:
+	elif space == SPACE_LOCAL:
 		jointMatrix = jointDag.exclusiveMatrix()
-	elif space == WORLD:
+	elif space == SPACE_WORLD:
 		jointMatrix = OpenMaya.MMatrix()
 	else: raise TypeError( "Invalid space specified" )
 
@@ -374,14 +374,25 @@ def getJointBounds( joints, threshold=0.65, space=OBJECT ):
 
 		bbox.expand( MPoint( *vPosInJointSpace ) )
 
-	return bbox.min(), bbox.max()
+	bbMin, bbMax = bbox.min(), bbox.max()
+	bbMin = Vector( [bbMin.x, bbMin.y, bbMin.z] )
+	bbMax = Vector( [bbMax.x, bbMax.y, bbMax.z] )
+
+	return bbMin, bbMax
 
 
-def getJointSize( joints, threshold=0.65, space=OBJECT ):
+def getJointSizeAndCentre( joints, threshold=0.65, space=SPACE_OBJECT ):
 	minB, maxB = getJointBounds( joints, threshold, space )
-	vec = minB - maxB
+	vec = maxB - minB
+	centre = (minB + maxB) / 2.0
 
-	return Vector( map( abs, [vec.x, vec.y, vec.z] ) )
+	return Vector( map( abs, vec ) ), centre
+
+getJointSizeAndCenter = getJointSizeAndCentre  #for spelling n00bs
+
+
+def getJointSize( joints, threshold=0.65, space=SPACE_OBJECT ):
+	return getJointSizeAndCentre( joints, threshold, space )[ 0 ]
 
 
 def ikSpringSolver( start, end, *a, **kw ):
@@ -397,6 +408,7 @@ def ikSpringSolver( start, end, *a, **kw ):
 	kw[ 'solver' ] = 'ikSpringSolver'
 
 	cmd.select( start, end, replace=True )
+
 	return cmd.ikHandle( *a, **kw )
 
 
@@ -406,35 +418,43 @@ def resetSkinCluster( skinCluster ):
 	the current pose is becomes the bindpose
 	'''
 
-	skinInputMatrices = listConnections( skinCluster.matrix, plugs=True, connections=True, destination=False )
+	skinInputMatrices = listConnections( '%s.matrix' % skinCluster, plugs=True, connections=True, destination=False )
+
+	#this happens if the skinCluster is bogus - its possible for deformers to become orphaned in the scene
+	if skinInputMatrices is None:
+		return
 
 	#get a list of dag pose nodes connected to the skin cluster
-	dagPoseNodes = listConnections( skinCluster, d=False, type='dagPose' )
+	dagPoseNodes = listConnections( skinCluster, d=False, type='dagPose' ) or []
 
-	for dest, src in skinInputMatrices:
-		matrixAsStr = ' '.join( map( str, cmd.getAttr( '%s.worldInverseMatrix' % src.node() ) ) )
-		melStr = 'setAttr -type "matrix" %s.bindPreMatrix[ %d ] %s' % (skinCluster, dest.index(), matrixAsStr)
-		mel.eval( melStr )
+	iterInputMatrices = iter( skinInputMatrices )
+	for dest in iterInputMatrices:
+		src = iterInputMatrices.next()
+		srcNode = src.split( '.' )[ 0 ]
+		idx = dest[ dest.rfind( '[' )+1:-1 ]
+		matrixAsStr = ' '.join( map( str, cmd.getAttr( '%s.worldInverseMatrix' % srcNode ) ) )
+		melStr = 'setAttr -type "matrix" %s.bindPreMatrix[%s] %s' % (skinCluster, idx, matrixAsStr)
+		api.mel.eval( melStr )
 
 		#reset the stored pose in any dagposes that are conn
 		for dPose in dagPoseNodes:
-			dagPose( src.node(), reset=True, n=dPose )
+			dagPose( srcNode, reset=True, n=dPose )
 
 
 def enableSkinClusters():
 	for c in ls( type='skinCluster' ):
 		resetSkinCluster( c )
-		c.nodeState.set( 0 )
+		setAttr( '%s.nodeState' % c, 0 )
 
 
 def disableSkinClusters():
 	for c in ls( type='skinCluster' ):
-		c.nodeState.set( 1 )
+		setAttr( '%s.nodeState' % c, 1 )
 
 
 def getSkinClusterEnableState():
 	for c in ls( type='skinCluster' ):
-		if c.nodeState.get() == 1:
+		if getAttr( '%s.nodeState' % c ) == 1:
 			return False
 
 	return True
@@ -442,18 +462,18 @@ def getSkinClusterEnableState():
 
 def buildMeasure( startNode, endNode ):
 	measure = createNode( 'distanceDimShape', n='%s_to_%s_measureShape#' % (startNode, endNode) )
-	measureT = measure.getParent()
+	measureT = listRelatives( measure, p=True, pa=True )[ 0 ]
 
-	locA = spaceLocator()
-	locB = spaceLocator()
-	pymelCore.parent( locA, startNode, r=True )
-	pymelCore.parent( locB, endNode, r=True )
+	locA = spaceLocator()[ 0 ]
+	locB = spaceLocator()[ 0 ]
+	cmd.parent( locA, startNode, r=True )
+	cmd.parent( locB, endNode, r=True )
 
-	locAShape = locA.getShape()
-	locBShape = locB.getShape()
+	locAShape = listRelatives( locA, s=True, pa=True )[ 0 ]
+	locBShape = listRelatives( locB, s=True, pa=True )[ 0 ]
 
-	connectAttr( locAShape.worldPosition[ 0 ], measure.startPoint, f=True )
-	connectAttr( locBShape.worldPosition[ 0 ], measure.endPoint, f=True )
+	connectAttr( '%s.worldPosition[ 0 ]' % locAShape, '%s.startPoint' % measure, f=True )
+	connectAttr( '%s.worldPosition[ 0 ]' % locBShape, '%s.endPoint' % measure, f=True )
 
 	return measureT, measure, locA, locB
 
@@ -469,19 +489,19 @@ def buildAnnotation( obj, text='' ):
 	obj = str( obj )  #cast as string just in case we've been passed a PyNode instance
 
 	rand = random.randint
-	end = spaceLocator()
-	shape = PyNode( annotate( end, p=(rand(0, 1000000), rand(1000000, 2000000), 2364), tx=text ) )
+	end = spaceLocator()[ 0 ]
+	shape = annotate( end, p=(rand(0, 1000000), rand(1000000, 2000000), 2364), tx=text )
 
-	start = shape.getParent()
-	endShape = end.getShape()
+	start = listRelatives( shape, p=True, pa=True )[ 0 ]
+	endShape = listRelatives( end, s=True, pa=True )[ 0 ]
 
 	delete( parentConstraint( obj, end ) )
 	for ax in Axis.AXES[ :3 ]:
-		start.attr( "t"+ ax ).set( 0 )
+		setAttr( '%s.t%s' % (start, ax), 0 )
 
-	endShape.v.set( 0 )
-	endShape.v.setLocked( True )
-	pymelCore.parent( end, obj )
+	setAttr( '%s.v' % endShape, 0 )
+	setAttr( '%s.v' % endShape, lock=True )
+	cmd.parent( end, obj )
 
 	return start, end, shape
 
@@ -514,37 +534,34 @@ def switchToFK( control, ikHandle=None, onCmd=None, offCmd=None ):
 		onCmd     this flag tells the script what command to run to turn the ik handle on - it is often left blank because its assumed we're already in ik mode
 		offCmd    this flag holds the command to turn the ik handle off, and switch to fk mode
 
-	NOTE: if the offCmd isn't specified, it defaults to:  lambda c, ik: c.ikBlend.set( 0 )
+	NOTE: if the offCmd isn't specified, it defaults to:  lambda c, ik: setAttr( '%s.ikBlend' % c, 0 )
 
 	both on and off callbacks take 2 args - the control and the ikHandle
 
 	example:
-	switchToFK( ikHandle1, onCmd=lambda ctrl, ik: ik.ikBlend.set( 1 ), offCmd=lambda c, ik: setAttr ik.ikBlend.set( 0 ) )
+	switchToFK( ikHandle1, onCmd=lambda ctrl, ik: setAttr( '%s.ikBlend' % ik, 1 ), offCmd=lambda c, ik: setAttr( '%s.ikBlend' % ik, 0 ) )
 	'''
 	if ikHandle is None:
 		ikHandle = control
 
 	if onCmd is None:
-		onCmd = lambda c, ik: c.ikBlend.set( 0 )
-
-	control, ikHandle = map( PyNode, [ control, ikHandle ] )
+		onCmd = lambda c, ik: setAttr( '%s.ikBlend' % c, 0 )
 
 	if callable( onCmd ):
 		onCmd( control, ikHandle )
 
-	joints = map( PyNode, pymelCore.ikHandle( ikHandle, q=True, jl=True ) )
-	effector = PyNode( pymelCore.ikHandle( ikHandle, q=True, ee=True ) )
-	effectorCtrl = effector.tx.listConnections( d=False )[ 0 ]
-	jRotations = [ j.r.get() for j in joints ]
+	joints = cmd.ikHandle( ikHandle, q=True, jl=True )
+	effector = cmd.ikHandle( ikHandle, q=True, ee=True )
+	effectorCtrl = listConnections( '%s.tx' % effector, d=False )[ 0 ]
+	jRotations = [ getAttr( '%s.r' % j ) for j in joints ]
 
-	#if alignEnd: pass #zooAlign ( "-key 1 -src "+ $ikHandle +" -tgt "+ $effectorCtrl[0] );
 	if callable( offCmd ):
 		offCmd( control, ikHandle )
 
 	for j, rot in zip( joints, jRotations ):
-		if j.rx.isSettable(): j.rx.set( rot[ 0 ] )
-		if j.ry.isSettable(): j.ry.set( rot[ 1 ] )
-		if j.rz.isSettable(): j.rz.set( rot[ 2 ] )
+		if getAttr( '%s.rx' % j, settable=True ): setAttr( '%s.rx' % j, rot[ 0 ] )
+		if getAttr( '%s.ry' % j, settable=True ): setAttr( '%s.ry' % j, rot[ 1 ] )
+		if getAttr( '%s.rz' % j, settable=True ): setAttr( '%s.rz' % j, rot[ 2 ] )
 
 
 def switchToIK( control, ikHandle=None, poleControl=None, onCmd=None, offCmd=None ):
@@ -571,45 +588,88 @@ def switchToIK( control, ikHandle=None, poleControl=None, onCmd=None, offCmd=Non
 	if callable( onCmd ):
 		onCmd( control, ikHandle, poleControl )
 
-	joints = pymelCore.ikHandle( ikHandle, q=True, jl=True )
-	effector = pymelCore.ikHandle( ikHandle, q=True, ee=True )
-	effectorCtrl = effector.tx.listConnections( d=False )[ 0 ]
+	joints = cmd.ikHandle( ikHandle, q=True, jl=True )
+	effector = cmd.ikHandle( ikHandle, q=True, ee=True )
+	effectorCtrl = listConnections( '%s.tx' % effector, d=False )[ 0 ]
 
 	mel.zooAlign( "-src %s -tgt %s" % (effectorCtrl, control) )
 	if poleControl is not None and objExists( poleControl ):
 		pos = mel.zooFindPolePosition( "-start %s -mid %s -end %s" % (joints[ 0 ], joints[ 1 ], effectorCtrl) )
-		move( poleControl, a=True, ws=True, rpr=True, *pos )
+		move( pos[0], pos[1], pos[2], poleControl, a=True, ws=True, rpr=True )
 
 	if callable( offCmd ):
 		offCmd( control, ikHandle, poleControl )
 
-'''
-//transfers the pose on a child to its parent
-global proc zooChildToParent( string $child ) {
-	string $sel[] = `ls -sl`;
-	string $parent = zooGetElement_str(0,`listRelatives -f -p $child`);
-	string $loc = zooGetElement_str(0,`spaceLocator`);
 
-	zooAlign ( "-src "+ $child +" -tgt "+ $loc );
-	zooResetAttrs $child;
-	zooAlign ( "-src "+ $loc +" -tgt "+ $parent );
-	delete $loc;
-	select $sel;
-	}
+def replaceConstraintTarget( constraint, newTarget, targetIndex=0 ):
+	'''
+	replaces the target at "targetIndex" with the new target
+	'''
 
+	constraint = str( constraint )
+	newTarget = apiExtensions.asMObject( str( newTarget ) )
 
-global proc string zooGetPostTraceCmd( string $obj ) {
-	if( `objExists ( $obj +".xferPostTraceCmd" )`) return `getAttr ( $obj +".xferPostTraceCmd" )`;
-	return "";
-	}
+	for attr in attributeQuery( 'target', node=constraint, listChildren=True ):
+		for connection in listConnections( '%s.target[%s].%s' % (constraint, targetIndex, attr), p=True, type='transform', d=False ) or []:
+			toks = connection.split( '.' )
+			node = toks [ 0 ]
+
+			if not apiExtensions.cmpNodes( node, newTarget ):
+				toks[ 0 ] = str( newTarget )
+				connectAttr( '.'.join( toks ), '%s.target[%s].%s' % (constraint, targetIndex, attr), f=True )
 
 
-global proc zooSetPostTraceCmd( string $obj, string $cmd ) {
-	if( $cmd == "" ) return;
-	if( !`objExists ( $obj +".xferPostTraceCmd" )`) addAttr -dt "string" -ln xferPostTraceCmd $obj;
-	setAttr -type "string" ( $obj +".xferPostTraceCmd" ) $cmd;
-	}
-'''
+def setupBaseLimbTwister( joint, aimObject, upObject, aimAxis ):
+	'''
+	Builds a bicep twist rig.
+
+	Bicep twist joints are basically joints that sit next to the bicep (humerous) in the hierarchy and take
+	all the weighting of the deltoid and upper triceps.  Bicep twists don't rotate on their twist axis, but
+	aim at the elbow, so they basically do exactly as the humerous does but don't twist.
+	'''
+	if not isinstance( aimAxis, Axis ):
+		aimAxis = Axis.FromName( aimAxis )
+
+	otherAxes_onAim = [ ax.asVector() for ax in aimAxis.otherAxes() ]
+
+	joint = apiExtensions.asMObject( joint )
+	upObject = apiExtensions.asMObject( upObject )
+
+	jWorldInvMatrix = joint.getWorldInverseMatrix()
+	upWorldInvMatrix = upObject.getWorldInverseMatrix()
+
+	#we want to transform the aimObject's two different axes into the space of the joint -
+	#transform the joint's axes into world space vectors
+	otherAxes_onUp = []
+	otherAxes_onUp.append( otherAxes_onAim[0] * jWorldInvMatrix * upWorldInvMatrix )
+	otherAxes_onUp.append( otherAxes_onAim[1] * jWorldInvMatrix * upWorldInvMatrix )
+
+	matrixMult = createNode( 'pointMatrixMult' )
+	connectAttr( '%s.worldMatrix[0]' % upObject, '%s.inMatrix' % matrixMult )
+
+	vectorProduct = createNode( 'vectorProduct' )
+	connectAttr( '%s.output' % matrixMult, '%s.input1' % vectorProduct )
+	setAttr( '%s.operation' % vectorProduct, 1 )
+	setAttr( '%s.normalizeOutput' % vectorProduct, True )
+
+	aimNode = aimConstraint( aimObject, joint, aim=aimAxis.asVector(), wuo=upObject )[0]
+	connectAttr( '%s.constraintVector' % aimNode, '%s.input2' % vectorProduct )
+
+	sdkDriver = '%s.outputX' % vectorProduct
+	for up, worldUp, driverValue in zip( otherAxes_onAim, otherAxes_onUp, (0, 1) ):  #((0, 0.1), (0.9, 1)) ):
+		for upAxisValue, worldUpAxisValue, axisName in zip( up, worldUp, Axis.BASE_AXES ):
+			axisName = axisName.upper()
+			#for driverValue in driverValues:
+			setDrivenKeyframe( '%s.upVector%s' % (aimNode, axisName), value=upAxisValue,
+		                       currentDriver=sdkDriver, driverValue=driverValue, itt='linear', ott='linear' )
+
+			setDrivenKeyframe( '%s.worldUpVector%s' % (aimNode, axisName), value=worldUpAxisValue,
+		                       currentDriver=sdkDriver, driverValue=driverValue, itt='linear', ott='linear' )
+
+	for axisName in Axis.BASE_AXES:
+		axisName = axisName.upper()
+		setInfinity( '%s.upVector%s' % (aimNode, axisName), pri='oscillate', poi='oscillate' )
+		setInfinity( '%s.worldUpVector%s' % (aimNode, axisName), pri='oscillate', poi='oscillate' )
 
 
 del( control )

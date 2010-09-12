@@ -1,7 +1,3 @@
-'''
-To create a new rig primitive, create a class and author the rigging code in the
-_build
-'''
 
 from skeletonBuilderCore import *
 from rigPrim_base import __author__, RigPart, WorldPart, RigSubPart, PrimaryRigPart
@@ -14,6 +10,8 @@ from rigPrim_quadrupeds import QuadrupedIkFkLeg
 from rigPrim_root import Root
 from rigPrim_spines import FkSpine
 
+
+### !!! DO NOT IMPORT RIG SCRIPTS BELOW THIS LINE !!! ###
 
 #now populate a dictionary that associates the skeleton part classes with a list of valid rigging classes - this dict can be used to lookup a list of methods to expose to a user in a UI
 _rigMethodDict = {}

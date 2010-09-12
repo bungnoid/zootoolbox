@@ -1,24 +1,28 @@
 import os
 import sys
 
-from pymel.core import *
+from api import mel
+from maya.cmds import *
 from filesystem import Path, removeDupes, BreakException, getArgDefault
 from vectors import Vector
+from pymel.core import PyNode
 
-import pymel.core as pymelCore
+import maya.cmds as cmd
 import filesystem
-import utils
+import rigUtils
 import triggered
 import colours
 
 import meshUtils
+import profileDecorators
+from apiExtensions import asMObject, MObject
 
 
-WORLD = utils.WORLD
-LOCAL = utils.LOCAL
-OBJECT = utils.OBJECT
+SPACE_WORLD = rigUtils.SPACE_WORLD
+SPACE_LOCAL = rigUtils.SPACE_LOCAL
+SPACE_OBJECT = rigUtils.SPACE_OBJECT
 
-Axis = utils.Axis
+Axis = rigUtils.Axis
 CONTROL_DIRECTORY = Path( '%VTOOLS%/maya/scripts/zoo' ) #Path( __file__ ).up()
 
 AX_X, AX_Y, AX_Z, AX_X_NEG, AX_Y_NEG, AX_Z_NEG = map( Axis, range( 6 ) )
@@ -60,7 +64,7 @@ class ShapeDesc(object):
 		else:
 			self.joints = joints if isinstance( joints, (tuple, list) ) else [ joints ]
 	def __repr__( self ):
-		return repr( self.surfaceType )
+		return repr( self.surfaceType or self.curveType )
 	__str__ = __repr__
 
 DEFAULT_SHAPE_DESC = ShapeDesc()
@@ -90,6 +94,8 @@ class PlaceDesc(object):
 		self.pivot = self.getObj( self.Pivot )
 	def getObj( self, item ):
 		p = self._placeData[ item ]
+		if isinstance( p, MObject ): return p
+
 		if p == self.PLACE_OBJ:
 			p = self._placeData[ 0 ]
 		elif p == self.ALIGN_OBJ:
@@ -97,11 +103,12 @@ class PlaceDesc(object):
 		elif p == self.PIVOT_OBJ:
 			p = self._placeData[ 2 ]
 
-		if isinstance( p, PyNode ): return p
+		if isinstance( p, basestring ): return p
 		if isinstance( p, int ): return self.WORLD
 		if p is None: return self.WORLD
+		if isinstance( p, PyNode ): return str( p )
 
-		return PyNode( p )
+		return p
 	def getLocation( self, obj ):
 		if obj is None:
 			return Vector()
@@ -122,25 +129,14 @@ ColourDesc = colours.Colour
 DEFAULT_COLOUR = ColourDesc( 'orange' )
 
 
-def _performOnAttr( obj, attrName, functionName, *funcArgs, **funcKw ):
-	obj = PyNode( obj )
-	attr = getattr( obj, attrName, None )
-	if attr is None:
-		return
+def _performOnAttr( obj, attrName, metaName, metaState ):
+	childAttrs = attributeQuery( attrName, n=obj, listChildren=True ) or []
 
-	if attr.isCompound():
-		for a in attr.getChildren():
-			function = getattr( a, functionName, None )
-			if function is None:
-				return
-
-			function( *funcArgs, **funcKw )
+	if childAttrs:
+		for a in childAttrs:
+			setAttr( '%s.%s' % (obj, a), **{ metaName: metaState } )
 	else:
-		function = getattr( attr, functionName, None )
-		if function is None:
-			return
-
-		function( *funcArgs, **funcKw )
+		setAttr( '%s.%s' % (obj, attrName), **{ metaName: metaState } )
 
 
 NORMAL = False, True
@@ -152,6 +148,8 @@ def attrState( objs, attrNames, lock=None, keyable=None, show=None ):
 	if not isinstance( objs, (list, tuple) ):
 		objs = [ objs ]
 
+	objs = map( str, objs )
+
 	if not isinstance( attrNames, (list, tuple) ):
 		attrNames = [ attrNames ]
 
@@ -160,49 +158,60 @@ def attrState( objs, attrNames, lock=None, keyable=None, show=None ):
 			#showInChannelBox( False ) doesn't work if setKeyable is true - which is kinda dumb...
 			if show is not None:
 				if not show:
-					_performOnAttr( obj, attrName, 'setKeyable', False )
+					_performOnAttr( obj, attrName, 'keyable', False )
 					keyable = None
-				_performOnAttr( obj, attrName, 'showInChannelBox', show )
+				_performOnAttr( obj, attrName, 'keyable', show )
 
-			if lock is not None: _performOnAttr( obj, attrName, 'setLocked', lock )
+			if lock is not None: _performOnAttr( obj, attrName, 'lock', lock )
 
-			if keyable is not None: _performOnAttr( obj, attrName, 'setKeyable', keyable )
+			if keyable is not None: _performOnAttr( obj, attrName, 'keyable', keyable )
 
 
-def getJointSize( joints, threshold=0.65, space=OBJECT ):
+def getJointSizeAndCentre( joints, threshold=0.65, space=SPACE_OBJECT ):
 	'''
 	minor modification to the getJointSize function in rigging.utils - uses the
 	child of the joint[ 0 ] (if any exist) to determine the size of the joint in
 	the axis aiming toward
 	'''
-	joints = [ j for j in joints if j is not None ]
-	if not joints:
-		return Vector( 1, 1, 1 )
 
-	size = utils.getJointSize( joints, threshold, space )
+	centre = Vector.Zero( 3 )
+	if not isinstance( joints, (list, tuple) ):
+		joints = [ joints ]
+
+	joints = [ str( j ) for j in joints if j is not None ]
+	if not joints:
+		return Vector( (1, 1, 1) )
+
+	size, centre = rigUtils.getJointSizeAndCentre( joints, threshold, space )
 	if size.within( Vector.Zero( 3 ), 1e-2 ):
 		while threshold > 1e-2:
 			threshold *= 0.9
-			size = utils.getJointSize( joints, threshold )
+			size, centre = rigUtils.getJointSizeAndCentre( joints, threshold )
 
 		if size.within( Vector.Zero( 3 ), 1e-2 ):
-			size = Vector( 1, 1, 1 )
+			size = Vector( (1, 1, 1) )
 
-	children = joints[ 0 ].getChildren()
+	children = listRelatives( joints[ 0 ], pa=True )
 	if children:
-		childPos = children[ 0 ].getRotatePivot( WORLD ) - joints[ 0 ].getRotatePivot( WORLD )
-		childPos = Vector( childPos )  #case as non pymel vector - lazy
+		childPos = Vector( xform( children[ 0 ], q=True, ws=True, rp=True ) ) - Vector( xform( joints[ 0 ], q=True, ws=True, rp=True ) )
 
-		axis = utils.getObjectAxisInDirection( joints[ 0 ], childPos, DEFAULT_AXIS )
-		axisValue = children[ 0 ].attr( 't'+ axis.asCleanName() ).get()
+		axis = rigUtils.getObjectAxisInDirection( joints[ 0 ], childPos, DEFAULT_AXIS )
+		axisValue = getAttr( '%s.t%s' % (children[ 0 ], axis.asCleanName()) )
 
-		if space == WORLD:
+		if space == SPACE_WORLD:
 			axis = Axis.FromVector( childPos )
 
-		size[ axis % 3 ] = axisValue
+		size[ axis % 3 ] = abs( axisValue )
+		centre[ axis % 3 ] = axisValue / 2.0
 
 
-	return size
+	return size, centre
+
+getJointSizeAndCenter = getJointSizeAndCentre  #for spelling n00bs
+
+
+def getJointSize( joints, threshold=0.65, space=SPACE_OBJECT ):
+	return getJointSizeAndCentre( joints, threshold, space )[ 0 ]
 
 
 def getAutoOffsetAmount( placeObject, joints=None, axis=AX_Z, threshold=0.65 ):
@@ -220,7 +229,7 @@ def getAutoOffsetAmount( placeObject, joints=None, axis=AX_Z, threshold=0.65 ):
 		joints = removeDupes( [ placeObject ] + joints )  #make sure the placeObject is the first item in the joints list, otherwise the bounds won't be transformed to the correct space
 
 	#get the bounds of the geo skinned to the hand and use it to determine default placement of the slider control
-	bounds = utils.getJointBounds( joints )
+	bounds = rigUtils.getJointBounds( joints )
 	offsetAmount = abs( bounds[ axis.isNegative() ][ axis % 3 ] )
 	#print bounds[ 0 ].x, bounds[ 0 ].y, bounds[ 0 ].z, bounds[ 1 ].x, bounds[ 1 ].y, bounds[ 1 ].z
 
@@ -229,6 +238,9 @@ def getAutoOffsetAmount( placeObject, joints=None, axis=AX_Z, threshold=0.65 ):
 
 AUTO_SIZE = None
 
+DEFAULT_HIDE_ATTRS = ( 'scale', 'visibility' )
+
+
 def buildControl( name,
                   placementDesc=DEFAULT_PLACE_DESC,
                   pivotModeDesc=PivotModeDesc.MID,
@@ -236,11 +248,11 @@ def buildControl( name,
                   colour=DEFAULT_COLOUR,
                   constrain=True,
                   oriented=True,
-                  offset=Vector(), offsetSpace=utils.OBJECT,
-                  size=Vector( 1, 1, 1 ), scale=1.0, autoScale=False,
+                  offset=Vector(), offsetSpace=SPACE_OBJECT,
+                  size=Vector( (1, 1, 1) ), scale=1.0, autoScale=False,
                   parent=None, qss=None,
                   asJoint=False, freeze=True,
-                  lockAttrs=( 'scale', ), hideAttrs=( 'scale', 'visibility' ),
+                  lockAttrs=( 'scale', ), hideAttrs=DEFAULT_HIDE_ATTRS,
                   niceName=None ):
 	'''
 	this rather verbosely called function deals with creating control objects in
@@ -290,7 +302,7 @@ def buildControl( name,
 		scale = _scale
 
 	if size is AUTO_SIZE:
-		tmpKw = {} if oriented else { 'space': WORLD }
+		tmpKw = {} if oriented else { 'space': SPACE_WORLD }
 		size = getJointSize( [ place ] + (shapeDesc.joints or []), **tmpKw )
 		for n, v in enumerate( size ):
 			if abs( v ) < 1e-2:
@@ -327,7 +339,7 @@ def buildControl( name,
 		select( group( em=True ) )
 
 	sel = ls( sl=True )
-	obj = sel[ 0 ]
+	obj = asMObject( sel[ 0 ] )
 
 	#now to deal with the surface - if its different from the curve, then build it
 	if shapeDesc.surfaceType != shapeDesc.curveType \
@@ -335,7 +347,7 @@ def buildControl( name,
 	   and shapeDesc.surfaceType != ShapeDesc.SKIN:
 
 		#if the typesurface is different from the typecurve, then first delete all existing surface shapes under the control
-		shapesTemp = listRelatives( obj, s=1, f=1 )
+		shapesTemp = listRelatives( obj, s=True, pa=True )
 		for s in shapesTemp:
 			if nodeType( s ) == "nurbsSurface":
 				delete( s )
@@ -349,10 +361,10 @@ def buildControl( name,
 
 		#and parent its surface shape nodes to the actual control, and then delete it
 		tempSel = ls( sl=True )
-		shapesTemp=listRelatives( tempSel[0], s=1, f=1 )
+		shapesTemp = listRelatives( tempSel[0], s=True, pa=True ) or []
 		for s in shapesTemp:
 			if nodeType(s) == "nurbsSurface":
-				pymelCore.parent( s, obj, add=True, s=True )
+				cmd.parent( s, obj, add=True, s=True )
 
 		delete( tempSel[ 0 ] )
 		select( sel )
@@ -362,19 +374,19 @@ def buildControl( name,
 	if asJoint:
 		select( cl=True )
 		j = joint()
-		for s in listRelatives( obj, s=True ):
-			pymelCore.parent( s, j, add=1, s=1 )
+		for s in listRelatives( obj, s=True, pa=True ) or []:
+			cmd.parent( s, j, add=True, s=True )
 
-		j.radius.setKeyable( False )
+		setAttr( '%s.radius' % j, keyable=False )
 		delete( obj )
-		obj = j
+		obj = asMObject( j )
 
-	obj.scale.set( scale, scale, scale )
+	setAttr( '%s.s' % obj, scale, scale, scale )
 
 
 	#rename the object
 	if not name: name = 'control'
-	obj.rename( name )
+	rename( obj, name )
 
 
 	#move the pivot - if needed
@@ -382,15 +394,15 @@ def buildControl( name,
 	shapeStrs = getShapeStrs( obj )
 	if pivotModeDesc == PivotModeDesc.TOP:
 		for s in shapeStrs:
-			move( s, 0, -scale/2.0, 0, r=True )
+			move(  0, -scale/2.0, 0, s, r=True )
 	elif pivotModeDesc == PivotModeDesc.BASE:
 		for s in shapeStrs:
-			move( s, 0, scale/2.0, 0, r=True )
+			move(  0, scale/2.0, 0, s, r=True )
 
 
 	#rotate it accordingly
 	rot = AXIS_ROTATIONS[ shapeDesc.axis ]
-	rotate( obj, os=True, *rot )
+	rotate( rot[0], rot[1], rot[2], obj, os=True )
 	makeIdentity( obj, a=1, r=1 )
 
 
@@ -398,7 +410,7 @@ def buildControl( name,
 	grp = obj
 	if oriented:
 		grp = group( em=True, n="%s_space#" % obj )
-		pymelCore.parent( obj, grp )
+		cmd.parent( obj, grp )
 		attrState( grp, ['s', 'v'], *LOCK_HIDE )
 		if align is not None:
 			delete( parentConstraint( align, grp ) )
@@ -411,28 +423,28 @@ def buildControl( name,
 	if align:
 		delete( orientConstraint( align, grp ) )
 	else:
-		rotate( grp, (0, 0, 0), a=True, ws=True )
+		rotate( 0, 0, 0, grp, a=True, ws=True )
 
 
 	#do the size scaling...
 	if shapeDesc.surfaceType != ShapeDesc.SKIN:
 		for s in getShapeStrs( obj ):
-			pymelCore.scale( s, size )
+			cmd.scale( size[0], size[1], size[2], s )
 
 
 	#if the parent exists - parent the new control to the given parent
 	if parent is not None:
-		pymelCore.parent( grp, parent )
+		grp = cmd.parent( grp, parent )[0]
 
 
 	#do offset
 	for s in getShapeStrs( obj ):
 		mkw = { 'r': True }
-		if offsetSpace == utils.OBJECT: mkw[ 'os' ] = True
-		elif offsetSpace == utils.LOCAL: mkw[ 'ls' ] = True
-		elif offsetSpace == utils.WORLD: mkw[ 'ws' ] = True
+		if offsetSpace == SPACE_OBJECT: mkw[ 'os' ] = True
+		elif offsetSpace == SPACE_LOCAL: mkw[ 'ls' ] = True
+		elif offsetSpace == SPACE_WORLD: mkw[ 'ws' ] = True
 		if offset:
-			move( s, *offset, **mkw )
+			move( offset[0], offset[1], offset[2], s, **mkw )
 
 	if freeze:
 		makeIdentity( obj, a=1, r=1 )
@@ -442,19 +454,20 @@ def buildControl( name,
 
 	#delete shape data that we don't want
 	if shapeDesc.curveType is None:
-		for s in listRelatives( obj, s=True ):
+		for s in listRelatives( obj, s=True, pa=True ) or []:
 			if nodeType(s) == "nurbsCurve":
 				delete(s)
 
 	if shapeDesc.surfaceType is None:
-		for s in listRelatives( obj, s=True ):
+		for s in listRelatives( obj, s=True, pa=True ) or []:
 			if nodeType(s) == "nurbsSurface":
 				delete(s)
 
 
 	#now snap the pivot to alignpivot object if it exists
 	if pivot is not None and objExists( pivot ):
-		move( (obj.rp, obj.sp), placementDesc.pivotPos, a=True, ws=True, rpr=True )
+		p = placementDesc.pivotPos
+		move( p[0], p[1], p[2], '%s.rp' % obj, '%s.sp' % obj, a=True, ws=True, rpr=True )
 
 
 	#constrain the target object to this control?
@@ -483,15 +496,15 @@ def buildControl( name,
 			mel.eval( createCmd )
 			geo = ls( sl=True )[ 0 ]
 
-		pymelCore.parent( geo, obj )
+		geo = cmd.parent( geo, obj )[0]
 		makeIdentity( geo, a=True, s=True, r=True, t=True )
 
-		pymelCore.parent( listRelatives( geo, s=True, pa=True ), obj, add=True, s=True )
+		cmd.parent( listRelatives( geo, s=True, pa=True ), obj, add=True, s=True )
 		delete( geo )
 
 		#when selected, turn the mesh display off, and only highlight edges
 		if writeTrigger:
-			triggered.Trigger.CreateTrigger( str( obj ), cmdStr="for( $s in `listRelatives -s #` ) setAttr ( $s +\".displayEdges\" ) 2;" )
+			triggered.Trigger.CreateTrigger( str( obj ), cmdStr="for( $s in `listRelatives -s -pa #` ) setAttr ( $s +\".displayEdges\" ) 2;" )
 
 
 	#build a shader for the control
@@ -501,7 +514,7 @@ def buildControl( name,
 
 	#add to a selection set if desired
 	if qss is not None:
-		qss.add( obj )
+		sets( obj, add=qss )
 
 
 	#hide and lock attributes
@@ -532,9 +545,6 @@ def buildAlignedNull( alignTo, name=None, *a, **kw ):
 	if name is None:
 		name = 'alignedNull'
 
-	if not isinstance( alignTo, PyNode ):
-		alignTo = PyNode( alignTo )
-
 	return buildControl( name, alignTo, shapeDesc=SHAPE_NULL, constrain=False, oriented=False, freeze=False, *a, **kw )
 
 
@@ -542,11 +552,11 @@ def setItemRigControl( item, control ):
 	'''
 	used to associate an item within a skeleton part with a rig control
 	'''
-	item, control = map( PyNode, [item, control] )
-	if not item.hasAttr( '_skeletonPartRigControl' ):
-		item.addAttr( '_skeletonPartRigControl', at='message' )
+	attrPath = '%s._skeletonPartRigControl' % item
+	if not objExists( attrPath ):
+		addAttr( item, ln='_skeletonPartRigControl', at='message' )
 
-	connectAttr( control.message, item._skeletonPartRigControl, f=True )
+	connectAttr( '%s.message' % control, attrPath, f=True )
 
 	return True
 
@@ -556,9 +566,9 @@ def getItemRigControl( item ):
 	returns the control associated with the item within a skeleton part, or None
 	if there is no control driving the item
 	'''
-	item = PyNode( item )
-	if item.hasAttr( '_skeletonPartRigControl' ):
-		cons = item._skeletonPartRigControl.listConnections( d=False )
+	attrPath = '%s._skeletonPartRigControl' % item
+	if objExists( attrPath ):
+		cons = listConnections( attrPath, d=False ) or []
 		if cons:
 			return cons[ 0 ]
 
@@ -566,17 +576,19 @@ def getItemRigControl( item ):
 
 
 def getNiceName( obj ):
-	if obj.hasAttr( '_NICE_NAME' ):
-		return obj._NICE_NAME.get()
+	attrPath = '%s._NICE_NAME' % obj
+	if objExists( attrPath ):
+		return getAttr( attrPath )
 
 	return None
 
 
 def setNiceName( obj, niceName ):
-	if not obj.hasAttr( '_NICE_NAME' ):
-		obj.addAttr( '_NICE_NAME', dt='string' )
+	attrPath = '%s._NICE_NAME' % obj
+	if not objExists( attrPath ):
+		addAttr( obj, ln='_NICE_NAME', dt='string' )
 
-	obj._NICE_NAME.set( niceName )
+	setAttr( attrPath, niceName, type='string' )
 
 
 SHAPE_TO_COMPONENT_NAME = { 'nurbsSurface': 'cv',
@@ -591,7 +603,7 @@ def getShapeStrs( obj ):
 	global SHAPE_TO_COMPONENT_NAME
 
 	geo = []
-	shapes = listRelatives( obj, s=1, pa=1 )
+	shapes = listRelatives( obj, s=True, pa=True ) or []
 	for s in shapes:
 		nType = str( nodeType( s ) )
 		cName = SHAPE_TO_COMPONENT_NAME[ nType ]
@@ -633,6 +645,14 @@ for f in CONTROL_SHAPE_FILES:
 def getFileForShapeName( shapeName ):
 	theFile = CONTROL_SHAPE_DICT.get( shapeName.lower(), None )
 	return theFile
+
+
+@profileDecorators.d_profile
+def speedTest():
+	import time
+	start = time.clock()
+	for n in range( 100 ): buildControl( 'apples' )
+	print 'time taken %0.3f' % (time.clock()-start)
 
 
 #end

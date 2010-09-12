@@ -1,5 +1,7 @@
 from filesystem import *
 from baseMelUI import *
+from mappingUtils import *
+
 import utils
 import names
 import api
@@ -10,21 +12,6 @@ TOOL_NAME = 'valve'
 TOOL_VER = 1
 EXT = 'mapping'
 ui = None
-
-
-def findItem( itemName, knownNamespace=None ):
-	itemName = str( itemName )
-	if cmd.objExists( itemName ):
-		return itemName
-
-	if knownNamespace is None:
-		knownNamespace = '*'
-
-	match = names.matchNames( [ itemName ], cmd.ls( knownNamespace, r=True, typ='transform' ) )[ 0 ]
-	if match:
-		return match
-
-	return None
 
 
 class MappingForm(BaseMelWidget):
@@ -49,7 +36,7 @@ class MappingForm(BaseMelWidget):
 	HIDE_NAMESPACES = True
 
 	#if this is set to True, then sources can be mapped to multiple targets
-	ALLOW_MULTIPLE_TGTS = True
+	ALLOW_MULTI_SELECTION = True
 
 	def __new__( cls, parent, *a, **kw ):
 		return BaseMelWidget.__new__( cls, parent )
@@ -57,8 +44,8 @@ class MappingForm(BaseMelWidget):
 		self._srcToTgtDict = {}
 		self._previousMappingFile = None
 
-		self.UI_srcButton = cmd.button( l='Source Items (click for menu)' )
-		self.UI_tgtButton = cmd.button( l='Target Items (click for menu)' )
+		self.UI_srcButton = MelButton( self, l='Source Items (click for menu)' )
+		self.UI_tgtButton = MelButton( self, l='Target Items (click for menu)' )
 
 		cmd.popupMenu( p=self.UI_srcButton, pmc=self.build_srcMenu )
 		cmd.popupMenu( p=self.UI_tgtButton, pmc=self.build_tgtMenu )
@@ -68,8 +55,8 @@ class MappingForm(BaseMelWidget):
 
 		cmd.setParent( self )
 
-		self.UI_but_srcUp = MelButton( self, label='up', vis=True, width=15, c=self.on_src_up )
-		self.UI_but_srcDn = MelButton( self, label='dn', vis=True, width=15, c=self.on_src_dn )
+		self.UI_but_srcUp = MelButton( self, label='up', vis=True, width=22, c=self.on_src_up )
+		self.UI_but_srcDn = MelButton( self, label='dn', vis=True, width=22, c=self.on_src_dn )
 		self.UI_srcs = MelObjectScrollList( self, deleteKeyCommand=self.on_delete, doubleClickCommand=self.on_selectSrc )
 		self.UI_srcs.setChangeCB( self.on_selectItemSrc )
 
@@ -121,6 +108,16 @@ class MappingForm(BaseMelWidget):
 	@property
 	def tgts( self ):
 		return self.UI_tgts.getItems()
+	def showUpDownButtons( self ):
+		self.UI_but_srcUp.show()
+		self.UI_but_srcDn.show()
+	def hideUpDownButtons( self ):
+		self.UI_but_srcUp.hide()
+		self.UI_but_srcDn.hide()
+	def setSrcsLabel( self, newLabel ):
+		self.UI_srcButton.setLabel( newLabel )
+	def setTgtsLabel( self, newLabel ):
+		self.UI_tgtButton.setLabel( newLabel )
 	def getUnmappedSrcs( self ):
 		return list( set( self.srcs ).difference( self.getMapping().srcs ) )
 	def getUnmappedTgts( self ):
@@ -189,7 +186,7 @@ class MappingForm(BaseMelWidget):
 		d, mapping = Path( filepath ).unpickle()
 
 		mapping = names.Mapping.FromDict( mapping )
-		if self.ALLOW_MULTIPLE_TGTS:
+		if self.ALLOW_MULTI_SELECTION:
 			self._srcToTgtDict = mapping.asDict()
 		else:
 			self._srcToTgtDict = mapping.asFlatDict()
@@ -336,7 +333,7 @@ class MappingForm(BaseMelWidget):
 		curMapping = names.Mapping.FromDict( self._srcToTgtDict )
 		curMapping.swap()
 
-		if self.ALLOW_MULTIPLE_TGTS:
+		if self.ALLOW_MULTI_SELECTION:
 			self._srcToTgtDict = curMapping.asDict()
 		else:
 			self._srcToTgtDict = curMapping.asFlatDict()

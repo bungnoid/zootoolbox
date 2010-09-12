@@ -1,13 +1,16 @@
-from pymel.core import *
+
+from maya.cmds import *
+from apiExtensions import cmpNodes
 from names import Parity, Name, camelCaseToNice
 from vectors import Vector
+from control import attrState, NORMAL, HIDE, LOCK_HIDE, NO_KEY
 
 import exceptionHandlers
 import filesystem
 import inspect
 import control
 import utils
-import pymel.core as pymelCore
+import maya.cmds as cmd
 
 iterBy = filesystem.iterBy
 
@@ -17,14 +20,11 @@ TOOL_NAME = 'skeletonBuilder'
 #now do maya imports and maya specific assignments
 import api
 import maya.cmds as cmd
-from rigger import utils
+import rigUtils
 
-from utils import ENGINE_FWD, ENGINE_UP, ENGINE_SIDE
-from utils import MAYA_SIDE, MAYA_FWD, MAYA_UP
-from utils import Axis, resetSkinCluster
-from pymel.core.nodetypes import Joint
-
-#import wingdbstub
+from rigUtils import ENGINE_FWD, ENGINE_UP, ENGINE_SIDE
+from rigUtils import MAYA_SIDE, MAYA_FWD, MAYA_UP
+from rigUtils import Axis, resetSkinCluster
 
 mel = api.mel
 
@@ -35,9 +35,8 @@ AXES = Axis.BASE_AXES
 BONE_AIM_AXIS = ENGINE_FWD			#this is the axis the joint should bank around, in general the axis the "aims" at the child joint
 BONE_ROTATE_AXIS = ENGINE_SIDE		#this is the axis of "primary rotation" for the joint.  for example, the elbow would rotate primarily in this axis, as would knees and fingers
 
-getLocalAxisInDirection = utils.getLocalAxisInDirection
-getPlaneNormalForObjects = utils.getPlaneNormalForObjects
-
+getLocalAxisInDirection = rigUtils.getLocalAxisInDirection
+getPlaneNormalForObjects = rigUtils.getPlaneNormalForObjects
 CHANNELS = ('x', 'y', 'z')
 TYPICAL_HEIGHT = 70  #maya units
 
@@ -48,15 +47,15 @@ FINGER_IDX_NAMES = ('thumb', 'index', 'mid', 'ring', 'pinky', 'sixth' 'seventh',
 
 def getDefaultScale():
 	def isVisible( node ):
-		if not node.v:
+		if not getAttr( '%s.v' % node ):
 			return False
 
 		for p in iterParents( node ):
-			if not p.v: return False
+			if not getAttr( '%s.v' % p ): return False
 
 		return True
 
-	visibleMeshes = [ m for m in ls( type='mesh' ) if isVisible( m ) ]
+	visibleMeshes = [ m for m in (ls( type='mesh' ) or []) if isVisible( m ) ]
 	if not visibleMeshes:
 		return TYPICAL_HEIGHT
 
@@ -64,27 +63,32 @@ def getDefaultScale():
 	if not visibleSkinnedMeshes:
 		return TYPICAL_HEIGHT
 
-	return utils.getObjsScale( visibleSkinnedMeshes )
+	return rigUtils.getObjsScale( visibleSkinnedMeshes )
 
 
-def iterParents( obj, breakObj=None ):
-	'''
-	walks up the dag hierarchy until either the top is reached, or the breakObj is found if one is specified
-	'''
-	parent = obj.getParent()
+def getNodeParent( obj ):
+	parent = listRelatives( obj, p=True, pa=True )
+	if parent is None:
+		return None
+
+	return parent[ 0 ]
+
+
+def iterParents( obj, until=None ):
+	parent = getNodeParent( obj )
 	while parent is not None:
 		yield parent
-		if breakObj is not None:
-			if parent == breakObj:
-				break
+		if until is not None:
+			if parent == until:
+				return
 
-		parent = parent.getParent()
+		parent = getNodeParent( parent )
 
 
 def sortByHierarchy( objs ):
 	sortedObjs = []
 	for o in objs:
-		pCount = len( o.getAllParents() )
+		pCount = len( list( iterParents( o ) ) )
 		sortedObjs.append( (pCount, o) )
 
 	sortedObjs.sort()
@@ -99,48 +103,47 @@ def d_restoreLocksAndNames(f):
 	freezing transforms etc...
 	'''
 	def newF( item, *args, **kwargs ):
-		if not isinstance( item, PyNode ):
-			print 'AAARRRGGGHHHH - d_restorLocksAndNames'
-			item = PyNode( item )
 
 		attrs = ('t', 'r')
 
 		#unparent and children in place, and store the original name, and lock
 		#states of attributes - we need to unlock attributes as this item will
 		#most likely change its orientation
-		children = listRelatives( item, typ='transform' )
+		children = listRelatives( item, typ='transform', pa=True ) or []
 		childrenPreStates = {}
 		for child in [ item ] + children:
 			lockStates = []
 			for a in attrs:
 				for c in CHANNELS:
-					attr = getattr( child, a+c )
-					lockStates.append( (attr, attr.isLocked()) )
-					attr.setLocked( False )
+					attrPath = '%s.%s%s' % (child, a, c)
+
+					#if the attribute isn't settable, skip it
+					if not getAttr( attrPath, settable=True ):
+						continue
+
+					lockStates.append( (attrPath, getAttr( attrPath, lock=True )) )
+					setAttr( attrPath, lock=False )
 
 			originalChildName = str( child )
 			if child != item:
-				pymelCore.parent( child, world=True )
+				child = cmd.parent( child, world=True )[0]
 
 			childrenPreStates[ child ] = originalChildName, lockStates
 
 		f( item, children=children, *args, **kwargs )
 		try: makeIdentity( item, a=True, t=True, r=True )
 		except:
-			#import exceptionHandlers, sys
-			#exceptionHandlers.exceptionHandler( *sys.exc_info() )
-			#raise
 			print 'still excepting'
 			pass
 
 		#now re-parent children
 		for child, (originalName, lockStates) in childrenPreStates.iteritems():
 			if child != item:
-				pymelCore.parent( child, item )
-				child.rename( originalName )
+				child = cmd.parent( child, item )[0]
+				child = rename( child, originalName.split( '|' )[-1] )
 
-			for attr, lockState in lockStates:
-				attr.setLocked( lockState )
+			for attrPath, lockState in lockStates:
+				setAttr( attrPath, lock=lockState )
 
 	newF.__name__ = f.__name__
 	newF.__doc__ = f.__doc__
@@ -170,7 +173,11 @@ def autoAlignItem( item, invertAimAndUp=False, upVector=BONE_ROTATE_AXIS, worldU
 	else:
 		for a in [ 'jo', 'r' ]:
 			for c in CHANNELS:
-				getattr( item, a + c ).set( 0 )
+				attrPath = '%s.%s%s' % (item, a, c)
+				if not getAttr( attrPath, settable=True ):
+					continue
+
+				setAttr( attrPath, 0 )
 
 
 @d_restoreLocksAndNames
@@ -197,11 +204,11 @@ def alignItemToWorld( item, children=None, skipX=False, skipY=False, skipZ=False
 	'''
 	aligns the item to world space axes, optionally skipping individual axes
 	'''
-	rotate( item, -90, -90, 0, a=True, ws=True )
+	rotate( -90, -90, 0, item, a=True, ws=True )
 
-	if skipX: rotate( item, 0, 0, 0, a=True, os=True, rotateX=True )
-	if skipY: rotate( item, 0, 0, 0, a=True, os=True, rotateY=True )
-	if skipZ: rotate( item, 0, 0, 0, a=True, os=True, rotateZ=True )
+	if skipX: rotate( 0, 0, 0, item, a=True, os=True, rotateX=True )
+	if skipY: rotate( 0, 0, 0, item, a=True, os=True, rotateY=True )
+	if skipZ: rotate( 0, 0, 0, item, a=True, os=True, rotateZ=True )
 
 
 @d_restoreLocksAndNames
@@ -211,8 +218,8 @@ def alignItemToLocal( item, children=None, skipX=False, skipY=False, skipZ=False
 	'''
 	for skip, axis in zip( (skipX, skipY, skipZ), CHANNELS ):
 		if skipX:
-			getattr( item, 'r'+ axis ).set( 0 )
-			getattr( item, 'jo'+ axis ).set( 0 )
+			setAttr( '%s.r%s' % (item, axis), 0 )
+			setAttr( '%s.jo%s' % (item, axis), 0 )
 
 
 @d_restoreLocksAndNames
@@ -293,26 +300,35 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		skeleton parts are defined change
 		'''
 
-		#make sure all items in self are PyNode instances
-		for n, item in enumerate( self ):
-			if not isinstance( item, PyNode ):
-				self[ n ] = PyNode( item )
-
 		baseItem = self[ 0 ]
-		for n, item in enumerate( self ):
-			item.segmentScaleCompensate.set( False )
-			if not item.hasAttr( '_skeletonPartName' ):
-				item.addAttr( '_skeletonPartName', dt='string' )
 
-			if not item.hasAttr( '_skeletonPartArgs' ):
-				item.addAttr( '_skeletonPartArgs', dt='string' )
+		idx = -1
+		if not objExists( '%s._skeletonPartArgs' % baseItem ):
+			idx = self.GetUniqueIdx()
+
+		#make sure all items have the appropriate attributes on them
+		for n, item in enumerate( self ):
+			setAttr( '%s.segmentScaleCompensate' % item, False )
+			if not objExists( '%s._skeletonPartName' % item ):
+				addAttr( item, ln='_skeletonPartName', dt='string' )
+
+			if not objExists( '%s._skeletonPartArgs' % item ):
+				addAttr( item, ln='_skeletonPartArgs', dt='string' )
 
 			if n:
-				if not baseItem._skeletonPartName.isConnectedTo( item._skeletonPartName ):
-					baseItem._skeletonPartName.connect( item._skeletonPartName, f=True )
+				if not isConnected( '%s._skeletonPartName' % baseItem, '%s._skeletonPartName' % item ):
+					connectAttr( '%s._skeletonPartName' % baseItem, '%s._skeletonPartName' % item, f=True )
 
-				if not baseItem._skeletonPartArgs.isConnectedTo( item._skeletonPartArgs ):
-					baseItem._skeletonPartArgs.connect( item._skeletonPartArgs, f=True )
+				if not isConnected( '%s._skeletonPartArgs' % baseItem, '%s._skeletonPartArgs' % item ):
+					connectAttr( '%s._skeletonPartArgs' % baseItem, '%s._skeletonPartArgs' % item, f=True )
+
+		#ensure it has a type name is
+		if not getAttr( '%s._skeletonPartName' % baseItem ):
+			setAttr( '%s._skeletonPartName' % baseItem, type( self ).__name__, type='string' )
+
+		#ensure it has something in the kwargs attribute
+		if not getAttr( '%s._skeletonPartArgs' % baseItem ):
+			setAttr( '%s._skeletonPartArgs' % self[ 0 ], str( { 'idx': idx } ), type='string' )
 	def sort( self ):
 		'''
 		sorts the part by hierarchy
@@ -328,18 +344,26 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		returns the kwarg dict that was used to create this particular part
 		'''
 		for base in self.bases:
-			if base.hasAttr( '_skeletonPartArgs' ):
-				argStr = base._skeletonPartArgs.get()
+			if objExists( '%s._skeletonPartArgs' % base ):
+				argStr = getAttr( '%s._skeletonPartArgs' % base )
 				kw = eval( argStr )
 
 				return kw
+	def setBuildKwargs( self, kwargs ):
+		'''
+		returns the kwarg dict that was used to create this particular part
+		'''
+		if not objExists( '%s._skeletonPartArgs' % self.base ):
+			argStr = addAttr( self.base, ln='_skeletonPartArgs', dt='string' )
+
+		setAttr( '%s._skeletonPartArgs' % self.base, str( kwargs ), type='string' )
 	def getRigKwargs( self ):
 		'''
 		returns the kwarg dict that should be used to create the rig for this part
 		'''
 		try:
-			argStr = self[ 0 ]._skeletonRigArgs.get()
-		except AttributeError:
+			argStr = getAttr( '%s._skeletonRigArgs' % self[ 0 ] )
+		except:
 			return {}
 
 		if argStr is None:
@@ -349,31 +373,31 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 
 		return kw
 	def setRigKwargs( self, kwargs ):
-		if not self.base.hasAttr( '_skeletonRigArgs' ):
-			argStr = self.base.addAttr( '_skeletonRigArgs', dt='string' )
+		if not objExists( '%s._skeletonRigArgs' % self.base ):
+			argStr = addAttr( self.base, ln='_skeletonRigArgs', dt='string' )
 
-		self.base._skeletonRigArgs.set( str( kwargs ) )
+		setAttr( '%s._skeletonRigArgs' % self.base, str( kwargs ), type='string' )
 	def updateRigKwargs( self, **kw ):
 		currentKwargs = self.getRigKwargs()
 		currentKwargs.update( kw )
 		self.setRigKwargs( currentKwargs )
 	def getActualScale( self ):
-		return utils.getObjsScale( self )
+		return rigUtils.getObjsScale( self )
 	def getParent( self ):
 		'''
 		returns the parent of the part - the actual node name.  use getParentPart
 		to query the part this part is parented to (if any)
 		'''
-		return self.base.getParent()
+		return getNodeParent( self.base )
 	def setParent( self, parent ):
 		'''
 		parents the part to a new object in the scene - if parent is None, the
 		part is parented to the world
 		'''
 		if parent is None:
-			pymelCore.parent( self.base, w=True )
+			cmd.parent( self.base, w=True )
 		else:
-			pymelCore.parent( self.base, parent )
+			cmd.parent( self.base, parent )
 	def getParentPart( self ):
 		'''
 		returns the part this part is parented to - if any.  if this part isn't
@@ -416,17 +440,12 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		if an item is given that isn't involved in a part None is returned
 		'''
 
-		try:
-			items = cls.GetItems( item )
-		except AssertionError:
-			return None
+		items = cls.GetItems( item )
+		partClassName = getAttr( '%s._skeletonPartName' % items[ 0 ] )
+		partClass = SkeletonPart.GetNamedSubclass( partClassName )
 
-		partClassName = items[ 0 ]._skeletonPartName.get()
-		partClass = None
-		for c in SkeletonPart.GetSubclasses():
-			if c.__name__ == partClassName:
-				partClass = c
-				break
+		if partClass is None:
+			raise SkeletonError( "Cannot find a skeleton part class called %s" % partClassName )
 
 		return partClass( items )
 	@classmethod
@@ -436,33 +455,32 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		joints of that part
 		'''
 
-		if not isinstance( item, PyNode ):
-			print 'AAARRRGGGHHHH - GetItems'
-			item = PyNode( item )
+		if objExists( '%s._skeletonPartName' % item ):
+			outputs = listConnections( '%s._skeletonPartName' % item, t='joint', source=False ) or []
+			if outputs:
+				return [ item ] + sortByHierarchy( outputs )
 
-		baseItem = None
-		if item.hasAttr( '_skeletonPart' ):
-			try: baseItem = listConnections( item._skeletonPart, t='joint', source=True )[ 0 ]
-			except IndexError:
-				baseItem = item
-		elif item.hasAttr( '_skeletonPartName' ):
-			baseItem = item
+			inputs = listConnections( '%s._skeletonPartName' % item, t='joint', destination=False ) or []
+			if inputs:
+				assert len( inputs ) == 1
+				outputs = listConnections( '%s._skeletonPartName' % inputs[ 0 ], t='joint', source=False ) or []
+
+				return [ inputs[ 0 ] ] + sortByHierarchy( outputs )
+
+			#if it has a _skeletonPartName arg and no inputs OR outputs, then its a single joint part like the root
+			return [ item ]
+
 		else:
 			#if neither of the above are the case, then walk up the chain until one of the above criteria are met
+			baseItem = None
 			for p in iterParents( item ):
-				if p.hasAttr( '_skeletonPart' ):
-					baseItem = p._skeletonPart.listConnections( t='joint', source=True )[ 0 ]
-					break
-				elif p.hasAttr( '_skeletonPartName' ):
-					baseItem = p
-					break
+				if objExists( '%s._skeletonPartName' % p ):
+					return cls.GetItems( p )
 
-			assert baseItem is not None, "Cannot find a SkeletonPart anywhere in the hierarchy for %s" % item
+			if baseItem is None:
+				raise SkeletonError( "Cannot find a SkeletonPart anywhere in the hierarchy for %s" % item )
 
-		cons = listConnections( baseItem.message, t='joint', destination=True )
-		cons = [ baseItem ] + sortByHierarchy( cons )
-
-		return cons
+		raise SkeletonError( "Cannot find a SkeletonPart anywhere in the hierarchy for %s" % item )
 	@classmethod
 	def Create( cls, partClass, *a, **kw ):
 		'''
@@ -474,7 +492,7 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		re-instantiated at a later date
 		'''
 		if isinstance( partClass, basestring ):
-			partClass = globals().get( partClass.capitalize(), None )
+			partClass = SkeletonPart.GetNamedSubclass( partClass[0].upper() + partClass[ 1: ] )
 
 		partScale = kw.setdefault( 'partScale', cls.PART_SCALE )
 
@@ -520,22 +538,15 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		kw.pop( 'parent', None )
 		newKw = {}
 		for k, v in kw.iteritems():
-			if isinstance( v, PyNode ): newKw[ k ] = str( v )
-			else: newKw[ k ] = v
+			newKw[ k ] = v
 
-		baseItem._skeletonPartName.set( partClass.__name__ )
-		baseItem._skeletonPartArgs.set( str( newKw ) )
-
-		for i in newPart[ 1: ]:
-			i.addAttr( '_skeletonPart', at='message' )
-			baseItem.message.connect( i._skeletonPart, f=True )
-
+		setAttr( '%s._skeletonPartArgs' % baseItem, str( newKw ), type='string' )
 		newPart._align( _initialAlign=True )
 
 
 		#turn of segment scale compensate - not sure why it defaults to on.
 		for item in newPart:
-			item.segmentScaleCompensate.set( False )
+			setAttr( '%s.segmentScaleCompensate' % item, False )
 
 
 		#are we doing visualizations?
@@ -554,18 +565,29 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		#make sure the part is a valid part type
 		if partClass is not cls.ALL_PARTS:
 			if isinstance( partClass, basestring ):
-				partClass = globals().get( partClass.capitalize(), None )
+				partClass = SkeletonPart.GetNamedSubclass( partClass[0].upper() + partClass[ 1: ] )
 
 			buildFunc = getattr( partClass, '_build', None )
 			if buildFunc is None:
 				raise SkeletonError( 'no such part type' )
 
+		yieldedItems = set()
+
 		partName = partClass.__name__ if partClass else ''
 		for attrPath in ls( '*._skeletonPartName', r=True ):
-			if partClass is cls.ALL_PARTS or attrPath.get() == partName:
-				j = attrPath.node()
-				if j.hasAttr( '_skeletonPart' ): continue  #skip items that have this attribute - they're leaf items, we only want the base item
-				yield cls.InitFromItem( j )
+			if partClass is cls.ALL_PARTS or getAttr( attrPath ) == partName:
+				j = attrPath.split( '.' )[ 0 ]
+				if j in yieldedItems:
+					continue
+
+				try:
+					aPart = cls.InitFromItem( j )
+				except SkeletonError: continue
+
+				yield aPart
+
+				for item in aPart:
+					yieldedItems.add( item )
 	@classmethod
 	def IterAllPartsInOrder( cls, partClass=ALL_PARTS ):
 		allParts = [ part for part in cls.IterAllParts( partClass ) ]
@@ -587,12 +609,12 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		partsDict = {}
 
 		for joint in ls( typ='joint' ):
-			if not joint.hasAttr( '_skeletonPartName' ):
+			if not objExists( '%s._skeletonPartName' % joint ):
 				continue
 
-			partClassName = joint._skeletonPartName.get()
+			partClassName = getAttr( '%s._skeletonPartName' % joint )
 
-			buildArgDict = eval( joint._skeletonPartArgs.get() )
+			buildArgDict = eval( getAttr( '%s._skeletonPartArgs' % joint ) )
 			idx = buildArgDict.get( 'idx', None )
 			if idx is None:
 				print 'NO IDX FOUND FOR PART %s (%s) - SKIPPING' % (joint, partClassName)
@@ -646,7 +668,7 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		'''
 
 		#first get a list of all the joints directly parented to a memeber of this part
-		allChildren = listRelatives( self, typ='transform' )
+		allChildren = listRelatives( self, typ='transform', pa=True )
 		if not allChildren:
 			return
 
@@ -662,7 +684,7 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		'''
 
 		#first get a list of all the joints directly parented to a memeber of this part
-		allChildren = listRelatives( self, typ='joint' )
+		allChildren = listRelatives( self, typ='joint', pa=True )
 		if not allChildren:
 			return []
 
@@ -676,15 +698,87 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 
 		childrenOfChildren = []
 		for i in orphanChildren:
-			iChildren = listRelatives( i, typ='joint' )
+			iChildren = listRelatives( i, typ='joint', pa=True )
 			if not iChildren: continue
 			for c in iChildren:
-				if c.hasAttr( '_skeletonPart' ): continue
+				if objExists( '%s._skeletonPartName' % c ): continue
 				childrenOfChildren.append( c )
 
 		return orphanChildren + childrenOfChildren
 	def selfAndOrphans( self ):
 		return self + self.getOrphanJoints()
+	def on_manualCreation( self ):
+		pass
+
+
+def createRotationCurves( theJoint ):
+	"""
+	create the UI widget for each rotGUI
+	"""
+
+	rotGuiOverRideColor = [ 13 , 14 , 6 ]
+	rotGuiCurves = []
+
+	c = cmd.curve( d=1, p=((0.000000, -0.000000, -1.000000),
+	                       (-0.000000, 0.500000, -0.866025),
+	                       (-0.000000, 0.866025, -0.500000),
+	                       (-0.000000, 1.000000, -0.000000),
+	                       (-0.000000, 0.350000, 0.000000),
+	                       (-0.116667, 0.116667, -0.116667),
+	                       (-0.000000, 0.000000, -0.350000),
+	                       (0.000000, -0.436239, -0.464331),
+	                       (0.000000, -0.866025, -0.350000),
+	                       (0.000000, -1.000000, 0.000000),
+	                       (0.000000, -0.866025, -0.500000),
+	                       (0.000000, -0.500000, -0.866025),
+	                       (0.000000, -0.000000, -1.000000)) )
+
+	rotGuiCurves.append( c )
+	c = cmd.curve( d=1, p=((0.000000, 0.000000, -1.000000),
+	                       (-0.500000, 0.000000, -0.866025),
+	                       (-0.866025, 0.000000, -0.500000),
+	                       (-1.000000, 0.000000, -0.000000),
+	                       (-0.350000, -0.000000, -0.000000),
+	                       (-0.116667, 0.116666, -0.116667),
+	                       (-0.000000, -0.000000, -0.350000),
+	                       (0.436239, -0.000000, -0.464331),
+	                       (0.866025, -0.000000, -0.350000),
+	                       (1.000000, -0.000000, 0.000000),
+	                       (0.866025, 0.000000, -0.500000),
+	                       (0.500000, 0.000000, -0.866025),
+	                       (0.000000, 0.000000, -1.000000)) )
+
+	rotGuiCurves.append( c )
+	c = cmd.curve( d=1, p=((0.000000, 1.000000, -0.000000),
+	                       (-0.500000, 0.866025, -0.000000),
+	                       (-0.866025, 0.500000, -0.000000),
+	                       (-1.000000, 0.000000, -0.000000),
+	                       (-0.350000, -0.000000, -0.000000),
+	                       (-0.116667, 0.116667, -0.116666),
+	                       (-0.000000, 0.350000, 0.000000),
+	                       (0.436239, 0.464331, -0.000000),
+	                       (0.866025, 0.350000, -0.000000),
+	                       (1.000000, -0.000000, 0.000000),
+	                       (0.866025, 0.500000, -0.000000),
+	                       (0.500000, 0.866025, -0.000000),
+	                       (0.000000, 1.000000, -0.000000)) )
+
+	rotGuiCurves.append( c )
+	for i, theCurve in enumerate( rotGuiCurves ):
+		theScale = 3
+		cmd.setAttr( '%s.sx' % theCurve, theScale )
+		cmd.setAttr( '%s.sy' % theCurve, theScale )
+		cmd.setAttr( '%s.sz' % theCurve, theScale )
+
+		cmd.makeIdentity( theCurve, a=True, s=True )
+		theCurveShape = cmd.listRelatives( theCurve, s=True, pa=True )[ 0 ]
+
+		cmd.setAttr( '%s.overrideEnabled' % theCurveShape, 1 )
+		cmd.setAttr( '%s.overrideDisplayType' % theCurveShape, 0 )
+		cmd.setAttr( '%s.overrideColor' % theCurveShape, rotGuiOverRideColor[i] )
+
+		cmd.parent( theCurveShape, str( theJoint ), add=True, shape=True )
+		cmd.delete( theCurve )
 
 
 def d_wrapAlign( f ):
@@ -695,11 +789,14 @@ def d_wrapAlign( f ):
 		skinClustersConnections = []
 		skinClusters = ls( typ='skinCluster' )
 		for c in skinClusters:
-			cons = c.matrix.listConnections( destination=False, plugs=True, connections=True )
+			cons = listConnections( '%s.matrix' % c, destination=False, plugs=True, connections=True )
 			if cons is None:
-				print 'WARNING - no connections found on the skinCluster %s' % str( c )
+				print 'WARNING - no connections found on the skinCluster %s' % c
 
-			for dest, src in cons:
+			conIter = iter( cons )
+			for dest in conIter:
+				src = conIter.next()
+
 				#remove the actual connection...
 				delete( dest, icn=True )
 
@@ -732,8 +829,10 @@ def d_wrapAlign( f ):
 				except AssertionError: continue  #the parts may have changed size since the initial connection, so if they differ in size just ignore the assertion...
 
 		#re-connect all joints to skinClusters, and reset them
-		for dest, src in skinClustersConnections:
-			src >> dest
+		skinClustersConnectionsIter = iter( skinClustersConnections )
+		for dest in skinClustersConnectionsIter:
+			src = skinClustersConnectionsIter.next()
+			connectAttr( src, dest, f=True )
 
 		for skinCluster in skinClusters:
 			resetSkinCluster( skinCluster )
@@ -758,10 +857,10 @@ class BaseSkeletonPart(SkeletonPart):
 			p.breakDriver()
 
 		def doUnalign( item, *a, **kw ):
-			control.attrState( item, 'r', *control.NORMAL )
+			attrState( item, 'r', *NORMAL )
 			rot = xform( item, q=True, ws=True, ro=True )
-			item.jo.set( (0, 0, 0) )
-			rotate( item, rot, a=True, ws=True )
+			setAttr( '%s.jo' % item, 0, 0, 0 )
+			rotate( rot[0], rot[1], rot[2], item, a=True, ws=True )
 
 		for item in self.selfAndOrphans():
 			doUnalign( item )
@@ -813,16 +912,17 @@ class BaseSkeletonPart(SkeletonPart):
 		NOTE: visualizations should never add joints, but can use any other node
 		machinery available.
 		'''
-		pass
+		for item in self:
+			createRotationCurves( item )
 	def unvisualize( self ):
 		'''
 		removes any visualization on the part
 		'''
 		for i in self.selfAndOrphans():
-			children = listRelatives( i, shapes=True )
+			children = listRelatives( i, shapes=True, pa=True ) or []
 			for c in children:
 				try:
-					if isinstance( c, Joint ): continue
+					if nodeType( c ) == 'joint': continue
 					delete( c )
 				#this can happen if the deletion of a previous child causes some other child to also be deleted - its a fringe case but possible (i think)
 				except TypeError: continue
@@ -840,7 +940,7 @@ class BaseSkeletonPart(SkeletonPart):
 		attrs = 't', 'r'
 
 		#first unlock trans and rot channels
-		control.attrState( otherPart, [ 't', 'r' ], False )
+		attrState( otherPart, [ 't', 'r' ], False )
 
 		#self.unalign()
 		#otherPart.unalign()
@@ -850,41 +950,42 @@ class BaseSkeletonPart(SkeletonPart):
 			for thisItem, otherItem in zip( self, otherPart ):
 				#translation will be inverted on all channels unless the parent of the items are the same
 				expressionLines = []
-				if thisItem.getParent() == otherItem.getParent():
+				if getNodeParent( thisItem ) == getNodeParent( otherItem ):
 					upAxis = getLocalAxisInDirection( thisItem, MAYA_UP ).asCleanName()
 					fwdAxis = getLocalAxisInDirection( thisItem, MAYA_FWD ).asCleanName()
 					sideAxis = getLocalAxisInDirection( thisItem, MAYA_SIDE ).asCleanName()
 
 					expressionLines.append( '%s.t%s = -1 * %s.t%s;' % (otherItem, sideAxis, thisItem, sideAxis) )
-					connectAttr( thisItem.attr( 't'+ upAxis ), otherItem.attr( 't'+ upAxis ), f=True )
-					connectAttr( thisItem.attr( 't'+ fwdAxis ), otherItem.attr( 't'+ fwdAxis ), f=True )
+					connectAttr( '%s.t%s' % (thisItem, upAxis), '%s.t%s' % (otherItem, upAxis), f=True )
+					connectAttr( '%s.t%s' % (thisItem, fwdAxis), '%s.t%s' % (otherItem, fwdAxis), f=True )
 				else:
 					for c in CHANNELS:
+						setAttr( '%s.t%s' % (otherItem, c), lock=False )  #make sure channels are unlocked!
 						expressionLines.append( '%s.t%s = -1 * %s.t%s;' % (otherItem, c, thisItem, c) )
 
 				expression( string='\n'.join( expressionLines ) )
 
 				#rotation values should match
 				for c in CHANNELS:
-					connectAttr( thisItem.attr( 'r'+ c ), otherItem.attr( 'r'+ c ), f=True )
+					connectAttr( '%s.r%s' % (thisItem, c), '%s.r%s' % (otherItem, c), f=True )
 
 		#otherwise setting up the driven relationship is straight up attribute connections...
 		else:
 			for thisItem, otherItem in zip( self, otherPart ):
 				for attr in attrs:
 					for c in CHANNELS:
-						connectAttr( thisItem.attr( attr + c ), otherItem.attr( attr + c ), f=True )
+						connectAttr( '%s.%s%s' % (thisItem, attr, c), '%s.%s%s' % (otherItem, attr, c), f=True )
 	def breakDriver( self ):
 		attrs = 't', 'r'
 
 		for item in self:
 			for a in attrs:
 				for c in CHANNELS:
-					attr = item.attr( a + c )
-					isLocked = attr.isLocked()
-					attr.setLocked( False )  #need to make sure attributes are unlocked before trying to break a connection - regardless of whether the attribute is the source or destination...  8-o
-					delete( attr, inputConnectionsAndNodes=True )
-					if isLocked: attr.setLocked( True )
+					attrPath = '%s.%s%s' % (item, a, c)
+					isLocked = getAttr( attrPath, lock=True )
+					if isLocked: setAttr( attrPath, lock=False )  #need to make sure attributes are unlocked before trying to break a connection - regardless of whether the attribute is the source or destination...  8-o
+					delete( attrPath, inputConnectionsAndNodes=True )
+					if isLocked: setAttr( attrPath, lock=True )
 	def getDriver( self ):
 		'''
 		returns the part driving this part if any, otherwise None is returned
@@ -894,7 +995,7 @@ class BaseSkeletonPart(SkeletonPart):
 		for item in self:
 			for attr in attrs:
 				for c in CHANNELS:
-					cons = listConnections( item.attr( attr + c ), destination=False, skipConversionNodes=True, t='joint' )
+					cons = listConnections( '%s.%s%s' % (item, attr, c), destination=False, skipConversionNodes=True, t='joint' )
 					if cons:
 						for c in cons:
 							part = SkeletonPart.InitFromItem( c )
@@ -909,7 +1010,7 @@ class BaseSkeletonPart(SkeletonPart):
 		for item in self:
 			for attr in attrs:
 				for c in CHANNELS:
-					allOutConnections += listConnections( item.attr( attr + c ), source=False, skipConversionNodes=True, t='joint' ) or []
+					allOutConnections += listConnections( '%s.%s%s' % (item, attr, c), source=False, skipConversionNodes=True, t='joint' ) or []
 
 		if allOutConnections:
 			allOutConnections = filesystem.removeDupes( allOutConnections )
@@ -917,7 +1018,7 @@ class BaseSkeletonPart(SkeletonPart):
 
 		return []
 	def unfinalize( self ):
-		control.attrState( self.selfAndOrphans(), [ 't', 'r' ], *control.NO_KEY )
+		attrState( self.selfAndOrphans(), [ 't', 'r' ], *NO_KEY )
 	def generateItemHash( self, item ):
 		#create a hash for the position and orientation of the joint so we can ensure the state is still the same at a later date
 		tHashAccum = 0
@@ -926,8 +1027,8 @@ class BaseSkeletonPart(SkeletonPart):
 		joChanValues = []
 		for c in CHANNELS:
 			#we hash the rounded string of the float to eliminate floating point error
-			t = item.attr( 't'+ c ).get()
-			jo = item.attr( 'jo'+ c ).get()
+			t = getAttr( '%s.t%s' % (item, c) )
+			jo = getAttr( '%s.jo%s' % (item, c) )
 			val = '%0.4f %0.4f' % (t, jo)
 
 			tHashAccum += hash( val )
@@ -935,7 +1036,7 @@ class BaseSkeletonPart(SkeletonPart):
 			tChanValues.append( t )
 			joChanValues.append( jo )
 
-		iParent = str( item.getParent() )
+		iParent = getNodeParent( item )
 
 		return iParent, tHashAccum, tChanValues, joChanValues
 	def _finalize( self ):
@@ -961,14 +1062,14 @@ class BaseSkeletonPart(SkeletonPart):
 		#unlock all channels and make keyable - we cannot change lock/keyability
 		#state once the skeleton is referenced into the rig, and we need them to
 		#be in such a state to build the rig
-		control.attrState( self.selfAndOrphans(), [ 't', 'r' ], False, True, True )
+		attrState( self.selfAndOrphans(), [ 't', 'r' ], False, True, True )
 
 		#create a hash for the position and orientation of the joint so we can ensure the state is still the same at a later date
 		for i in self.selfAndOrphans():
-			if not i.hasAttr( '_skeletonFinalizeHash' ):
-				i.addAttr( '_skeletonFinalizeHash', dt='string' )
+			if not objExists( '%s._skeletonFinalizeHash' % i ):
+				addAttr( i, ln='_skeletonFinalizeHash', dt='string' )
 
-			i._skeletonFinalizeHash.set( str( self.generateItemHash( i ) ) )
+			setAttr( '%s._skeletonFinalizeHash' % i, str( self.generateItemHash( i ) ), type='string' )
 	def compareAgainstHash( self ):
 		'''
 		compares the current orientation of the partto the stored state hash when
@@ -980,12 +1081,12 @@ class BaseSkeletonPart(SkeletonPart):
 
 		#create a hash for the position and orientation of the joint so we can ensure the state is still the same at a later date
 		for i in self.selfAndOrphans():
-			if not i.hasAttr( '_skeletonFinalizeHash' ):
+			if not objExists( '%s._skeletonFinalizeHash' % i ):
 				print 'no finalization hash found on %s' % i
 				return False
 
 			iParent, xformHash, xxa, yya = self.generateItemHash( i )
-			try: storedParent, stored_xHash, xxb, yyb = eval( i._skeletonFinalizeHash.get() )
+			try: storedParent, stored_xHash, xxb, yyb = eval( getAttr( '%s._skeletonFinalizeHash' % i ) )
 			except:
 				print 'stored hash differs from the current hashing routine - please re-finalize'
 				return False
@@ -1023,7 +1124,7 @@ class BaseSkeletonPart(SkeletonPart):
 		#grab the build kwargs used to create this part, and update it with the new kwargs passed in
 		buildKwargs = self.getBuildKwargs()
 		buildKwargs.update( newBuildKwargs )
-		buildKwargs[ 'parent' ] = self.getParent()
+		buildKwargs[ 'parent' ] = getNode( self )
 
 		self.sort()
 		self.unvisualize()
@@ -1047,8 +1148,8 @@ class BaseSkeletonPart(SkeletonPart):
 		orphans = self.getOrphanJoints()
 		orphanParents = []
 		for orphan in orphans:
-			orphanParents.append( orphan.getParent() )
-			pymelCore.parent( orphan, w=True )
+			orphanParents.append( getNodeParent( orphan ) )
+			cmd.parent( orphan, w=True )
 
 		delete( self )
 		newPart = self.Create( **buildKwargs )
@@ -1064,8 +1165,8 @@ class BaseSkeletonPart(SkeletonPart):
 
 		oldToNewNameMapping = {}
 		for (oldItemName, pos, rot), item in zip( posRots, self ):
-			move( item, pos[ 0 ], pos[ 1 ], pos[ 2 ], ws=True, a=True, rpr=True )
-			rotate( item, rot[ 0 ], rot[ 1 ], rot[ 2 ], ws=True, a=True )
+			move( pos[ 0 ], pos[ 1 ], pos[ 2 ], item, ws=True, a=True, rpr=True )
+			rotate( rot[ 0 ], rot[ 1 ], rot[ 2 ], item, ws=True, a=True )
 			oldToNewNameMapping[ oldItemName ] = item
 
 		#reparent child parts
@@ -1081,7 +1182,7 @@ class BaseSkeletonPart(SkeletonPart):
 		#reparent orphans
 		for orphan, orphanParent in zip( orphans, orphanParents ):
 			orphanParent = oldToNewNameMapping.get( orphanParent, orphanParent )
-			pymelCore.parent( orphan, orphanParent )
+			cmd.parent( orphan, orphanParent )
 
 		self.visualize()
 	def rig( self, **kw ):
@@ -1139,7 +1240,7 @@ def jointSize( jointName, size ):
 def getRoot():
 	joints = ls( typ='joint' )
 	for j in joints:
-		if j.hasAttr( TOOL_NAME ):
+		if objExists( '%s.%s' % (j, TOOL_NAME) ):
 			return j
 
 	return None
@@ -1158,7 +1259,7 @@ class Root(BaseSkeletonPart):
 		partScale = kw[ 'partScale' ]
 
 		root = createJoint( 'root' )
-		move( root, 0, partScale / 1.8, 0, ws=True )
+		move( 0, partScale / 1.8, 0, root, ws=True )
 		jointSize( root, 3 )
 
 		#tag the root joint with the tool name only if its the first root created - having multiple roots in a scene/skeleton is entirely valid
@@ -1166,8 +1267,8 @@ class Root(BaseSkeletonPart):
 
 		#the root can only have a parent if its not the first root created
 		if idx:
-			root = root.rename( 'root_%d' % idx )
-			move( root, 0, 0, -partScale / 2, r=True )
+			root = rename( root, 'root_%d' % idx )
+			move( 0, 0, -partScale / 2, root, r=True )
 
 		return [ root ]
 	def _align( self, _initialAlign=False ):
@@ -1175,7 +1276,7 @@ class Root(BaseSkeletonPart):
 			alignItemToWorld( self[ 0 ] )
 	def _finalize( self ):
 		#make sure the scale is unlocked on the base joint of the root part...
-		control.attrState( self.base, 's', False, False, True )
+		attrState( self.base, 's', False, False, True )
 		super( self.__class__, Root )._finalize( self )
 
 
@@ -1189,11 +1290,7 @@ def getParent( parent=None ):
 	if isinstance( parent, SkeletonPart ):
 		return parent.end
 
-	if not isinstance( parent, PyNode ):
-		print 'AAARRRGGGGHHHH - getParent'
-		parent = PyNode( parent )
-
-	if parent.exists():
+	if objExists( parent ):
 		return parent
 
 	return getRoot() or SkeletonPart.Create( root )
@@ -1212,7 +1309,7 @@ class Spine(BaseSkeletonPart):
 		partScale = kw[ 'partScale' ]
 
 		parent = getParent( parent )
-		directionAxis = utils.Axis.FromName( direction )
+		directionAxis = Axis.FromName( direction )
 
 		allJoints = []
 		prevJoint = str( parent )
@@ -1220,8 +1317,8 @@ class Spine(BaseSkeletonPart):
 		moveList = list( directionAxis.asVector() * posInc )
 		for n in range( count ):
 			j = createJoint( 'spine%s%d' % ('' if idx == 0 else '%d_' % idx, n+1) )
-			pymelCore.parent( j, prevJoint, relative=True )
-			move( j, r=True, ws=True, *moveList )
+			cmd.parent( j, prevJoint, relative=True )
+			move( moveList[0], moveList[1], moveList[2], j, r=True, ws=True )
 			allJoints.append( j )
 			prevJoint = j
 
@@ -1266,7 +1363,7 @@ class Head(BaseSkeletonPart):
 
 		head = createJoint( 'head' )
 		if not neckCount:
-			pymelCore.parent( head, parent, relative=True )
+			cmd.parent( head, parent, relative=True )
 			return [ head ]
 
 		allJoints = []
@@ -1274,17 +1371,17 @@ class Head(BaseSkeletonPart):
 
 		for n in range( neckCount ):
 			j = createJoint( 'neck%d' % (n+1) )
-			pymelCore.parent( j, prevJoint, relative=True )
-			move( j, 0, posInc, posInc, r=True, ws=True )
+			cmd.parent( j, prevJoint, relative=True )
+			move( 0, posInc, posInc, j, r=True, ws=True )
 			allJoints.append( j )
 			prevJoint = j
 
 		#move the first neck joint up a bunch
-		move( allJoints[ 0 ], 0, partScale / 10.0, 0, r=True, ws=True )
+		move( 0, partScale / 10.0, 0, allJoints[ 0 ], r=True, ws=True )
 
 		#parent the head appropriately
-		pymelCore.parent( head, allJoints[ -1 ], relative=True )
-		move( head, 0, posInc, posInc, r=True, ws=True )
+		cmd.parent( head, allJoints[ -1 ], relative=True )
+		move( 0, posInc, posInc, head, r=True, ws=True )
 		allJoints.append( head )
 
 		jointSize( head, 2 )
@@ -1300,9 +1397,9 @@ class Head(BaseSkeletonPart):
 		scale = self.getBuildScale() / 10.0
 
 		plane = polyCreateFacet( ch=False, tx=True, s=1, p=((0, -scale, 0), (0, scale, 0), (self.getParityMultiplier() * 2 * scale, 0, 0)) )
-		pymelCore.parent( plane, self.head, relative=True )
+		cmd.parent( plane, self.head, relative=True )
 
-		pymelCore.parent( listRelatives( plane, shapes=True ), self.head, add=True, shape=True )
+		cmd.parent( listRelatives( plane, shapes=True, pa=True ), self.head, add=True, shape=True )
 		delete( plane )
 
 
@@ -1323,24 +1420,24 @@ class Arm(BaseSkeletonPart):
 		parityName = idx.asName()
 		if buildClavicle:
 			clavicle = createJoint( 'clavicle%s' % parityName )
-			pymelCore.parent( clavicle, parent, relative=True )
-			move( clavicle, dirMult * partScale / 50.0, partScale / 10.0, partScale / 25.0, r=True, ws=True )
+			cmd.parent( clavicle, parent, relative=True )
+			move( dirMult * partScale / 50.0, partScale / 10.0, partScale / 25.0, clavicle, r=True, ws=True )
 			allJoints.append( clavicle )
 			parent = clavicle
 
 		bicep = createJoint( 'bicep%s' % parityName )
-		pymelCore.parent( bicep, parent, relative=True )
-		move( bicep, dirMult * partScale / 10.0, 0, 0, r=True, ws=True )
+		cmd.parent( bicep, parent, relative=True )
+		move( dirMult * partScale / 10.0, 0, 0, bicep, r=True, ws=True )
 
 		elbow = createJoint( 'elbow%s' % parityName )
-		pymelCore.parent( elbow, bicep, relative=True )
-		move( elbow, dirMult * partScale / 5.0, 0, -partScale / 20.0, r=True, ws=True )
+		cmd.parent( elbow, bicep, relative=True )
+		move( dirMult * partScale / 5.0, 0, -partScale / 20.0, elbow, r=True, ws=True )
 
 		wrist = createJoint( 'wrist%s' % parityName )
-		pymelCore.parent( wrist, elbow, relative=True )
-		move( wrist, dirMult * partScale / 5.0, 0, partScale / 20.0, r=True, ws=True )
+		cmd.parent( wrist, elbow, relative=True )
+		move( dirMult * partScale / 5.0, 0, partScale / 20.0, wrist, r=True, ws=True )
 
-		setAttr( str( bicep ) +'.rz', dirMult * 45 )
+		setAttr( '%s.rz' % bicep, dirMult * 45 )
 
 		jointSize( bicep, 2 )
 		jointSize( wrist, 2 )
@@ -1350,9 +1447,9 @@ class Arm(BaseSkeletonPart):
 		scale = self.getBuildScale() / 10.0
 
 		plane = polyCreateFacet( ch=False, tx=True, s=1, p=((0, 0, -scale), (0, 0, scale), (self.getParityMultiplier() * 2 * scale, 0, 0)) )
-		pymelCore.parent( plane, self.wrist, relative=True )
+		cmd.parent( plane, self.wrist, relative=True )
 
-		pymelCore.parent( listRelatives( plane, shapes=True ), self.wrist, add=True, shape=True )
+		cmd.parent( listRelatives( plane, shapes=True, pa=True ), self.wrist, add=True, shape=True )
 		delete( plane )
 	@property
 	def clavicle( self ): return self[ 0 ] if len( self ) > 3 else None
@@ -1369,8 +1466,8 @@ class Arm(BaseSkeletonPart):
 		normal *= parity.asMultiplier()
 
 		if self.clavicle:
-			parent = self.clavicle.getParent()
-			alignAimAtItem( self.clavicle, self.bicep, parity, upType='objectrotation', worldUpObject=parent, worldUpVector=MAYA_FWD  )
+			parent = getNodeParent( self.clavicle )
+			if parent: alignAimAtItem( self.clavicle, self.bicep, parity, upType='objectrotation', worldUpObject=parent, worldUpVector=MAYA_FWD  )
 
 		alignAimAtItem( self.bicep, self.elbow, parity, worldUpVector=normal )
 		alignAimAtItem( self.elbow, self.wrist, parity, worldUpVector=normal )
@@ -1419,16 +1516,16 @@ class Leg(BaseSkeletonPart):
 		kneeFwdMove = partScale / 20.0
 
 		thigh = createJoint( 'thigh%s' % parityName )
-		pymelCore.parent( thigh, parent, relative=True )
-		move( thigh, sidePos, -upPos, fwdPos, r=True, ws=True )
+		cmd.parent( thigh, parent, relative=True )
+		move( sidePos, -upPos, fwdPos, thigh, r=True, ws=True )
 
 		knee = createJoint( 'knee%s' % parityName )
-		pymelCore.parent( knee, thigh, relative=True )
-		move( knee, 0, -(height - footHeight) / 2.0, kneeFwdMove, r=True, ws=True )
+		cmd.parent( knee, thigh, relative=True )
+		move( 0, -(height - footHeight) / 2.0, kneeFwdMove, knee, r=True, ws=True )
 
 		ankle = createJoint( 'ankle%s' % parityName )
-		pymelCore.parent( ankle, knee, relative=True )
-		move( ankle, 0, -(height - footHeight) / 2.0, -kneeFwdMove, r=True, ws=True )
+		cmd.parent( ankle, knee, relative=True )
+		move( 0, -(height - footHeight) / 2.0, -kneeFwdMove, ankle, r=True, ws=True )
 
 		jointSize( thigh, 2 )
 		jointSize( ankle, 2 )
@@ -1436,8 +1533,8 @@ class Leg(BaseSkeletonPart):
 		allJoints = []
 		if buildToe:
 			toe = createJoint( 'toeBase%s' % parityName )
-			pymelCore.parent( toe, ankle, relative=True )
-			move( toe, 0, -footHeight, footHeight * 3, r=True, ws=True )
+			cmd.parent( toe, ankle, relative=True )
+			move( 0, -footHeight, footHeight * 3, toe, r=True, ws=True )
 			allJoints.append( toe )
 
 			jointSize( toe, 1.5 )
@@ -1445,10 +1542,10 @@ class Leg(BaseSkeletonPart):
 			for n in range( toeCount ):
 				toeN = createJoint( 'toe_%d_%s' % (n, parityName) )
 				allJoints.append( toeN )
-				#move( toeN, dirMult * partScale / 50.0, 0, partScale / 25.0, ws=True )
-				pymelCore.parent( toeN, toe, relative=True )
+				#move( dirMult * partScale / 50.0, 0, partScale / 25.0, toeN, ws=True )
+				cmd.parent( toeN, toe, relative=True )
 
-		rotate( thigh, 0, dirMult * 15, 0, r=True, ws=True )
+		rotate( 0, dirMult * 15, 0, thigh, r=True, ws=True )
 
 		#finally create a "ground plane" visualization tool parented to ankle
 
@@ -1486,10 +1583,10 @@ class Hand(BaseSkeletonPart):
 		'''
 		returns all the bases for the hand - bases are the top most parents
 		'''
-		handParent = self[ 0 ].getParent()
+		handParent = getNodeParent( self[ 0 ] )
 		bases = []
 		for item in self:
-			itemParent = item.getParent()
+			itemParent = getNodeParent( item )
 			if itemParent == handParent:
 				bases.append( item )
 
@@ -1500,7 +1597,7 @@ class Hand(BaseSkeletonPart):
 		joint names ordered hierarchically
 		'''
 		for base in self.bases:
-			children = listRelatives( base, ad=True, path=True, type='joint' )
+			children = listRelatives( base, ad=True, path=True, type='joint' ) or []
 			children = [ base ] + sortByHierarchy( children )
 			yield children
 	@classmethod
@@ -1523,13 +1620,13 @@ class Hand(BaseSkeletonPart):
 			prevParent = parent
 			for n in range( fingerJointCount ):
 				j = createJoint( '%s%s_%d%s' % (fingerName, idx if idx > 1 else '', n, limbName) )
-				pymelCore.parent( j, prevParent, r=True )
-				move( j, lengthInc, 0, 0, r=True, os=True )
+				cmd.parent( j, prevParent, r=True )
+				move( lengthInc, 0, 0, j, r=True, os=True )
 
 				if n == 0:
-					move( j, lengthInc, 0, -maxPos + (posRange * nameIdx / (fingerCount - 1)), r=True, os=True )
+					move( lengthInc, 0, -maxPos + (posRange * nameIdx / (fingerCount - 1)), j, r=True, os=True )
 				else:
-					j.ty.setLocked( True )
+					setAttr( '%s.ty' % j, lock=True )
 
 				allJoints.append( j )
 				prevParent = j
@@ -1540,12 +1637,12 @@ class Hand(BaseSkeletonPart):
 
 		for base in self.bases:
 			plane = polyPlane( w=scale, h=scale / 2.0, sx=1, sy=1, ax=(0, 1, 0), cuv=2, ch=False )[ 0 ]
-			pymelCore.parent( plane, base, relative=True )
+			cmd.parent( plane, base, relative=True )
 
-			plane.tx.set( self.getParityMultiplier() * scale / 2 )
+			setAttr( '%s.tx' % plane, self.getParityMultiplier() * scale / 2 )
 			makeIdentity( plane, a=True, t=True )
 
-			pymelCore.parent( listRelatives( plane, shapes=True ), base, add=True, shape=True )
+			cmd.parent( listRelatives( plane, shapes=True, pa=True ), base, add=True, shape=True )
 			delete( plane )
 	def _align( self, _initialAlign=False ):
 		parity = self.getParity()
@@ -1553,7 +1650,7 @@ class Hand(BaseSkeletonPart):
 
 		parityMult = self.getParityMultiplier()
 
-		defactoUpVector = utils.getObjectBasisVectors( wrist )[ 2 ]
+		defactoUpVector = rigUtils.getObjectBasisVectors( wrist )[ 2 ]
 		for chain in self.iterFingerChains():
 			upVector = defactoUpVector
 			if len( chain ) >= 3:
@@ -1580,7 +1677,7 @@ class ArbitraryChain(BaseSkeletonPart):
 		if not self.hasParity():
 			parityStr = ''
 
-		chainName = camelCaseToNice( self.getBuildKwargs()[ 'chainName' ] )
+		chainName = camelCaseToNice( self.getBuildKwargs().get( 'chainName', 'no__name' ) )
 
 		return '%s%s Chain %d' % (parityStr, chainName, self.getIdx())
 
@@ -1600,7 +1697,7 @@ class ArbitraryChain(BaseSkeletonPart):
 		length = partScale
 		lengthInc = dirMult * length / jointCount
 
-		directionAxis = utils.Axis.FromName( direction )
+		directionAxis = rigUtils.Axis.FromName( direction )
 		directionVector = directionAxis.asVector() * lengthInc
 		directionVector = list( directionVector )
 		otherIdx = directionAxis.otherAxes()[ 1 ]
@@ -1611,11 +1708,11 @@ class ArbitraryChain(BaseSkeletonPart):
 		half = jointCount / 2
 		for n in range( jointCount ):
 			j = createJoint( '%s_%d%s' % (chainName, n, parityStr) )
-			pymelCore.parent( j, prevParent, r=True )
+			cmd.parent( j, prevParent, r=True )
 
 			moveVector = directionVector + [ j ]
 			moveVector[ otherIdx ] = dirMult * n * lengthInc / jointCount / 5.0
-			move( j, r=True, ws=True, *moveVector )
+			move( moveVector[0], moveVector[1], moveVector[2], j, r=True, ws=True )
 			allJoints.append( j )
 			prevParent = j
 
@@ -1635,7 +1732,7 @@ class ArbitraryChain(BaseSkeletonPart):
 			#for the sake of simplicity take the first, last and some joint in
 			#the middle and fit a plane to them, and use it's normal for the upAxis
 			midJoint = self[ num / 2 ]
-			defaultUpVector = utils.getObjectBasisVectors( self[ 0 ] )[ 1 ]  #defaults to the "Y" axis of the part's parent
+			defaultUpVector = rigUtils.getObjectBasisVectors( self[ 0 ] )[ 1 ]  #defaults to the "Y" axis of the part's parent
 			normal = getPlaneNormalForObjects( self.base, midJoint, self.end, defaultUpVector )
 			normal *= parity.asMultiplier()
 
@@ -1645,6 +1742,15 @@ class ArbitraryChain(BaseSkeletonPart):
 			autoAlignItem( self[ -1 ], parity, worldUpVector=normal )
 			for i in self.getOrphanJoints():
 				autoAlignItem( i, parity, worldUpVector=normal )
+	def on_manualCreation( self ):
+		buildKwargs = self.getBuildKwargs()
+		chainName = buildKwargs.get( 'chainName', None )
+		if not chainName:
+			ret = cmd.promptDialog( t='Please Specify a Name', m='Please specify a name for the chain', b='Continue', db='Continue' )
+			chainName = cmd.promptDialog( q=True, tx=True )
+
+			buildKwargs[ 'chainName' ] = chainName
+			self.setBuildKwargs( buildKwargs )
 
 
 def alignItems( items ):
@@ -1657,7 +1763,7 @@ def alignItems( items ):
 		for i in items: autoAlignItem( i )
 	else:
 		midJoint = items[ num / 2 ]
-		defaultUpVector = utils.getObjectBasisVectors( items[ 0 ] )[ 1 ]  #defaults to the "Y" axis of the part's parent
+		defaultUpVector = rigUtils.getObjectBasisVectors( items[ 0 ] )[ 1 ]  #defaults to the "Y" axis of the part's parent
 		normal = getPlaneNormalForObjects( items[ 0 ], midJoint, items[ -1 ], defaultUpVector )
 
 		for n, i in enumerate( items[ :-1 ] ):
@@ -1692,20 +1798,20 @@ class QuadrupedFrontLeg(Arm):
 		parityName = idx.asName()
 
 		clavicle = createJoint( 'quadClavicle%s' % parityName )
-		pymelCore.parent( clavicle, parent, relative=True )
-		move( clavicle, dirMult * partScale / 10.0, -partScale / 10.0, partScale / 6.0, r=True, ws=True )
+		cmd.parent( clavicle, parent, relative=True )
+		move( dirMult * partScale / 10.0, -partScale / 10.0, partScale / 6.0, clavicle, r=True, ws=True )
 
 		bicep = createJoint( 'quadHumerous%s' % parityName )
-		pymelCore.parent( bicep, clavicle, relative=True )
-		move( bicep, 0, -height / 3.0, -height / 6.0, r=True, ws=True )
+		cmd.parent( bicep, clavicle, relative=True )
+		move( 0, -height / 3.0, -height / 6.0, bicep, r=True, ws=True )
 
 		elbow = createJoint( 'quadElbow%s' % parityName )
-		pymelCore.parent( elbow, bicep, relative=True )
-		move( elbow, 0, -height / 3.0, height / 10.0, r=True, ws=True )
+		cmd.parent( elbow, bicep, relative=True )
+		move( 0, -height / 3.0, height / 10.0, elbow, r=True, ws=True )
 
 		wrist = createJoint( 'quadWrist%s' % parityName )
-		pymelCore.parent( wrist, elbow, relative=True )
-		move( wrist, 0, -height / 3.0, 0, r=True, ws=True )
+		cmd.parent( wrist, elbow, relative=True )
+		move( 0, -height / 3.0, 0, wrist, r=True, ws=True )
 
 		jointSize( clavicle, 2 )
 		jointSize( wrist, 2 )
@@ -1735,20 +1841,20 @@ class QuadrupedBackLeg(Arm):
 		kneeFwdMove = height / 10.0
 
 		thigh = createJoint( 'quadThigh%s' % parityName )
-		thigh = pymelCore.parent( thigh, parent, relative=True )[ 0 ]
-		move( thigh, dirMult * partScale / 10.0, -partScale / 10.0, -partScale / 5.0, r=True, ws=True )
+		thigh = cmd.parent( thigh, parent, relative=True )[ 0 ]
+		move( dirMult * partScale / 10.0, -partScale / 10.0, -partScale / 5.0, thigh, r=True, ws=True )
 
 		knee = createJoint( 'quadKnee%s' % parityName )
-		knee = pymelCore.parent( knee, thigh, relative=True )[ 0 ]
-		move( knee, 0, -height / 3.0, kneeFwdMove, r=True, ws=True )
+		knee = cmd.parent( knee, thigh, relative=True )[ 0 ]
+		move( 0, -height / 3.0, kneeFwdMove, knee, r=True, ws=True )
 
 		ankle = createJoint( 'quadAnkle%s' % parityName )
-		ankle = pymelCore.parent( ankle, knee, relative=True )[ 0 ]
-		move( ankle, 0, -height / 3.0, -kneeFwdMove, r=True, ws=True )
+		ankle = cmd.parent( ankle, knee, relative=True )[ 0 ]
+		move( 0, -height / 3.0, -kneeFwdMove, ankle, r=True, ws=True )
 
 		toe = createJoint( 'quadToe%s' % parityName )
-		toe = pymelCore.parent( toe, ankle, relative=True )[ 0 ]
-		move( toe, 0, -height / 3.0, 0, r=True, ws=True )
+		toe = cmd.parent( toe, ankle, relative=True )[ 0 ]
+		move( 0, -height / 3.0, 0, toe, r=True, ws=True )
 
 		jointSize( thigh, 2 )
 		jointSize( ankle, 2 )
@@ -1774,10 +1880,10 @@ class WeaponRoot(BaseSkeletonPart):
 
 		parent = getParent( parent )
 		j = createJoint( '%s_%d' % (weaponName, idx+1) )
-		pymelCore.parent( j, parent, r=True )
+		cmd.parent( j, parent, r=True )
 
 		#move it out a bit
-		for ax in AXES: j.attr( 't'+ ax ).set( partScale )
+		for ax in AXES: setAttr( '%s.t%s' % (j, ax), partScale )
 
 		return [ j ]
 	def _align( self, _initialAlign=False ):
@@ -1893,8 +1999,9 @@ def finalizeAllParts():
 
 	for part in sortPartsByHierarchy( part for part in SkeletonPart.IterAllParts() ):
 		print 'Finalizing', part
-		part.breakDriver()
-		part._finalize()
+		if not part.compareAgainstHash():
+			part.breakDriver()
+			part._finalize()
 
 
 def getNamespaceFromReferencing( node ):
@@ -1937,15 +2044,13 @@ def buildRigForModel( scene=None, autoFinalize=True, referenceModel=True ):
 	if not scene and referenceModel:
 		raise SceneNotSavedError( "Uh oh, your scene hasn't been saved - Please save it somewhere on disk so I know where to put the rig.  Thanks!" )
 
-	if scene:
-		#backup the current state of the scene, just in case something goes south...
+	#backup the current state of the scene, just in case something goes south...
+	if scene.exists:
 		backupFilename = scene.up() / ('%s_backup.%s' % (scene.name(), scene.getExtension()))
 		if backupFilename.exists: backupFilename.delete()
 		cmd.file( rename=backupFilename )
-		try:
-			cmd.file( save=True, force=True )
-		finally:
-			cmd.file( rename=scene )
+		cmd.file( save=True, force=True )
+		cmd.file( rename=scene )
 
 	#finalize if desired
 	if autoFinalize:
@@ -1965,8 +2070,12 @@ def buildRigForModel( scene=None, autoFinalize=True, referenceModel=True ):
 		cmd.file( rename=rigScene )
 		rigScene.editoradd()
 		cmd.file( f=True, save=True, typ='mayaAscii' )
+	else:
+		rigScene = scene
 
 	buildRigForAllParts()
+
+	return rigScene
 
 
 def buildRigForAllParts():
@@ -1974,9 +2083,8 @@ def buildRigForAllParts():
 	allParts = [ part for part in SkeletonPart.IterAllParts() ]
 	allParts = sortPartsByHierarchy( allParts )
 
-	scale = getDefaultScale() / 10.0
 	for part in allParts:
-		part.rig( scale=scale )
+		part.rig()
 
 
 #end

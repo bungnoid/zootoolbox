@@ -6,16 +6,16 @@ class FkSpine(PrimaryRigPart):
 	SKELETON_PRIM_ASSOC = ( Spine, )
 
 	@classmethod
-	def _build( cls, skeletonPart, **kw ):
-		return fkSpine( skeletonPart[ 0 ], skeletonPart[ -1 ], **kw )
+	def _build( cls, skeletonPart, translateControls=True, **kw ):
+		return fkSpine( skeletonPart[ 0 ], skeletonPart[ -1 ], translateControls=translateControls, **kw )
 
 
-def fkSpine( spineBase, spineEnd, parents=(), **kw ):
+def fkSpine( spineBase, spineEnd, parents=(), translateControls=True, **kw ):
 	'''
 	'''
 	scale = kw[ 'scale' ]
 
-	spineBase, spineEnd = PyNode( spineBase ), PyNode( spineEnd )
+	spineBase, spineEnd = spineBase, spineEnd
 
 	worldPart = WorldPart.Create()
 	worldControl = worldPart.control
@@ -29,7 +29,7 @@ def fkSpine( spineBase, spineEnd, parents=(), **kw ):
 	spines = [ spineEnd ]
 	if spineBase != spineEnd:
 		while True:
-			p = spines[ -1 ].getParent()
+			p = getNodeParent( spines[ -1 ] )
 			spines.append( p )
 			if p == spineBase: break
 
@@ -51,7 +51,7 @@ def fkSpine( spineBase, spineEnd, parents=(), **kw ):
 
 	for n, j in enumerate( spines ):
 		c = buildControl( "spine_%d_fkControl" % n, j, PivotModeDesc.BASE, ShapeDesc( 'pin', axis=AX_Z ), colour=spineColour, offset=spineOffset, scale=scale*1.5, niceName='Spine %d Control' % n )
-		cSpace = c.getParent()
+		cSpace = getNodeParent( c )
 
 		jParent = partParent
 		if n: jParent = controllers[ -1 ]
@@ -75,7 +75,8 @@ def fkSpine( spineBase, spineEnd, parents=(), **kw ):
 
 
 	#turn unwanted transforms off, so that they are locked, and no longer keyable
-	attrState( controllers, 't', *NORMAL )
+	if not translateControls:
+		attrState( controllers, 't', *LOCK_HIDE )
 
 
 	return controllers

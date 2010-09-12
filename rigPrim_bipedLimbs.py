@@ -7,7 +7,7 @@ class IkFkArm(PrimaryRigPart):
 	CONTROL_NAMES = 'control', 'fkBicep', 'fkElbow', 'fkWrist', 'poleControl', 'clavicle', 'allPurpose', 'poleTrigger'
 
 	@classmethod
-	def _build( cls, skeletonPart, stretchy=False, **kw ):
+	def _build( cls, skeletonPart, translateClavicle=True, **kw ):
 
 		#this bit of zaniness is so we don't have to call the items by name, which makes it work with Arm or Leg skeleton primitives
 		items = list( skeletonPart )[ :3 ]
@@ -16,10 +16,10 @@ class IkFkArm(PrimaryRigPart):
 			items = list( skeletonPart )[ 1:4 ]
 			items.append( skeletonPart[ 0 ] )
 
-		return ikFkArm( stretchy=stretchy, *items, **kw )
+		return ikFkArm( translateClavicle=translateClavicle, stretchy=False, *items, **kw )
 
 
-def ikFkArm( bicep, elbow, wrist, clavicle=None, stretchy=True, **kw ):
+def ikFkArm( bicep, elbow, wrist, clavicle=None, translateClavicle=True, stretchy=True, **kw ):
 	scale = kw[ 'scale' ]
 
 	idx = kw[ 'idx' ]
@@ -39,34 +39,35 @@ def ikFkArm( bicep, elbow, wrist, clavicle=None, stretchy=True, **kw ):
 	ikFkPart = buildContainer( IkFkBase, kw, ikFkNodes, ikFkControls )
 
 	#create variables for each control used
-	armControl = ikFkPart.control
-	ikHandle = ikFkPart.ikHandle
-	ikArmSpace = ikFkPart.ikSpace
-	fkArmSpace = ikFkPart.fkSpace
-	driverBicep = ikFkPart.fkUpper
-	driverElbow = ikFkPart.fkMid
-	driverWrist = ikFkPart.fkLower
-	elbowControl = ikFkPart.poleControl
+	armControl = asMObject( ikFkPart.control )
+	ikHandle = asMObject( ikFkPart.ikHandle )
+	ikArmSpace = asMObject( ikFkPart.ikSpace )
+	fkArmSpace = asMObject( ikFkPart.fkSpace )
+	driverBicep = asMObject( ikFkPart.fkUpper )
+	driverElbow = asMObject( ikFkPart.fkMid )
+	driverWrist = asMObject( ikFkPart.fkLower )
+	elbowControl = asMObject( ikFkPart.poleControl )
 	fkControls = driverBicep, driverElbow, driverWrist
 
 
 	#build the clavicle
 	if clavicle:
-		clavOffset = AX_Y.asVector() * getAutoOffsetAmount( clavicle, clavicle.getChildren(), AX_Y )
-		clavControl = buildControl( 'clavicleControl%s' % parity.asName(), PlaceDesc( bicep, clavicle, clavicle ), shapeDesc=ShapeDesc( 'sphere' ), scale=scale*1.25, offset=clavOffset, offsetSpace=WORLD, colour=colour )
-		clavControlOrient = clavControl.getParent()
+		clavOffset = AX_Y.asVector() * getAutoOffsetAmount( clavicle, listRelatives( clavicle, pa=True ), AX_Y )
+		clavControl = buildControl( 'clavicleControl%s' % parity.asName(), PlaceDesc( bicep, clavicle, clavicle ), shapeDesc=ShapeDesc( 'sphere' ), scale=scale*1.25, offset=clavOffset, offsetSpace=SPACE_WORLD, colour=colour )
+		clavControlOrient = getNodeParent( clavControl )
 
 		parent( clavControlOrient, parentControl )
 		parent( fkArmSpace, clavControl )
-		attrState( clavControl, 't', *LOCK_HIDE )
+		if not translateClavicle:
+			attrState( clavControl, 't', *LOCK_HIDE )
 	else:
 		clavControl = None
 		parent( fkArmSpace, parentControl )
 
 
 	#build space switching
-	allPurposeObj = spaceLocator()
-	allPurposeObj.rename( "arm_all_purpose_loc%s" % parity.asName() )
+	allPurposeObj = spaceLocator()[ 0 ]
+	allPurposeObj = rename( allPurposeObj, "arm_all_purpose_loc%s" % parity.asName() )
 	parent( allPurposeObj, worldControl )
 
 	buildDefaultSpaceSwitching( bicep, armControl, [ allPurposeObj ], [ 'All Purpose' ], True )
@@ -123,8 +124,8 @@ def makeStretchy( control, ikHandle, axis=BONE_AIM_AXIS, startObj=None, endObj=N
 	stretchName = "stretch"
 	parityFactor = parity.asMultiplier()
 
-	control.addAttr( stretchAuto, at='double', min=0, max=1, dv=1 )
-	control.addAttr( stretchName, at='double', min=0, max=10, dv=0 )
+	addAttr( control, ln=stretchAuto, at='double', min=0, max=1, dv=1 )
+	addAttr( control, ln=stretchName, at='double', min=0, max=10, dv=0 )
 	attrState( control, (stretchAuto, stretchName), keyable=True )
 
 
@@ -171,12 +172,12 @@ def makeStretchy( control, ikHandle, axis=BONE_AIM_AXIS, startObj=None, endObj=N
 	measure = loc_b
 
 	parent( loc_b, loc_a )
-	constraint_a = pointConstraint( startObj, loc_a )
+	constraint_a = pointConstraint( startObj, loc_a )[ 0 ]
 
-	aim = aimConstraint( endObj, loc_a, aimVector=(1,0,0) )
-	loc_b.tx.set( totalLength )
-	makeIdentity( loc_b, a=True, t=True)  #by doing this, the zero point for the null is the max extension for the limb
-	constraint_b = pointConstraint( endObj, loc_b )
+	aim = aimConstraint( endObj, loc_a, aimVector=(1,0,0) )[ 0 ]
+	setAttr( '%s.tx' % loc_b, totalLength )
+	makeIdentity( loc_b, a=True, t=True )  #by doing this, the zero point for the null is the max extension for the limb
+	constraint_b = pointConstraint( endObj, loc_b )[ 0 ]
 	attrState( [ loc_a, loc_b ], ('t', 'r'), *LOCK_HIDE )
 
 
@@ -196,36 +197,35 @@ def makeStretchy( control, ikHandle, axis=BONE_AIM_AXIS, startObj=None, endObj=N
 	keyTangent( dampen, f=":", itt='flat', ott='flat' )
 
 	#NOTE: the second term attribute of the length condition node holds the initial length for the limb, and is thus connected to the false attribute of all condition nodes
-	manualStretchMult.input2X.set( totalLength / 10 )
-	actualLength.input1D[ 0 ].set( totalLength )
-	actualLength.input1D[ 0 ].set( totalLength )
-	finalLength.minR.set( totalLength )
-	finalLength.maxR.set( totalLength * 3 )
-	connectAttr( measure.tx, dampen.input, f=True )
-	connectAttr( lengthMods.output1D, fkikBlend.input1X, f=True )
-	connectAttr( ikHandle.ikBlend, fkikBlend.input2X, f=True )
-	connectAttr( fkikBlend.outputX, stretchEnable.input1X, f=True )
-	connectAttr( getattr( control, stretchAuto ), stretchEnable.input2X, f=True )
-	connectAttr( measure.tx, lengthMods.input1D[ 0 ], f=True )
-	connectAttr( getattr( control, stretchName ), manualStretchMult.input1X, f=True )
-	connectAttr( manualStretchMult.outputX, lengthMods.input1D[ 1 ], f=True )
-	connectAttr( dampen.output, lengthMods.input1D[ 2 ], f=True )
-	connectAttr( stretchEnable.outputX, actualLength.input1D[ 1 ], f=True )
-	connectAttr( actualLength.output1D, finalLength.inputR, f=True )
+	setAttr( '%s.input2X' % manualStretchMult, totalLength / 10 )
+	setAttr( '%s.input1D[ 0 ]' % actualLength, totalLength )
+	setAttr( '%s.minR' % finalLength, totalLength )
+	setAttr( '%s.maxR' % finalLength, totalLength * 3 )
+	connectAttr( '%s.tx' % measure, '%s.input' % dampen, f=True )
+	connectAttr( '%s.output1D' % lengthMods, '%s.input1X' % fkikBlend, f=True )
+	connectAttr( '%s.ikBlend' % ikHandle, '%s.input2X' % fkikBlend, f=True )
+	connectAttr( '%s.outputX' % fkikBlend, '%s.input1X' % stretchEnable, f=True )
+	connectAttr( '%s.%s' % (control, stretchAuto), '%s.input2X' % stretchEnable, f=True )
+	connectAttr( '%s.tx' % measure, '%s.input1D[ 0 ]' % lengthMods, f=True )
+	connectAttr( '%s.%s' % (control, stretchName), '%s.input1X' % manualStretchMult, f=True )
+	connectAttr( '%s.outputX' % manualStretchMult, '%s.input1D[ 1 ]' % lengthMods, f=True )
+	connectAttr( '%s.output' % dampen, '%s.input1D[ 2 ]' % lengthMods, f=True )
+	connectAttr( '%s.outputX' % stretchEnable, '%s.input1D[ 1 ]' % actualLength, f=True )
+	connectAttr( '%s.output1D' % actualLength, '%s.inputR' % finalLength, f=True )
 
 
 	#connect the stretch distribution network up - NOTE this loop starts at 1 because we don't need to connect the
 	#start of the limb chain (ie the bicep or the thigh) as it doesn't move
 	for n, c in enumerate( clients ):
 		if n == 0: continue
-		fractionNodes[ n ].input2X.set( clientLengths[ n ] / totalLength * parityFactor )
+		setAttr( '%s.input2X' % fractionNodes[ n ], clientLengths[ n ] / totalLength * parityFactor )
 
 		#now connect the inital coords to the plus node - then connect the
-		connectAttr( finalLength.outputR, fractionNodes[ n ].input1X, f=True )
+		connectAttr( '%s.outputR' % finalLength, '%s.input1X' % fractionNodes[ n ], f=True )
 
 		#then connect the result of the plus node to the t(axis) pos of the limb joints
-		clients[ n ].tx.setLocked( False )
-		connectAttr( fractionNodes[ n ].outputX, clients[ n ].tx, f=True )
+		setAttr( '%s.tx' % clients[ n ], lock=False )
+		connectAttr( '%s.outputX' % fractionNodes[ n ], '%s.tx' % clients[ n ], f=True )
 
 
 	#now if we have only 3 clients, that means we have a simple limb structure
@@ -235,22 +235,22 @@ def makeStretchy( control, ikHandle, axis=BONE_AIM_AXIS, startObj=None, endObj=N
 		isNeg = default < 0
 
 		default = abs( default )
-		control.addAttr( 'elbowPos', at='double', min=0, max=1, dv=default )
-		control.elbowPos.setKeyable( True )
+		addAttr( control, ln='elbowPos', at='double', min=0, max=1, dv=default )
+		setAttr( '%s.elbowPos' % control, keyable=True )
 
 		elbowPos = shadingNode( 'reverse', asUtility=True, n='%s_elbowPos' % clients[ 1 ] )
 		if isNeg:
 			mult = shadingNode( 'multiplyDivide', asUtility=True )
-			mult.input2.set( (-1, -1, -1) )
-			connectAttr( control.elbowPos, elbowPos.inputX, f=True )
-			connectAttr( control.elbowPos, mult.input1X, f=True )
-			connectAttr( elbowPos.outputX, mult.input1Y, f=True )
-			connectAttr( mult.outputY, fractionNodes[2].input2X, f=True )
-			connectAttr( mult.outputX, fractionNodes[1].input2X, f=True )
+			setAttr( '%s.input2' % mult, -1, -1, -1 )
+			connectAttr( '%s.elbowPos' % control, '%s.inputX' % elbowPos, f=True )
+			connectAttr( '%s.elbowPos' % control, '%s.input1X' % mult, f=True )
+			connectAttr( '%s.outputX' % elbowPos, '%s.input1Y' % mult, f=True )
+			connectAttr( '%s.outputY' % mult, '%s.input2X' % fractionNodes[2], f=True )
+			connectAttr( '%s.outputX' % mult, '%s.input2X' % fractionNodes[1], f=True )
 		else:
-			connectAttr( control.elbowPos, elbowPos.inputX, f=True )
-			connectAttr( elbowPos.outputX, fractionNodes[2].input2X, f=True )
-			connectAttr( control.elbowPos, fractionNodes[1].input2X, f=True )
+			connectAttr( '%s.elbowPos' % control, '%s.inputX' % elbowPos, f=True )
+			connectAttr( '%s.outputX' % elbowPos, '%s.input2X' % fractionNodes[2], f=True )
+			connectAttr( '%s.elbowPos' % control, '%s.input2X' % fractionNodes[1], f=True )
 
 
 class IkFkLeg(PrimaryRigPart):
@@ -299,7 +299,7 @@ def ikFkLeg( thigh, knee, ankle, stretchy=True, **kw ):
 
 	#create variables for each control used
 	legControl = ikFkPart.control
-	legControlSpace = legControl.getParent()
+	legControlSpace = getNodeParent( legControl )
 
 	ikLegSpace = ikFkPart.ikSpace
 	fkLegSpace = ikFkPart.fkSpace
@@ -308,8 +308,8 @@ def ikFkLeg( thigh, knee, ankle, stretchy=True, **kw ):
 	driverAnkle = ikFkPart.fkLower
 	ikHandle = ikFkPart.ikHandle
 	kneeControl = ikFkPart.poleControl
-	kneeControlSpace = kneeControl.getParent()
-	toe = listRelatives( ankle, type='joint' ) or None
+	kneeControlSpace = getNodeParent( kneeControl )
+	toe = listRelatives( ankle, type='joint', pa=True ) or None
 	toeTip = None
 
 	if toe:
@@ -322,9 +322,9 @@ def ikFkLeg( thigh, knee, ankle, stretchy=True, **kw ):
 	if not toe:
 		toe = group( em=True )
 		parent( toe, ankle, r=True )
-		move( toe, 0, -scale, scale, r=True, ws=True )
+		move( 0, -scale, scale, toe, r=True, ws=True )
 
-	possibleTips = listRelatives( toe, type='joint' )
+	possibleTips = listRelatives( toe, type='joint', pa=True )
 	if possibleTips:
 		toeTip = possibleTips[ 0 ]
 
@@ -343,14 +343,14 @@ def ikFkLeg( thigh, knee, ankle, stretchy=True, **kw ):
 		toeRoll = buildNullControl( "leg_toe_roll_piv"+ suffix, toe, offset=(0, 0, scale) )
 
 	select( heelRoll )  #stupid move command doesn't support object naming when specifying a single axis move, so we must selec the object first
-	move( (0, 0, 0), rpr=True, y=True )
+	move( 0, 0, 0, rpr=True, y=True )
 
 
 	#move bank pivots to a good spot on the ground
-	toePos = toe.getRotatePivot( 'world' )
+	toePos = Vector( xform( toe, q=True, ws=True, rp=True ) )
 	sideOffset = -scale if parity == Parity.LEFT else scale
-	move( footBankL, (toePos.x+sideOffset, 0, toePos.z), a=True, ws=True, rpr=True )
-	move( footBankR, (toePos.x-sideOffset, 0, toePos.z), a=True, ws=True, rpr=True )
+	move( toePos.x+sideOffset, 0, toePos.z, footBankL, a=True, ws=True, rpr=True )
+	move( toePos.x-sideOffset, 0, toePos.z, footBankR, a=True, ws=True, rpr=True )
 
 
 	#parent the leg pivots together
@@ -362,65 +362,66 @@ def ikFkLeg( thigh, knee, ankle, stretchy=True, **kw ):
 	parent( footBankR, footBankL )
 	parent( footRollControl, footBankR )
 	parent( toeOrient, footBankR )
-	if toe: orientConstraint( toeOrient, toe, mo=True )
+	if toe:
+		orientConstraint( toeOrient, toe, mo=True )
+
 	makeIdentity( heelRoll, apply=True, t=True, r=True )
 
 
 	#move the knee control so its inline with the leg
-	#move( kneeControlSpace, newPos, a=True, ws=True, rpr=True )
-	rotate( kneeControlSpace, footCtrlRot, p=thigh.getRotatePivot( 'world' ), a=True, ws=True )
+	rotate( footCtrlRot[0], footCtrlRot[1], footCtrlRot[2], kneeControlSpace, p=xform( thigh, q=True, ws=True, rp=True ), a=True, ws=True )
 	makeIdentity( kneeControl, apply=True, t=True )
 
 
 	#add attributes to the leg control, to control the pivots
-	legControl.addAttr( 'rollBall', at='double', min=0, max=10, k=True )
-	legControl.addAttr( 'rollToe', at='double', min=-10, max=10, k=True )
-	legControl.addAttr( 'twistFoot', at='double', min=-10, max=10, k=True )
-	legControl.addAttr( 'toe', at='double', min=-10, max=10, k=True )
-	legControl.addAttr( 'bank', at='double', min=-10, max=10, k=True )
+	addAttr( legControl, ln='rollBall', at='double', min=0, max=10, k=True )
+	addAttr( legControl, ln='rollToe', at='double', min=-10, max=10, k=True )
+	addAttr( legControl, ln='twistFoot', at='double', min=-10, max=10, k=True )
+	addAttr( legControl, ln='toe', at='double', min=-10, max=10, k=True )
+	addAttr( legControl, ln='bank', at='double', min=-10, max=10, k=True )
 
 
 	#replace the legControl as a target to teh parent constraint on the endOrient transform so the ikHandle respects the foot slider controls
 	footFinalPivot = buildNullControl( "final_piv"+ suffix, ankle, parent=footRollControl )
-	endOrientConstraint = ikFkPart.endOrient.tx.listConnections( type='constraint', d=False )[ 0 ]
-	for attr in endOrientConstraint.target[ 0 ].getChildren():
-		for con in attr.listConnections( p=True, type='transform', d=False ):
-			if con.node() == legControl:
-				#footFinalPivot.attr( con.shortName() ) >> attr  ##there is a bug here - instantiating a rotatePivot doesn't return an Attribute instance - so we need to go back to dealing with strings...
-
+	endOrientConstraint = listConnections( '%s.tx' % ikFkPart.endOrient, type='constraint', d=False )[ 0 ]
+	#replaceConstraintTarget( endOrientConstraint, footFinalPivot )
+	for attr in attributeQuery( 'target', node=endOrientConstraint, listChildren=True ):
+		for con in listConnections( '%s.target[ 0 ].%s' % (endOrientConstraint, attr), p=True, type='transform', d=False ) or []:
+			node = con.split( '.' )[ 0 ]
+			if cmpNodes( node, legControl ):
 				toks = str( con ).split( '.' )
 				toks[ 0 ] = str( footFinalPivot )
-				connectAttr( '.'.join( toks ), attr, f=True )
+				connectAttr( '.'.join( toks ), '%s.target[0].%s' % (endOrientConstraint, attr), f=True )
 
 	delete( parentConstraint( footFinalPivot, ikHandle, mo=True ) )
 	parent( ikHandle, footFinalPivot )
 
 
 	#build the SDK's to control the pivots
-	setDrivenKeyframe( footRollControl.rx, cd=legControl.rollBall, dv=0, v=0 )
-	setDrivenKeyframe( footRollControl.rx, cd=legControl.rollBall, dv=10, v=90 )
-	setDrivenKeyframe( footRollControl.rx, cd=legControl.rollBall, dv=-10, v=-90 )
+	setDrivenKeyframe( '%s.rx' % footRollControl, cd='%s.rollBall' % legControl, dv=0, v=0 )
+	setDrivenKeyframe( '%s.rx' % footRollControl, cd='%s.rollBall' % legControl, dv=10, v=90 )
+	setDrivenKeyframe( '%s.rx' % footRollControl, cd='%s.rollBall' % legControl, dv=-10, v=-90 )
 
-	setDrivenKeyframe( toeRoll.rx, cd=legControl.rollToe, dv=0, v=0 )
-	setDrivenKeyframe( toeRoll.rx, cd=legControl.rollToe, dv=10, v=90 )
-	setDrivenKeyframe( toeRoll.rx, cd=legControl.rollToe, dv=0, v=0 )
-	setDrivenKeyframe( toeRoll.rx, cd=legControl.rollToe, dv=-10, v=-90 )
-	setDrivenKeyframe( toeRoll.ry, cd=legControl.twistFoot, dv=-10, v=-90 )
-	setDrivenKeyframe( toeRoll.ry, cd=legControl.twistFoot, dv=10, v=90 )
+	setDrivenKeyframe( '%s.rx' % toeRoll, cd='%s.rollToe' % legControl, dv=0, v=0 )
+	setDrivenKeyframe( '%s.rx' % toeRoll, cd='%s.rollToe' % legControl, dv=10, v=90 )
+	setDrivenKeyframe( '%s.rx' % toeRoll, cd='%s.rollToe' % legControl, dv=0, v=0 )
+	setDrivenKeyframe( '%s.rx' % toeRoll, cd='%s.rollToe' % legControl, dv=-10, v=-90 )
+	setDrivenKeyframe( '%s.ry' % toeRoll, cd='%s.twistFoot' % legControl, dv=-10, v=-90 )
+	setDrivenKeyframe( '%s.ry' % toeRoll, cd='%s.twistFoot' % legControl, dv=10, v=90 )
 
-	setDrivenKeyframe( toeOrient.ry, cd=legControl.toe, dv=-10, v=90 )
-	setDrivenKeyframe( toeOrient.ry, cd=legControl.toe, dv=10, v=-90 )
+	setDrivenKeyframe( '%s.rx' % toeOrient, cd='%s.toe' % legControl, dv=-10, v=90 )
+	setDrivenKeyframe( '%s.rx' % toeOrient, cd='%s.toe' % legControl, dv=10, v=-90 )
 
 	min = -90 if parity == Parity.LEFT else 90
 	max = 90 if parity == Parity.LEFT else -90
-	setDrivenKeyframe( footBankL.rz, cd=legControl.bank, dv=0, v=0 )
-	setDrivenKeyframe( footBankL.rz, cd=legControl.bank, dv=10, v=max )
-	setDrivenKeyframe( footBankR.rz, cd=legControl.bank, dv=0, v=0 )
-	setDrivenKeyframe( footBankR.rz, cd=legControl.bank, dv=-10, v=min )
+	setDrivenKeyframe( '%s.rz' % footBankL, cd='%s.bank' % legControl, dv=0, v=0 )
+	setDrivenKeyframe( '%s.rz' % footBankL, cd='%s.bank' % legControl, dv=10, v=max )
+	setDrivenKeyframe( '%s.rz' % footBankR, cd='%s.bank' % legControl, dv=0, v=0 )
+	setDrivenKeyframe( '%s.rz' % footBankR, cd='%s.bank' % legControl, dv=-10, v=min )
 
 
 	#build all purpose
-	allPurposeObj = spaceLocator( name="leg_all_purpose_loc%s" % suffix )
+	allPurposeObj = spaceLocator( name="leg_all_purpose_loc%s" % suffix )[ 0 ]
 	parent( allPurposeObj, worldControl )
 
 
@@ -437,7 +438,7 @@ def ikFkLeg( thigh, knee, ankle, stretchy=True, **kw ):
 
 
 	#hide attribs, objects and cleanup
-	attrState( legControl, 'kneePos', *LOCK_HIDE )
+	#attrState( legControl, 'kneePos', *LOCK_HIDE )
 
 
 	return legControl, driverThigh, driverKnee, driverAnkle, kneeControl, allPurposeObj, ikFkPart.poleTrigger
