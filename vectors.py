@@ -4,7 +4,9 @@ anything that was easily accessible and quick to write.  this may just go away i
 comprehensive/mature is found
 '''
 
-import math, random
+import re
+import math
+import random
 from math import cos, sin, tan, acos, asin, atan2
 
 
@@ -42,6 +44,12 @@ class Vector(list):
 	__str__ = __repr__
 	def setIndex( self, idx, value ):
 		self[ idx ] = value
+	def __nonzero__( self ):
+		for item in self:
+			if item:
+				return True
+
+		return False
 	def __add__( self, other ):
 		return self.__class__( [x+y for x, y in zip(self, other)] )
 	__iadd__ = __add__
@@ -175,7 +183,7 @@ class Vector(list):
 		mag = sqrt( mag )
 
 		return self.__class__( [v / mag for v in self] )
-	def change_space( self, basisX, basisY, basisZ=None, inPlace=True ):
+	def change_space( self, basisX, basisY, basisZ=None ):
 		'''
 		will re-parameterize this vector to a different space
 		NOTE: the basisZ is optional - if not given, then it will be computed from X and Y
@@ -187,10 +195,6 @@ class Vector(list):
 
 		dot = self.dot
 		new = dot( basisX ), dot( basisY ), dot( basisZ )
-
-		if inPlace:
-			self[0], self[1], self[2] = new
-			return self
 
 		return self.__class__( new )
 	def rotate( self, quat ):
@@ -229,84 +233,186 @@ class Vector(list):
 	w = property( lambda self: self[ 3 ], lambda self, value: self.setIndex( 3, value ) )
 
 
-def findMatchingVectors( theVector, vectors, tolerance=1e-6 ):
-	'''
-	finds vectors that fall within an axis tolerance of theVector - ie the axis values
-	of vectors[n] fall within the tolerance boundaries of axis values of theVector.  so
-	in other words - this returns all vectors that fall within the bounding box defined
-	by the theVector and +/-tolerance
+class Colour(Vector):
+	NAMED_PRESETS = { "active": (0.26, 1, 0.64),
+	                  "black": (0, 0, 0),
+	                  "white": (1, 1, 1),
+	                  "grey": (.5, .5, .5),
+	                  "lightgrey": (.7, .7, .7),
+	                  "darkgrey": (.25, .25, .25),
+	                  "red": (1, 0, 0),
+	                  "lightred": (1, .5, 1),
+	                  "peach": (1, .5, .5),
+	                  "darkred": (.6, 0, 0),
+	                  "orange": (1., .5, 0),
+	                  "lightorange": (1, .7, .1),
+	                  "darkorange": (.7, .25, 0),
+	                  "yellow": (1, 1, 0),
+	                  "lightyellow": (1, 1, .5),
+	                  "darkyellow": (.8,.8,0.),
+	                  "green": (0, 1, 0),
+	                  "lightgreen": (.4, 1, .2),
+	                  "darkgreen": (0, .5, 0),
+	                  "blue": (0, 0, 1),
+	                  "lightblue": (.4, .55, 1),
+	                  "darkblue": (0, 0, .4),
+	                  "purple": (.7, 0, 1),
+	                  "lightpurple": (.8, .5, 1),
+	                  "darkpurple": (.375, 0, .5),
+	                  "brown": (.57, .49, .39),
+	                  "lightbrown": (.76, .64, .5),
+	                  "darkbrown": (.37, .28, .17) }
 
-	NOTE: this method assumes that vectors are sorted by x - you can use sortByIdx(vectors)
-	to do this...
-	'''
-	numVectors = len(vectors)
+	NAMED_PRESETS[ 'highlight' ] = NAMED_PRESETS[ 'active' ]
+	NAMED_PRESETS[ 'pink' ] = NAMED_PRESETS[ 'lightred' ]
 
-	#do some binary culling before beginning the search - the 200 number is arbitrary,
-	#but values less than that don't lead to significant performance improvements
-	idx = 0
-	theVectorIdx = theVector[idx]
-	while numVectors > 200:
-		half = numVectors / 2
-		halfPoint = vectors[half][idx]
+	DEFAULT_COLOUR = NAMED_PRESETS[ 'black' ]
+	DEFAULT_ALPHA = 0.7  #alpha=0 is opaque, alpha=1 is transparent
 
-		if (halfPoint + tolerance) < theVectorIdx: vectors = vectors[half:]
-		elif (halfPoint - tolerance) > theVectorIdx: vectors = vectors[:half]
-		else: break
+	INDEX_NAMES = 'rgba'
+	_EQ_TOLERANCE = 0.1
 
-		numVectors = len(vectors)
+	_NUM_RE = re.compile( '^[0-9. ]+' )
 
-	matchingX = []
-	for i in vectors:
-		diff = i[0] - theVector[0]
-		if abs(diff) <= tolerance:
-			matchingX.append(i)
+	def __eq__( self, other, tolerance=_EQ_TOLERANCE ):
+		return Vector.__eq__( self, other, tolerance )
+	def __ne__( self, other, tolerance=_EQ_TOLERANCE ):
+		return Vector.__ne__( self, other, tolerance )
+	def __init__( self, colour ):
+		'''
+		colour can be a combination:
+		name alpha  ->  darkred 0.5
+		name
+		r g b a  ->  1 0 0 0.2
+		if r, g, b or a are missing, they're assumed to be 0
+		a 4 float, RGBA array is returned
+		'''
+		if isinstance( colour, basestring ):
+			alpha = self.DEFAULT_ALPHA
+			toks = colour.lower().split( ' ' )[ :4 ]
 
-	matchingY = []
-	for i in matchingX:
-		diff = i[1] - theVector[1]
-		if abs(diff) <= tolerance:
-			matchingY.append(i)
+			if len( toks ) > 1:
+				if toks[ -1 ].isdigit():
+					alpha = float( toks[ -1 ] )
 
-	matching = []
-	for i in matchingY:
-		diff = i[2] - theVector[2]
-		if abs(diff) <= tolerance:
-			matching.append(i)
+			clr = [0,0,0,alpha]
+			for n, c in enumerate( self.DEFAULT_COLOUR[ :4 ] ):
+				clr[ n ] = c
 
-	return matching
+			clr[ 3 ] = alpha
+
+			if not toks[ 0 ].isdigit():
+				try:
+					clr = list( self.NAMED_PRESETS[ toks[ 0 ] ] )[ :3 ]
+					clr.append( alpha )
+				except KeyError: pass
+			else:
+				for n, t in enumerate( toks ):
+					try: clr[ n ] = float( t )
+					except ValueError: continue
+		else:
+			clr = colour
+
+		Vector.__init__( self, clr )
+	def darken( self, factor ):
+		'''
+		returns a colour vector that has been darkened by the appropriate ratio.
+		this is basically just a multiply, but the alpha is unaffected
+		'''
+		darkened = self * factor
+		darkened[ 3 ] = self[ 3 ]
+
+		return darkened
+	def lighten( self, factor ):
+		toWhiteDelta = Colour( (1,1,1,0) ) - self
+		toWhiteDelta = toWhiteDelta * factor
+		lightened = self + toWhiteDelta
+		lightened[ 3 ] = self[ 3 ]
+
+		return lightened
+	@classmethod
+	def ColourToName( cls, theColour ):
+		'''
+		given an arbitrary colour, will return the most appropriate name as
+		defined in the NAMED_PRESETS class dict
+		'''
+		if not isinstance( theColour, Colour ):
+			theColour = Colour( theColour )
+
+		theColour = Vector( theColour[ :3 ] )  #make sure its a 3 vector
+		matches = []
+		for name, colour in cls.NAMED_PRESETS.iteritems():
+			colour = Vector( colour )
+			diff = (colour - theColour).magnitude()
+			matches.append( (diff, name) )
+
+		matches.sort()
+
+		return matches[ 0 ][ 1 ]
+
+Color = Colour  #for spelling n00bs
 
 
-def getClosestVector( theVector, vectors, tolerance=1e-6 ):
-	'''
-	given a list of vectors, this method will return the one with the best match based
-	on the distance between any two vectors
-	'''
-	matching = findMatchingVectors(theVector, vectors, tolerance)
-	numMatches = len(matching)
-	if numMatches == 0:
-		return None
-	elif numMatches == 1:
-		return matching[0]
+class Axis(int):
+	BASE_AXES = 'x', 'y', 'z'
+	AXES = ( 'x', 'y', 'z', \
+	         '-x', '-y', '-z' )
 
-	#now iterate over the matching vectors and return the best match
-	best = matching.pop()
-	diff = (best - theVector).magnitude()
-	for match in matching:
-		curDiff = (match - theVector).magnitude()
-		if curDiff < diff:
-			best = match
-			diff = curDiff
+	def __new__( cls, idx ):
+		if isinstance( idx, basestring ):
+			return cls.FromName( idx )
 
-	return best
+		return int.__new__( cls, idx )
+	def __neg__( self ):
+		return Axis( (self + 3) % 6 )
+	@classmethod
+	def FromName( cls, name ):
+		idx = list( cls.AXES ).index( name.lower().replace( '_', '-' ) )
+		return cls( idx )
+	@classmethod
+	def FromVector( cls, vector ):
+		'''
+		returns the closest axis to the given vector
+		'''
+		assert len( cls.BASE_AXES ) >= len( vector )
 
+		listV = list( vector )
+		idx, value = 0, listV[ 0 ]
+		for n, v in enumerate( listV ):
+			if v > value:
+				value = v
+				idx = n
 
-def sortByIdx( vectorList, idx=0 ):
-	'''
-	sort the weightData by ascending x values so we can perform binary culling on the
-	list when searching
-	'''
-	sortedByIdx = sorted( [(i[idx], i) for i in vectorList] )
-	return [i[1] for i in sortedByIdx]
+		return cls( idx )
+	def asVector( self ):
+		v = Vector( [0, 0, 0] )
+		v[ self % 3 ] = 1 if self < 3 else -1
+
+		return v
+	def isNegative( self ):
+		return self > 2
+	def asName( self ):
+		return self.AXES[ self ]
+	def asCleanName( self ):
+		'''
+		returns the axis name without a negative regardless
+		'''
+		return self.AXES[ self ].replace( '-', '' )
+	def asEncodedName( self ):
+		'''
+		returns the axis name, replacing the - with an _
+		'''
+		return self.asName().replace( '-', '_' )
+	def otherAxes( self ):
+		'''
+		returns the other two axes that aren't this axis
+		'''
+		allAxes = [ 0, 1, 2 ]
+		allAxes.remove( self % 3 )
+
+		return list( map( Axis, allAxes ) )
+
+AX_X, AX_Y, AX_Z = map( Axis, range( 3 ) )
 
 
 class Quaternion(Vector):
@@ -366,17 +472,17 @@ class Quaternion(Vector):
 	def copy( self ):
 		return self.__class__(self)
 	@classmethod
-	def FromEulerXYZ( cls, x, y, z, fromdeg=False ): return cls(Matrix.FromEulerXYZ(x,y,z,fromdeg))
+	def FromEulerXYZ( cls, x, y, z, degrees=False ): return cls(Matrix.FromEulerXYZ(x, y, z, degrees))
 	@classmethod
-	def FromEulerYZX( cls, x, y, z, fromdeg=False ): return cls(Matrix.FromEulerYZX(x,y,z,fromdeg))
+	def FromEulerYZX( cls, x, y, z, degrees=False ): return cls(Matrix.FromEulerYZX(x, y, z, degrees))
 	@classmethod
-	def FromEulerZXY( cls, x, y, z, fromdeg=False ): return cls(Matrix.FromEulerZXY(x,y,z,fromdeg))
+	def FromEulerZXY( cls, x, y, z, degrees=False ): return cls(Matrix.FromEulerZXY(x, y, z, degrees))
 	@classmethod
-	def FromEulerXZY( cls, x, y, z, fromdeg=False ): return cls(Matrix.FromEulerXZY(x,y,z,fromdeg))
+	def FromEulerXZY( cls, x, y, z, degrees=False ): return cls(Matrix.FromEulerXZY(x, y, z, degrees))
 	@classmethod
-	def FromEulerYXZ( cls, x, y, z, fromdeg=False ): return cls(Matrix.FromEulerYXZ(x,y,z,fromdeg))
+	def FromEulerYXZ( cls, x, y, z, degrees=False ): return cls(Matrix.FromEulerYXZ(x, y, z, degrees))
 	@classmethod
-	def FromEulerZYX( cls, x, y, z, fromdeg=False ): return cls(Matrix.FromEulerZYX(x,y,z,fromdeg))
+	def FromEulerZYX( cls, x, y, z, degrees=False ): return cls(Matrix.FromEulerZYX(x, y, z, degrees))
 	@classmethod
 	def AxisAngle( cls, axis, angle, normalize=False ):
 		'''angle is assumed to be in radians'''
@@ -556,6 +662,13 @@ class Matrix(list):
 			new.setRow( n, self[ n ][ :newSize ] )
 
 		return new
+	def expand( self, newSize ):
+		new = self.Identity( newSize )
+		for i in range( self.size ):
+			for j in range( self.size ):
+				new[ i ][ j ] = self[ i ][ j ]
+
+		return new
 	#some alternative ways to build matrix instances
 	@classmethod
 	def Zero( cls, size=4 ):
@@ -628,8 +741,10 @@ class Matrix(list):
 
 			return cls( row0+row1+row2 )
 	@classmethod
-	def FromEulerXYZ( cls, x, y, z, fromdeg=False ):
-		if fromdeg: x,y,z = map(math.radians,(x,y,z))
+	def FromEulerXYZ( cls, x, y, z, degrees=False ):
+		if degrees:
+			x,y,z = map(math.radians,(x,y,z))
+
 		cx = cos(x)
 		sx = sin(x)
 		cy = cos(y)
@@ -637,19 +752,15 @@ class Matrix(list):
 		cz = cos(z)
 		sz = sin(z)
 
-		row0 = cy*cz, sx*sy*cz-cx*sz, cx*sy*cz+sx*sz
-		row1 = cy*sz, sx*sy*sz+cx*cz, cx*sy*sz-sx*cz
-		row2 = -sy,   sx*cy, cx*cy
+		row0 = cy*cz, cy*sz, -sy
+		row1 = sx*sy*cz-cx*sz, sx*sy*sz+cx*cz, sx*cy
+		row2 = cx*sy*cz+sx*sz, cx*sy*sz-sx*cz, cx*cy
 
 		return cls( row0+row1+row2, 3 )
 	@classmethod
-	def FromEulerXZY( cls, x, y, z, fromdeg=False ):
-		'''
-		[cy*cz,cy*-sz*cx + sy*sx,cy*-sz*-sx + sy*cx ]
-		[sz,cz*cx,cz*-sx ]
-		[-sy*cz,-sy*-sz*cx + cy*sx,-sy*-sz*-sx + cy*cx ]
-		'''
-		if fromdeg: x,y,z = map(math.radians,(x,y,z))
+	def FromEulerXZY( cls, x, y, z, degrees=False ):
+		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
+		if degrees: x,y,z = map(math.radians,(x,y,z))
 		cx = cos(x)
 		sx = sin(x)
 		cy = cos(y)
@@ -663,13 +774,9 @@ class Matrix(list):
 
 		return cls( row0+row1+row2, 3 )
 	@classmethod
-	def FromEulerYXZ( cls, x, y, z, fromdeg=False ):
-		'''
-		[cz*cy + -sz*-sx*-sy,-sz*cx,cz*sy + -sz*-sx*cy ]
-		[sz*cy + cz*-sx*-sy,cz*cx,sz*sy + cz*-sx*cy ]
-		[cx*-sy,sx,cx*cy ]
-		'''
-		if fromdeg: x,y,z = map(math.radians,(x,y,z))
+	def FromEulerYXZ( cls, x, y, z, degrees=False ):
+		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
+		if degrees: x,y,z = map(math.radians,(x,y,z))
 		cx = cos(x)
 		sx = sin(x)
 		cy = cos(y)
@@ -683,13 +790,9 @@ class Matrix(list):
 
 		return cls( row0+row1+row2, 3 )
 	@classmethod
-	def FromEulerYZX( cls, x, y, z, fromdeg=False ):
-		'''
-		[cz*cy, -sz, cz*sy ]
-		[cx*sz*cy + -sx*-sy, cx*cz, cx*sz*sy + -sx*cy ]
-		[sx*sz*cy + cx*-sy, sx*cz, sx*sz*sy + cx*cy ]
-		'''
-		if fromdeg: x,y,z = map(math.radians,(x,y,z))
+	def FromEulerYZX( cls, x, y, z, degrees=False ):
+		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
+		if degrees: x,y,z = map(math.radians,(x,y,z))
 		cx = cos(x)
 		sx = sin(x)
 		cy = cos(y)
@@ -703,13 +806,9 @@ class Matrix(list):
 
 		return cls( row0+row1+row2, 3 )
 	@classmethod
-	def FromEulerZXY( cls, x, y, z, fromdeg=False ):
-		'''
-		[cy*cz + sy*sx*sz,cy*-sz + sy*sx*cz,sy*cx ]
-		[cx*sz,cx*cz,-sx ]
-		[-sy*cz + cy*sx*sz,-sy*-sz + cy*sx*cz,cy*cx ]
-		'''
-		if fromdeg: x,y,z = map(math.radians,(x,y,z))
+	def FromEulerZXY( cls, x, y, z, degrees=False ):
+		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
+		if degrees: x,y,z = map(math.radians,(x,y,z))
 		cx = cos(x)
 		sx = sin(x)
 		cy = cos(y)
@@ -723,9 +822,9 @@ class Matrix(list):
 
 		return cls( row0+row1+row2, 3 )
 	@classmethod
-	def FromEulerZYX( cls, x, y, z, fromdeg=False ):
-
-		if fromdeg: x,y,z = map(math.radians,(x,y,z))
+	def FromEulerZYX( cls, x, y, z, degrees=False ):
+		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
+		if degrees: x,y,z = map(math.radians,(x,y,z))
 		cx = cos(x)
 		sx = sin(x)
 		cy = cos(y)
@@ -925,40 +1024,30 @@ class Matrix(list):
 		self[3][:3] = pos
 
 	#the following methods return euler angles of a rotation matrix
-	def ToEulerXYZ( self, asdeg=False ):
-		'''
-		cy*cz,  sx*sy*cz-cx*sz, cx*sy*cz+sx*sz
-		cy*sz,  sx*sy*sz+cx*cz, cx*sy*sz-sx*cz
-		-sy,    sx*cy,          cx*cy
-		'''
-		easy = self[2][0]
-		y = -asin( easy )
-		cosY = cos( y )
+	def ToEulerXYZ( self, degrees=False ):
+		easy = self[0][2]
 
-		if easy != 1:
-			x = atan2( self[2][1] * cosY, self[2][2] * cosY )
-			z = atan2( self[1][0] * cosY, self[0][0] * cosY )
-		else:
+		try:
+			y = -asin( easy )
+		except ValueError:
 			z = 0
 			if easy == 1:
 				y = math.pi / 2.0
-				x = z + atan2( self[0][1], self[0][2] )
+				x = z + atan2( self[1][0], self[2][0] )
 			else:  #assert easy == -1
 				y = -math.pi / 2.0
-				x = -z + atan2( -self[0][1], -self[0][2] )
+				x = -z + atan2( -self[1][0], -self[2][0] )
+		else:
+			cosY = cos( y )
+			x = atan2( self[1][2] * cosY, self[2][2] * cosY )
+			z = atan2( self[0][1] * cosY, self[0][0] * cosY )
 
-		angles = x, y, z
+		if degrees:
+			return map( math.degrees, (x, y, z) )
 
-		if asdeg:
-			return map( math.degrees, angles )
-
-		return angles
-	def ToEulerXZY( self, asdeg=False ):
-		'''
-		cy*cz,   cy*-sz*cx + sy*sx,  cy*sz*sx + sy*cx
-		sz,      cz*cx,              cz*-sx
-		-sy*cz,  -sy*-sz*cx + cy*sx, -sy*-sz*-sx + cy*cx
-		'''
+		return x, y, z
+	def ToEulerXZY( self, degrees=False ):
+		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
 		easy = self[1][0]
 		z = asin( easy )
 		cosZ = cos( z )
@@ -971,16 +1060,12 @@ class Matrix(list):
 
 		angles = x, y, z
 
-		if asdeg:
+		if degrees:
 			return map( math.degrees, angles )
 
 		return angles
-	def ToEulerYXZ( self, asdeg=False ):
-		'''
-		cz*cy + -sz*sx*sy, -sz*cx, cz*sy + sz*sx*cy
-		sz*cy + cz*sx*sy,  cz*cx,  sz*sy -cz*sx*cy
-		-cx*sy,              sx,     cx*cy
-		'''
+	def ToEulerYXZ( self, degrees=False ):
+		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
 		easy = self[2][1]
 		x = asin( easy )
 		cosX = cos( x )
@@ -993,11 +1078,12 @@ class Matrix(list):
 
 		angles = x, y, z
 
-		if asdeg:
+		if degrees:
 			return map( math.degrees, angles )
 
 		return angles
-	def ToEulerYZX( self, asdeg=False ):
+	def ToEulerYZX( self, degrees=False ):
+		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
 		easy = self[0][1]
 		z = -asin( easy )
 		cosZ = cos( z )
@@ -1009,11 +1095,12 @@ class Matrix(list):
 
 		angles = x, y, z
 
-		if asdeg:
+		if degrees:
 			return map( math.degrees, angles )
 
 		return angles
-	def ToEulerZXY( self, asdeg=False ):
+	def ToEulerZXY( self, degrees=False ):
+		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
 		easy = self[1][2]
 		x = -asin( easy )
 		cosX = cos( x )
@@ -1025,16 +1112,12 @@ class Matrix(list):
 
 		angles = x, y, z
 
-		if asdeg:
+		if degrees:
 			return map( math.degrees, angles )
 
 		return angles
-	def ToEulerZYX( self, asdeg=False ):
-		'''
-		cy*cz,             cy*-sz,              sy
-		sx*sy*cz + cx*sz,  -sx*-sy*-sz + cx*cz, -sx*cy
-		cx*-sy*cz + sx*sz, cx*-sy*-sz + sx*cz,  cx*cy
-		'''
+	def ToEulerZYX( self, degrees=False ):
+		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
 		easy = self[0][2]
 		y = asin( easy )
 		cosY = cos( y )
@@ -1046,7 +1129,7 @@ class Matrix(list):
 
 		angles = x, y, z
 
-		if asdeg:
+		if degrees:
 			return map( math.degrees, angles )
 
 		return angles
@@ -1406,6 +1489,54 @@ def computeSymmetricalEigen( m ):
 		vEigenValues[i] = m[i][i]
 
 	return mEigenVectors, vEigenValues, bOk
+
+
+def closestPointOnLineTo( linePt1List, linePt2List, givenPointList ):
+	"""
+	given 3 float lists, return closest point in space (as a float list) from the givenPoint to the line between the first 2 args
+	"""
+
+
+	vA = Vector( linePt1List )
+	vB = Vector( linePt2List )
+	vPoint = Vector( givenPointList )
+
+	vABDir = vB - vA
+	vABDirNrm = vABDir.normalize()
+
+	origDistance = vABDir.get_magnitude()
+
+	v1 = vPoint - vA
+	t = v1.dot( vABDirNrm )
+
+	if t <= 0.0:
+		return linePt1List
+	elif t >= origDistance:
+		return linePt2List
+
+	v3 = vABDirNrm * t
+	vClosestPoint = vA + v3
+
+	return ( vClosestPoint.x, vClosestPoint.y, vClosestPoint.z )
+
+
+def mirrorEulerRotation( eulerRotation, axis=AX_X, degrees=True ):
+	rots = Matrix.FromEulerXYZ( degrees=degrees, *eulerRotation )
+	x, y, z = map( Vector, rots )
+
+	idxA, idxB = axis.otherAxes()
+	x[ idxA ] = -x[ idxA ]
+	x[ idxB ] = -x[ idxB ]
+
+	y[ idxA ] = -y[ idxA ]
+	y[ idxB ] = -y[ idxB ]
+
+	z[ idxA ] = -z[ idxA ]
+	z[ idxB ] = -z[ idxB ]
+
+	mirroredRotMatrix = Matrix( list(x) + list(y) + list(z), 3 )
+
+	return mirroredRotMatrix.ToEulerXYZ( useDegrees )
 
 
 #end
