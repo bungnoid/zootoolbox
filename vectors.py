@@ -1,8 +1,3 @@
-'''
-super simple vector class and vector functionality.  i wrote this simply because i couldn't find
-anything that was easily accessible and quick to write.  this may just go away if something more
-comprehensive/mature is found
-'''
 
 import re
 import math
@@ -226,7 +221,6 @@ class Vector(list):
 	def conjugate( self ):
 		return self.__class__( [ v.conjugate() for v in tuple(self.complex()) ] )
 
-	#this is kinda dumb - it'd be nice if this could be auto-derived from the value of INDEX_NAMES but I couldn't get it working so...  meh
 	x = property( lambda self: self[ 0 ], lambda self, value: self.setIndex( 0, value ) )
 	y = property( lambda self: self[ 1 ], lambda self, value: self.setIndex( 1, value ) )
 	z = property( lambda self: self[ 2 ], lambda self, value: self.setIndex( 2, value ) )
@@ -1518,25 +1512,6 @@ def closestPointOnLineTo( linePt1List, linePt2List, givenPointList ):
 	vClosestPoint = vA + v3
 
 	return ( vClosestPoint.x, vClosestPoint.y, vClosestPoint.z )
-
-
-def mirrorEulerRotation( eulerRotation, axis=AX_X, degrees=True ):
-	rots = Matrix.FromEulerXYZ( degrees=degrees, *eulerRotation )
-	x, y, z = map( Vector, rots )
-
-	idxA, idxB = axis.otherAxes()
-	x[ idxA ] = -x[ idxA ]
-	x[ idxB ] = -x[ idxB ]
-
-	y[ idxA ] = -y[ idxA ]
-	y[ idxB ] = -y[ idxB ]
-
-	z[ idxA ] = -z[ idxA ]
-	z[ idxB ] = -z[ idxB ]
-
-	mirroredRotMatrix = Matrix( list(x) + list(y) + list(z), 3 )
-
-	return mirroredRotMatrix.ToEulerXYZ( useDegrees )
 
 
 #end
