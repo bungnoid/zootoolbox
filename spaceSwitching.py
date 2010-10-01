@@ -11,6 +11,7 @@ import triggered
 import control
 import rigUtils
 import maya.cmds as cmd
+import apiExtensions
 
 attrState = control.attrState
 AXES = rigUtils.Axis.BASE_AXES
@@ -166,7 +167,7 @@ def add( src, tgt,
 
 	#find out what symbol to use to find the parent attribute
 	parentAttrIdx = 0
-	if space != src:
+	if not apiExtensions.cmpNodes( space, src ):
 		parentAttrIdx = triggered.addConnect( src, nodeWithParentAttr )
 
 

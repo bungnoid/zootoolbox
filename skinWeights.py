@@ -4,19 +4,19 @@ both by position and by index, and as such can be used to restore weights using 
 for this tool is found in zooSkinWeights
 '''
 
-from skinWeightsBase import *
 from api import melPrint
 from filesystem import removeDupes
+from maya.cmds import *
+from binarySearchTree import BinarySearchTree
 
 import maya.cmds as cmd
 import api
-
-#import wingdbstub
-
+import apiExtensions
 
 mel = api.mel
 iterParents = api.iterParents
 VertSkinWeight = MayaVertSkinWeight
+
 
 def getAllParents( obj ):
 	allParents = []
@@ -63,8 +63,7 @@ def saveWeights( geos, filepath=None ):
 	#data gathering time!
 	rigidBindObjects = []
 	for geo in geos:
-		geoNode = geo
-		skinClusters = cmd.ls(cmd.listHistory(geo), type='skinCluster')
+		skinClusters = cmd.ls( cmd.listHistory( geo ), type='skinCluster' )
 		if len( skinClusters ) > 1:
 			api.melWarning("more than one skinCluster found on %s" % geo)
 			continue
@@ -118,7 +117,7 @@ def saveWeights( geos, filepath=None ):
 
 
 	#sort the weightData by ascending x values so we can search faster
-	weightData = sortByIdx( weightData )
+	weightData.sort()
 
 	#turn the masterJointList into a dict keyed by index
 	joints = {}
@@ -139,56 +138,9 @@ def saveWeights( geos, filepath=None ):
 	return filepath
 
 
-def findMatchingVectors( theVector, vectors, tolerance=1e-6 ):
-	'''
-	'''
-	numVectors = len(vectors)
-
-	#do some binary culling before beginning the search - the 200 number is arbitrary,
-	#but values less than that don't lead to significant performance improvements
-	idx = 0
-	theVectorIdx = theVector[idx]
-	while numVectors > 200:
-		half = numVectors / 2
-		halfPoint = vectors[half][idx]
-
-		if (halfPoint + tolerance) < theVectorIdx: vectors = vectors[half:]
-		elif (halfPoint - tolerance) > theVectorIdx: vectors = vectors[:half]
-		else: break
-
-		numVectors = len(vectors)
-
-	matchingX = []
-	for i in vectors:
-		diff = i[0] - theVector[0]
-		if abs(diff) <= tolerance:
-			matchingX.append(i)
-
-	matchingY = []
-	for i in matchingX:
-		diff = i[1] - theVector[1]
-		if abs(diff) <= tolerance:
-			matchingY.append(i)
-
-	matching = []
-	for i in matchingY:
-		diff = i[2] - theVector[2]
-		if abs(diff) <= tolerance:
-			matching.append(i)
-
-	#now the matching vectors is a list of vectors that fall within the bounding box with length of 2*tolerance.
-	#we want to reduce this to a list of vectors that fall within the bounding sphere with radius tolerance
-	inSphere = []
-	for m in matching:
-		if (theVector - m).mag <= tolerance:
-			inSphere.append( m )
-
-	return inSphere
-
-
 _MAX_RECURSE = 35
 
-def getClosestVector( theVector, vectors, tolerance=1e-6, doPreview=False ):
+def getClosestVector( theVector, searchTree, tolerance=1e-6, doPreview=False ):
 	'''
 	given a list of vectors, this method will return the one with the best match based
 	on the distance between any two vectors
@@ -196,21 +148,21 @@ def getClosestVector( theVector, vectors, tolerance=1e-6, doPreview=False ):
 
 	global _MAX_RECURSE
 
-	matching = findMatchingVectors(theVector, vectors, tolerance)
+	matching = searchTree.getWithin( theVector, tolerance )
 
 	#if not matching: return None
 	itCount = 0
 	while not matching:
 		tolerance *= 1.25
 		itCount += 1
-		matching = findMatchingVectors( theVector, vectors, tolerance )
+		matching = searchTree.getWithin( theVector, tolerance )
 		if itCount > _MAX_RECURSE: return None
 
 	best = matching.pop()
 
-	diff = (best - theVector).mag
+	diff = (best - theVector).get_magnitude()
 	for match in matching:
-		curDiff = (match - theVector).mag
+		curDiff = (match - theVector).get_magnitude()
 		if curDiff < diff:
 			best = match
 			diff = curDiff
@@ -224,76 +176,34 @@ def getClosestVector( theVector, vectors, tolerance=1e-6, doPreview=False ):
 	return best, diff
 
 
-def getDistanceWeightedVector( theVector, vectors, tolerance=1e-6, doPreview=False ):
+def getDistanceRatioWeightedVector( theVector, searchTree, tolerance=1e-6, ratio=2, doPreview=False ):
 	global _MAX_RECURSE
 
-	matching = findMatchingVectors( theVector, vectors, tolerance )
+	matching = searchTree.getWithin( theVector, tolerance )
 
 	#if not matching: return None
 	itCount = 0
 	while not matching:
 		tolerance *= 1.25
 		itCount += 1
-		matching = findMatchingVectors( theVector, vectors, tolerance )
-		if itCount > _MAX_RECURSE: return None
+		matching = searchTree.getWithin( theVector, tolerance )
+		if itCount > _MAX_RECURSE:
+			return None
 
-	newVec = VertSkinWeight( matching[ 0 ] )
+	closestDist = (theVector - matching[0]).get_magnitude()
+	if len( matching ) == 1 or not closestDist:
+		return matching[0], closestDist
 
-	joints = []
-	weights = []
-	for v in matching:
-		dist = ( v - theVector ).get_magnitude()
-		distanceBiasedWeight = (tolerance - dist) / tolerance
-		distanceBiasedWeight **= 3  #3 seems to produce magically good results...  tahts all there is to it
-		joints += v.joints
-		weights += [ w * distanceBiasedWeight for w in v.weights ]
+	matching = searchTree.getWithin( theVector, closestDist*ratio )
 
-	joints, weights = regatherWeights( joints, weights )
-	newVec = VertSkinWeight( matching[ 0 ] )
-	newVec.populate( None, -1, joints, weights )
-
-	if doPreview:
-		cmd.select( [ m.getVertName() for m in matching ] )
-		print "skinning data"
-		for x in zip( newVec.joints, newVec.weights ): print x
-		raise Exception, "in preview mode"
-
-	return newVec, tolerance
-
-
-def getDistanceRatioWeightedVector( theVector, vectors, tolerance=1e-6, ratio=2, doPreview=False ):
-	global _MAX_RECURSE
-
-	matching = findMatchingVectors( theVector, vectors, tolerance )
-
-	#if not matching: return None
-	itCount = 0
-	while not matching:
-		tolerance *= 1.25
-		itCount += 1
-		matching = findMatchingVectors( theVector, vectors, tolerance )
-		if itCount > _MAX_RECURSE: return None
-
-	dists = []
-	for v in matching:
-		dist = ( v - theVector ).get_magnitude()
-		dists.append( (dist, v) )
-
-	dists.sort()
-	closestDist, closestV = dists[ 0 ]
-
-	matching = [ closestV ]
 	if closestDist == 0:
 		newVec = closestV
 	else:
 		jointsWeightsDict = {}
-		for dist, v in dists:
+		for v in matching:
+			dist = (v - theVector).get_magnitude()
 			vDistRatio = dist / closestDist
-			if vDistRatio > ratio: break  #the dists are sorted so if this is the case there are no more matches...
-	
-			matching.append( v )
-			tolerance = dist
-	
+
 			for j, w in zip( v.joints, v.weights ):
 				w = w / vDistRatio
 				jointsWeightsDict.setdefault( j, w + jointsWeightsDict.get( j, 0 ) )
@@ -303,7 +213,7 @@ def getDistanceRatioWeightedVector( theVector, vectors, tolerance=1e-6, ratio=2,
 		weightSum = sum( weightList )
 		if weightSum != 1.0:
 			weightList = [ w/weightSum for w in weightList ]
-	
+
 		newVec = VertSkinWeight( matching[ 0 ] )
 		newVec.populate( None, -1, jointsWeightsDict.keys(), weightList )
 
@@ -313,18 +223,13 @@ def getDistanceRatioWeightedVector( theVector, vectors, tolerance=1e-6, ratio=2,
 		for x in zip( newVec.joints, newVec.weights ): print x
 		raise Exception, "in preview mode"
 
-	return newVec, tolerance
+	return newVec, closestDist
 
 
 @api.d_progress(t='initializing...', status='initializing...', isInterruptable=True)
 def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMult=None, swapParity=True, averageVerts=True, doPreview=False, meshNameRemapDict=None, jointNameRemapDict=None ):
 	'''
-	loads weights back on to a model given a file.  NOTE: the tolerance is an axis tolerance
-	NOT a distance tolerance.  ie each axis must fall within the value of the given vector to be
-	considered a match - this makes matching a heap faster because vectors can be culled from
-	the a sorted list.  possibly implementing some sort of oct-tree class might speed up the
-	matching more, but...  the majority of weight loading time at this stage is spent by maya
-	actually applying skin weights, not the positional searching
+	loads weights back on to a model given a file
 	'''
 
 	#nothing to do...
@@ -353,11 +258,6 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 	progressWindow = cmd.progressWindow
 	xform = cmd.xform
 
-	findMethod = getClosestVector
-	findMethodKw = { 'tolerance': tolerance, 'doPreview': doPreview }
-	if averageVerts:
-		findMethod = getDistanceRatioWeightedVector
-
 
 	#now get a list of all weight files that are listed on the given objects - and
 	#then load them one by one and apply them to the appropriate objects
@@ -372,7 +272,6 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 		except KeyError: objItemsDict[obj] = items
 
 
-	unfoundVerts = []
 	numItems = len(objItemsDict)
 	curItem = 1
 	progressWindow(e=True, title='loading weights from file %d items' % numItems)
@@ -381,6 +280,18 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 	#load the data from the file
 	miscData, joints, jointHierarchies, weightData = Path( filepath ).unpickle()
 
+
+	#build the search tree
+	tree = BinarySearchTree( weightData )
+	findMethod = tree.getWithin
+	findMethodKw = { 'tolerance': tolerance }
+
+	if averageVerts:
+		findMethod = tree.getWithinRatio
+		findMethodKw = { 'ratio': tolerance }
+
+
+	#see if the file versions match
 	if miscData[ api.kEXPORT_DICT_TOOL_VER ] != TOOL_VERSION:
 		api.melWarning( "WARNING: the file being loaded was stored from an older version (%d) of the tool - please re-generate the file.  Current version is %d." % (miscData[ api.kEXPORT_DICT_TOOL_VER ], TOOL_VERSION) )
 
@@ -465,119 +376,53 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 		else: skinCluster = skinCluster[0]
 
 
-		num = len(verts)
-		cur = 0.0
-		inc = 100.0/num
-
-
 		#if we're using position, the restore weights path is quite different
-		queue = api.CmdQueue()
+		vertJointWeightData = []
 		if usePosition:
-			progressWindow( e=True, status='searching by position: %s (%d/%d)' % (geo, curItem, numItems) )
+			progressWindow( e=True, status='searching by position: %s (%d/%d)' % (geo, curItem, numItems), maxValue=len( verts ) )
 
-			print "starting first iteration with", len( weightData ), "verts"
-
-			iterationCount = 1
-			tolAdjustInterval = 15
-			while True:
-				unfoundVerts = []
-				foundVerts = []
-
-				tolAccum = 0
-				for vCount, vert in enumerate( verts ):
-					pos = Vector( xform(vert, q=True, ws=True, t=True) )
-					vertData = findMethod( pos, weightData, **findMethodKw )
-
-					if vertData is None:
-						unfoundVerts.append( vert )
-						continue
-
-					vertData, newTolerance = vertData
-					tolAccum += newTolerance
+			vCount = -1
+			for vert in verts:
+				vCount += 1
+				pos = Vector( xform(vert, q=True, ws=True, t=True) )
+				foundVerts = findMethod( pos, **findMethodKw )
 
 
-					#unpack data to locals
-					jointList, weightList = vertData.joints, vertData.weights
-					actualJointNames = [ joints[ n ] for n in jointList ]
+				#accumulate found verts
+				jointWeightDict = {}
+				for v in foundVerts:
+					for joint, weight in zip( v.joints, v.weights ):
+						actualJoint = joints[ joint ]
+						weight += jointWeightDict.get( actualJoint, 0 )
+						jointWeightDict[ actualJoint ] = weight
 
 
-					#check sizes - if joints have been remapped, there may be two entries for a joint
-					#in the re-mapped jointList - in this case, we need to re-gather weights
-					actualJointsAsSet = set( actualJointNames )
-					if len( actualJointsAsSet ) != len( actualJointNames ):
-						#so if the set sizes are different, then at least one of the joints is listed twice,
-						#so we need to gather up its weights into a single value
-						new = {}
-						[ new.setdefault(j, 0) for j in actualJointNames ]  #init the dict with 0 values
-						for j, w in zip(actualJointNames, weightList):
-							new[ j ] += w
-
-						#if the weightList is empty after renormalizing, nothing to do - keep loopin
-						actualJointNames, weightList = new.keys(), new.values()
-						if not weightList: raise NoVertFound
+				#normalize the weights
+				weightSum = float( sum( jointWeightDict.values() ) )
+				if weightSum != 1:
+					for joint, weight in jointWeightDict.iteritems():
+						jointWeightDict[ joint ] = weight / weightSum
 
 
-					#normalize the weightlist
-					weightList = normalizeWeightList( weightList )
-
-					#zip the joint names and their corresponding weight values together (as thats how maya
-					#accepts the data) and fire off the skinPercent cmd
-					jointsAndWeights = zip(actualJointNames, weightList)
-
-					queue.append( 'skinPercent -tv %s %s %s' % (' -tv '.join( [ '%s %s' % t for t in jointsAndWeights ] ), skinCluster, vert) )
-					foundVertData = VertSkinWeight( pos )
-					foundVertData.populate( vertData.mesh, vertData.idx, jointList, weightList )
-					foundVerts.append( foundVertData )
+				#append the data
+				vertJointWeightData.append( (vert, jointWeightDict.items()) )
 
 
-					#every so often re-adjust the tolerance if it differs enough
-					if vCount % tolAdjustInterval == 0:
-						averagedTolerance = tolAccum / tolAdjustInterval
-						mn, mx = sorted( [tolerance, averagedTolerance] )
-						try:
-							if mx/mn > 1.5:  #only if it different enough from the current tolerance do we bother adjusting
-								findMethodKw[ 'tolerance' ] = averagedTolerance
-								#print 'NEW TOLERANCE', averagedTolerance
-						except ZeroDivisionError: pass
+				#deal with the progress window - this isn't done EVERY vert because its kinda slow...
+				if vCount % 50 == 0:
+					progressWindow( e=True, progress=vCount )
 
-						tolAccum = 0
+					#bail if we've been asked to cancel
+					if progressWindow( q=True, isCancelled=True ):
+						progressWindow( ep=True )
+						return
 
-
-					#deal with the progress window - this isn't done EVERY vert because its kinda slow...
-					cur += inc
-					if vCount % 50 == 0:
-						progressWindow( e=True, progress=cur )
-
-						#bail if we've been asked to cancel
-						if progressWindow( q=True, isCancelled=True ):
-							progressWindow( ep=True )
-							return
-
-
-				#so with the unfound verts - sort them, call them "verts" and iterate over them with the newly grown weight data
-				#the idea here is that when a vert is found its added to the weight data (in memory not on disk).  by performing
-				#another iteration for the previously un-found verts, we should be able to get a better approximation
-				verts = unfoundVerts
-				if unfoundVerts:
-					if foundVerts:
-						weightData = sortByIdx( foundVerts )
-					else:
-						print "### still unfound verts, but no new matches were made in previous iteration - giving up.  %d iterations performed" % iterationCount
-						break
-				else:
-					print "### all verts matched!  %d iterations performed" % iterationCount
-					break
-
-				iterationCount += 1
-				print "starting iteration %d - using" % iterationCount, len( weightData ), "verts"
-				#for www in weightData: print www
-
-			progressWindow(e=True, status='maya is setting skin weights...')
-			queue()
+			progressWindow( e=True, status='maya is setting skin weights...' )
+			setSkinWeights( skinCluster, vertJointWeightData )
 
 		#otherwise simply restore by id
 		else:
-			progressWindow(edit=True, status='searching by vert name: %s (%d/%d)' % (geo, curItem, numItems))
+			progressWindow( e=True, status='searching by vert name: %s (%d/%d)' % (geo, curItem, numItems), maxValue=len( verts ) )
 
 			#rearrange the weightData structure so its ordered by vertex name
 			weightDataById = {}
@@ -604,21 +449,58 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 		cmd.skinCluster( skinCluster, edit=True, removeUnusedInfluence=True )
 		curItem += 1
 
-	if unfoundVerts: cmd.select( unfoundVerts )
 	end = time.clock()
 	api.melPrint('time for weight load %.02f secs' % (end-start))
 
 
-MAX_INFLUENCE_COUNT = 3
-def normalizeWeightList( weightList ):
-	sortedWeightList = sorted( weightList )[ -MAX_INFLUENCE_COUNT: ]
-	smallestViable = sortedWeightList[ 0 ]
+import profileDecorators
+from maya.OpenMayaAnim import MFnSkinCluster
+from maya.OpenMaya import MSelectionList, MDagPath, MObject, MPlug, MIntArray, MDoubleArray, MDagPathArray, MFnComponentListData, MGlobal, MItMeshVertex
 
-	weightSum = sum( sortedWeightList )
-	try:
-		return [ w / weightSum if w >= smallestViable else 0 for w in weightList ]
-	except ZeroDivisionError:
-		return []
+#@profileDecorators.d_profile
+def setSkinWeights( skinCluster, vertJointWeightData ):
+
+	idxJointWeight = []
+	for vert, jointsAndWeights in vertJointWeightData:
+		idx = int( vert[ vert.rindex( '[' )+1:-1 ] )
+		idxJointWeight.append( (idx, jointsAndWeights) )
+
+	skinCluster = apiExtensions.asMObject( skinCluster )
+	skinFn = MFnSkinCluster( skinCluster )
+
+
+	jApiIndices = {}
+	_tmp = MDagPathArray()
+	skinFn.influenceObjects( _tmp )
+	for n in range( _tmp.length() ):
+		jApiIndices[ str( _tmp[n].node() ) ] = skinFn.indexForInfluenceObject( _tmp[n] )
+
+
+	weightListP = skinFn.findPlug( "weightList" )
+	weightListObj = weightListP.attribute()
+	weightsP = skinFn.findPlug( "weights" )
+	tmpP = MPlug()
+
+	tmpIntArray = MIntArray()
+	baseFmtStr = str( skinCluster ) +'.weightList[%d]'
+
+	for vertIdx, jointsAndWeights in idxJointWeight:
+
+		#we need to use the api to query the physical indices used
+		weightsP.selectAncestorLogicalIndex( vertIdx, weightListObj )
+		weightsP.getExistingArrayAttributeIndices( tmpIntArray )
+
+		weightFmtStr = baseFmtStr % vertIdx +'.weights[%d]'
+
+		#clear out any existing skin data - and awesomely we cannot do this with the api - so we need to use a weird ass mel command
+		for n in range( tmpIntArray.length() ):
+			removeMultiInstance( weightFmtStr % tmpIntArray[n] )
+
+		#at this point using the api or mel to set the data is a moot point...  we have the strings already so just use mel
+		for joint, weight in jointsAndWeights:
+			if weight:
+				infIdx = jApiIndices[ joint ]
+				setAttr( weightFmtStr % infIdx, weight )
 
 
 def printDataFromFile( filepath=DEFAULT_PATH ):
@@ -674,6 +556,66 @@ def mirrorWeightsOnSelected( tolerance=TOL ):
 	#verts selected
 	saveWeights( selObjs, Path('%TEMP%/tmp.weights'), mode=kREPLACE )
 	loadWeights( cmd.ls(sl=True), Path( '%TEMP%/tmp.weights' ), True, 2, (-1,), True )
+
+
+def autoSkinToVolumeMesh( mesh, skeletonMeshRoot ):
+	'''
+	given a mesh and the root node for a hierarchy mesh volumes, this function will create
+	a skeleton with the same hierarchy and skin the mesh to this skeleton using the mesh
+	volumes to determine skin weights
+	'''
+
+	#grab a list of meshes under the hierarchy - we need to grab this geo, parent it to a skeleton and transfer defacto weighting to the given mesh
+	volumes = listRelatives( skeletonMeshRoot, ad=True, type='mesh', pa=True )
+
+	#now generate the skeleton
+	transforms = removeDupes( listRelatives( volumes, p=True, type='transform', pa=True ) or [] )
+	jointRemap = {}
+	for t in transforms:
+		select( cl=True )
+		jName = '%s_joint' % t
+		if objExists( jName ):
+			jName += '#'
+
+		j = joint( n=jName )
+		jointRemap[ t ] = j
+
+	#now do parenting
+	for t, j in jointRemap.iteritems():
+		tParent = listRelatives( t, p=True, pa=True )
+		if tParent:
+			tParent = tParent[0]
+			jParent = jointRemap.get( tParent, None )
+		else:
+			jParent = None
+
+		if jParent is not None:
+			parent( j, jParent )
+
+	#now do positioning
+	for t in api.sortByHierarchy( transforms ):
+		j = jointRemap[ t ]
+		pos = xform( t, q=True, ws=True, rp=True )
+		move( pos[0], pos[1], pos[2], j, ws=True, rpr=True )
+
+	#duplicate the geometry and parent the geo to the joints in the skeleton we just created - store the duplicates so we can delete them later
+	dupes = []
+	for t, j in jointRemap.iteritems():
+		dupe = apiExtensions.asMObject( duplicate( t, returnRootsOnly=True, renameChildren=True )[0] )
+		children = listRelatives( dupe, type='transform', pa=True ) or []
+		if children:
+			delete( children )
+
+		parent( dupe, j )
+		dupes.append( dupe )
+
+	f = saveWeights( map( str, dupes ) )
+
+	loadWeights( [mesh], f, usePosition=True, tolerance=0.5, averageVerts=True, jointNameRemapDict=jointRemap )
+
+	delete( dupes )
+
+	return jointRemap
 
 
 #end
