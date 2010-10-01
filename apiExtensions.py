@@ -1,14 +1,14 @@
+
 from maya.OpenMaya import *
 from filesystem import trackableClassFactory
 
+import sys
 import maya.cmds as cmd
 import vectors
 import time
 
 getAttr = cmd.getAttr
 setAttr = cmd.setAttr
-
-#sets up a global MScriptUtil object
 
 
 class _PyMObjectBase_(trackableClassFactory(MObject)):
@@ -155,24 +155,12 @@ MObject.partialPathName = MObjectHandle.partialPathName = partialPathName
 MObject.this = None  #stops __getattr__ from being called
 
 
-_mobjectEq = MObject.__eq__
-
-def isEqual( self, other ):
-	'''
-	comparisons may not always be with other MObject instances - so cast them appropriately if they're not already
-	'''
-	if isinstance( other, basestring ):
-		other = asMObject( other )
-
-	return _mobjectEq( self, other )
-
 def isNotEqual( self, other ):
-	return not isEqual( self, other )
+	return not self == other
 
 #override the default __eq__ operator on MObject.  NOTE: because the original __eq__ method is cached above,
 #reloading this module can result in funkiness because the __eq__ gets cached on reload.  the alternative is
 #to have an "originalMethods" script that never gets reloaded and stores original overridable methods
-MObject.__eq__ = isEqual
 MObject.__ne__ = isNotEqual
 
 
@@ -220,6 +208,22 @@ def cmpNodes( a, b ):
 		return False
 
 	return a == b
+
+
+def __eq( self, other ):
+	if isinstance( other, basestring ):
+		other = asMObject( other )
+
+	return MObjectOriginalEquivalenceMethod( self, other )
+
+#check to see if __eq__ has been setup already - if it has, the sys._MObjectOriginalEquivalenceMethod attribute will exist
+if not hasattr( sys, '_MObjectOriginalEquivalenceMethod' ):
+	sys._MObjectOriginalEquivalenceMethod = MObjectOriginalEquivalenceMethod = MObject.__eq__  #store on sys so that it doesn't get garbage collected when flush is called
+	MObject.__eq__ = __eq
+else:
+	MObjectOriginalEquivalenceMethod = sys._MObjectOriginalEquivalenceMethod
+	MObject.__eq__ = __eq
+	print "mobject __eq__ already setup!"
 
 
 #preGetAttr = MObject.__getattr__
@@ -515,6 +519,7 @@ def __asNice( self ):
 	return vectors.Vector( [self.x, self.y, self.z] )
 
 MVector.asNice = __asNice
+MPoint.asNice = __asNice
 
 
 def __asNice( self ):
@@ -534,6 +539,10 @@ def __str( self ):
 MVector.__str__ = __str
 MVector.__repr__ = __str
 MVector.__unicode__ = __str
+
+MPoint.__str__ = __str
+MPoint.__repr__ = __str
+MPoint.__unicode__ = __str
 
 
 def __str( self ):

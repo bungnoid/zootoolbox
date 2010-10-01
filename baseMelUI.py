@@ -11,11 +11,14 @@ http://www.macaronikazoo.com/?page_id=311
 import re
 import maya
 import names
+import inspect
 import maya.cmds as cmd
+import filesystem
+
 
 from maya.OpenMaya import MGlobal
 
-mayaVer = int( cmd.about( v=True )[:4] )
+mayaVer = int( float( maya.mel.eval( 'getApplicationVersionAsFloat()' ) ) )
 displayWarning = MGlobal.displayWarning
 displayError = MGlobal.displayError
 
@@ -559,7 +562,7 @@ class MelHLayout(_AlignedFormLayout):
 
 		weightsList = []
 		for child in children:
-			weight = weightsDict.get( child, 1  )
+			weight = weightsDict.get( child, 1 )
 			weightsList.append( weight )
 
 		weightSum = float( sum( weightsList ) )
@@ -732,7 +735,6 @@ class MelScrollLayout(BaseMelLayout):
 
 	def __new__( cls, parent, *a, **kw ):
 		kw.setdefault( 'childResizable', kw.pop( 'cr', True ) )
-
 		return BaseMelLayout.__new__( cls, parent, *a, **kw )
 
 MelScroll = MelScrollLayout
@@ -900,7 +902,9 @@ class MelFrameLayout(BaseMelLayout):
 			if state:
 				self.getCollapseCB()()
 			else:
-				self.getExpandCB()()
+				expandCB = self.getExpandCB()
+				if callable( expandCB ):
+					expandCB()
 
 
 class BaseMelWidget(BaseMelUI):
@@ -1056,9 +1060,9 @@ class MelNameField(MelTextField):
 
 
 class MelObjectSelector(MelForm):
-	def __new__( cls, parent, label, obj=None, labelWidth=None ):
+	def __new__( cls, parent, label='Node->', obj=None, labelWidth=None ):
 		return MelForm.__new__( cls, parent )
-	def __init__( self, parent, label, obj=None, labelWidth=None ):
+	def __init__( self, parent, label='Node->', obj=None, labelWidth=None ):
 		MelForm.__init__( self, parent )
 
 		self.UI_label = MelButton( self, l=label, c=self.on_setValue )
@@ -1081,6 +1085,10 @@ class MelObjectSelector(MelForm):
 		return self.UI_obj.getValue()
 	def setValue( self, value, executeChangeCB=True ):
 		return self.UI_obj.setValue( value, executeChangeCB )
+	def setChangeCB( self, cb ):
+		return self.UI_obj.setChangeCB( cb )
+	def getChangeCB( self ):
+		return self.UI_obj.getChangeCB()
 	def clear( self ):
 		self.UI_obj.clear()
 	def getLabel( self ):
@@ -1202,6 +1210,7 @@ class MelTextScrollList(BaseMelWidget):
 		return BaseMelWidget.__new__( cls, parent, *a, **kw )
 	def __init__( self, parent, *a, **kw ):
 		BaseMelWidget.__init__( self, parent, *a, **kw )
+
 		self._appendCB = None
 	def __getitem__( self, idx ):
 		return self.getItems()[ idx ]
@@ -1672,12 +1681,15 @@ class MelIteratorUI(object):
 		cmd.progressWindow( e=True, ep=True )
 
 
+class MayaNode(object): pass
+
 UI_FOR_PY_TYPES = { bool: MelCheckBox,
                     int: MelIntField,
                     float: MelFloatField,
                     basestring: MelTextField,
                     list: MelTextScrollList,
-                    tuple: MelTextScrollList }
+                    tuple: MelTextScrollList,
+                    MayaNode: MelObjectSelector }
 
 def buildUIForObject( obj, parent, typeMapping=None ):
 	'''
@@ -1691,9 +1703,16 @@ def buildUIForObject( obj, parent, typeMapping=None ):
 	buildClass = None
 	try: buildClass = typeMapping[ objType ]
 	except KeyError:
-		#if not, see if there is an inheritance match
+		#if not, see if there is an inheritance match - its possible there may by multiple matches
+		#however, so we need to check them all and see which is the most appropriate
+
+		mro = list( inspect.getmro( objType ) )
+		bestMatch = None
 		for aType, aBuildClass in typeMapping.iteritems():
-			if issubclass( objType, aType ):
+			if aType in mro:
+				bestMatch = mro.index( aType )
+
+			if bestMatch:
 				buildClass = aBuildClass
 				break
 
@@ -1841,6 +1860,183 @@ class BaseMelWindow(BaseMelUI):
 			method( *methodArgs, **methodKwargs )
 	def close( self ):
 		self.Close()
+
+
+###
+### PROCEDURAL UI BUILDING ###
+###
+
+
+class UITypeError(TypeError): pass
+
+class PyFuncLayout(MelColumnLayout):
+	'''
+	builds a default layout for a function - makes it easy to build UI for functions
+
+	call by passing a python function object on construction like so:
+
+	def sweet( this=12, isA=True, test=100 ): pass
+	PyFuncLayout( parentLayout, sweet )
+
+	NOTE: the UI building looks for a bunch of special attributes on the function that
+	can help control the presentation
+
+	_hideArgs = []  #this is a list of attribute names that won't be presented in the UI
+	_show = False   #defaults to False - controls whether the function appears when building UI for a module (otherwise ignored)
+	_expand = False #defaults to False - controls whether the frame layout for function is expanded or not by default when building UI for a module (ignored otherwise)
+	'''
+	def __init__( self, parent, func ):
+		MelColumnLayout.__init__( self, parent )
+
+		hideArgNames = []
+		if hasattr( func, '_hideArgs' ):
+			hideArgNames = list( func._hideArgs )
+
+		self.argUIDict = {}  #stores the argName->UI mapping
+		self.func = func  #stores the function passed in
+
+		argNames, vargName, vkwargName, defaults = inspect.getargspec( func )
+
+		numDefaults = len( defaults )
+		numArgsWithoutDefaults = len( argNames ) - numDefaults
+
+		#pad the defaults with empty strings for args that have no default - it'll be up to the user to write appropriate python expressions
+		defaults = ([ '' ] * numArgsWithoutDefaults) + list( defaults )
+
+		labels = []
+		for argName, default in zip( argNames, defaults ):
+			if argName in hideArgNames:
+				continue
+
+			hLayout = MelHLayout( self )
+
+			lbl = MelLabel( hLayout, l=names.camelCaseToNice( argName ) )
+			labels.append( lbl )
+
+			ui = buildUIForObject( default, hLayout )
+			ui.setChangeCB( filesystem.Callback( self.changeCB, argName ) )
+
+			hLayout.setWeight( lbl, 0 )
+			hLayout.layout()
+
+			#finally stuff the ui into the argUIDict
+			self.argUIDict[ argName ] = ui
+
+		maxWidth = max( [ lbl.getWidth() for lbl in labels ] ) + 10  #10 for padding...
+		for lbl in labels:
+			lbl.setWidth( maxWidth )
+
+		MelButton( self, l='Execute %s' % names.camelCaseToNice( func.__name__ ), c=self.execute )
+	def changeCB( self, argName ):
+		print '%s arg changed!' % argName
+	def getArgDict( self ):
+		argDict = {}
+		for argName, ui in self.argUIDict.iteritems():
+			argDict[ argName ] = ui.getValue()
+
+		#we need to get the args that have no default values and eval the values from the ui - it is assumed they're valid python expressions
+		argNames, vargName, vkwargName, defaults = inspect.getargspec( self.func )
+
+		numArgsWithoutDefaults = len( argNames ) - len( defaults )
+		for argName in argNames[ :numArgsWithoutDefaults ]:
+			uiStr = ui.getValue()
+			if not uiStr:
+				raise UITypeError( "No value given for %s arg" % argName )
+
+			argDict[ argName ] = eval( uiStr )
+
+		return argDict
+	def execute( self, *a ):
+		try:
+			self.func( **self.getArgDict() )
+		except UITypeError:
+			cmd.confirmDialog( "No value was entered for one of the args!", b='OK', db='OK')
+
+
+class PyFuncWindow(BaseMelWindow):
+	'''
+	this is basically just a wrapper around the PyFuncLayout above.  Its called
+	in a similar way:
+
+	def sweet( this=12, isA=True, test=100 ): pass
+	PyFuncWindow( sweet )
+	'''
+
+	WINDOW_NAME = 'funcWindow'
+	DEFAULT_MENU = None
+
+	FORCE_DEFAULT_SIZE = False
+
+	def __init__( self, func ):
+		PyFuncLayout( self, func )
+
+		self.setTitle( '%s Window' % names.camelCaseToNice( func.__name__ ) )
+		self.show()
+
+
+class PyModuleLayout(MelColumnLayout):
+	'''
+	builds a window for an entire module
+	'''
+	def __init__( self, parent, module, showAll=False ):
+		def func(): pass
+		funcType = type( func )
+
+		#track the number of expanded frame layouts - we want to make sure at least one is expanded...
+		numExpanded = 0
+
+		self.funcUIDict = {}
+		for objName, obj in module.__dict__.iteritems():
+			if not isinstance( obj, funcType ):
+				continue
+
+			#skip any obj that already has UI built
+			if obj in self.funcUIDict:
+				continue
+
+			show = False
+			if hasattr( obj, '_show' ):
+				show = obj._show
+
+			#if we're not showing all, check the show state and skip accordingly
+			if not showAll:
+				if not show:
+					continue
+
+			expand = False
+			if hasattr( obj, '_expand' ):
+				expand = obj._expand
+
+			if expand:
+				numExpanded += 1
+
+			frame = MelFrameLayout( self, label=names.camelCaseToNice( objName ), cl=not expand, cll=True )
+			ui = PyFuncLayout( frame, obj )
+			self.funcUIDict[ obj ] = ui
+
+		#if there are no expanded frames - expand the first one...
+		if not numExpanded:
+			children = self.getChildren()
+			children[ 0 ].setCollapse( False )
+
+
+class PyModuleWindow(BaseMelWindow):
+	'''
+	this is basically just a wrapper around the PyFuncLayout above.  Its called
+	in a similar way:
+
+	def sweet( this=12, isA=True, test=100 ): pass
+	PyFuncWindow( sweet )
+	'''
+
+	WINDOW_NAME = 'moduleWindow'
+	DEFAULT_MENU = None
+
+	def __init__( self, module, showAll=False ):
+		PyModuleLayout( self, module, showAll )
+
+		self.setTitle( '%s Window' % names.camelCaseToNice( module.__name__ ) )
+		self.show()
 
 
 #end
