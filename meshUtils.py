@@ -11,7 +11,6 @@ from vectors import Vector, Matrix, computeCovariantMatrix, computeSymmetricalEi
 from filesystem import Path, BreakException
 
 import maya.cmds as cmd
-import mayaVectors
 import api
 import apiExtensions
 import maya.OpenMaya as OpenMaya
@@ -50,7 +49,11 @@ def selectFlipped():
 
 def findFlipped( obj ):
 	flipped = []
-	faces = cmd.ls(cmd.polyListComponentConversion(obj,toFace=True),flatten=True)
+	faces = cmd.polyListComponentConversion( obj, toFace=True )
+	if not faces:
+		return flipped
+
+	faces = cmd.ls( faces, flatten=True )
 	for face in faces:
 		uvNormal = getUVFaceNormal(face)
 
@@ -86,9 +89,9 @@ def getUVFaceNormal( facepath ):
 	uvAPos = cmd.polyEditUV(uvs[0], query=True, uValue=True, vValue=True)
 	uvBPos = cmd.polyEditUV(uvs[1], query=True, uValue=True, vValue=True)
 	uvCPos = cmd.polyEditUV(uvs[2], query=True, uValue=True, vValue=True)
-	uvAB = Vector( [uvBPos[0]-uvAPos[0], uvBPos[1]-uvAPos[1]] )
-	uvBC = Vector( [uvCPos[0]-uvBPos[0], uvCPos[1]-uvBPos[1]] )
-	uvNormal = (uvAB ^ uvBC).normalize()
+	uvAB = Vector( [uvBPos[0]-uvAPos[0], uvBPos[1]-uvAPos[1], 0] )
+	uvBC = Vector( [uvCPos[0]-uvBPos[0], uvCPos[1]-uvBPos[1], 0] )
+	uvNormal = uvAB.cross( uvBC ).normalize()
 
 	return uvNormal
 
@@ -126,7 +129,8 @@ def extractFaces( faceList, delete=False ):
 
 		dupeMesh = cmd.duplicate( mesh, renameChildren=True )[ 0 ]
 		children = cmd.listRelatives( dupeMesh, pa=True, typ='transform' )
-		if children: cmd.delete( children )
+		if children:
+			cmd.delete( children )
 
 		#now delete all faces except those we want to keep
 		cmd.select( [ '%s.f[%d]' % (dupeMesh, idx) for idx in range( numFaces( dupeMesh ) ) ] )
@@ -354,7 +358,7 @@ def findVertsInVolume( meshes, volume ):
 	#grab any data we're interested in for the volume
 	volumePos = vectors.Vector( cmd.xform(volume, q=True, ws=True, rp=True) )
 	volumeScale = map(abs, cmd.getAttr('%s.s' % volume)[0])
-	volumeBasis = map(mayaVectors.MayaVector, api.getObjectBases(volume))
+	volumeBasis = [ Vector( (v.x, v.y, v.z) ) for v in api.getObjectBases( volume ) ]
 
 	#make sure the basis is normalized
 	volumeBasis = [v.normalize() for v in volumeBasis]
