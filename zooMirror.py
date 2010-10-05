@@ -184,7 +184,7 @@ class MirrorNode(MPxNode):
 		axis = Axis( dh_mirrorAxis.asShort() )
 
 		### DEAL WITH ROTATION AND POSITION SEPARATELY ###
-		R = inWorldMatrix.asPy( 3 ).getRotationMatrix()  #this gets just the 3x3 rotation matrix - and factors out the scale
+		R, S = inWorldMatrix.asPy( 3 ).decompose()  #this gets just the 3x3 rotation and scale matrices
 		x, y, z = R  #extract basis vectors
 
 		#mirror the rotation axes and construct the mirrored rotation matrix
@@ -198,7 +198,8 @@ class MirrorNode(MPxNode):
 		z[ idxA ] = -z[ idxA ]
 		z[ idxB ] = -z[ idxB ]
 
-		mirroredMatrix = Matrix( x + y + z, 3 )
+		#factor scale back into the matrix
+		mirroredMatrix = S * Matrix( x + y + z, 3 )
 
 		#now put the rotation matrix in the space of the target object
 		dh_targetParentMatrixInv = dataBlock.inputValue( self.targetParentMatrixInv )

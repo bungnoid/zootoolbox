@@ -437,6 +437,7 @@ class EulerRotation(Vector):
 	def degrees( self ):
 		return list( map( math.degrees, self ) )
 
+
 """
 class Quaternion(Vector):
 	def __init__( self, x=0, y=0, z=0, w=1 ):
@@ -975,6 +976,22 @@ class Matrix(list):
 		new /= det
 
 		return new.transpose()
+	def decompose( self ):
+		'''
+		return the scale matrix and rotation parts of this matrix
+		NOTE: both are returned as 3x3 matrices
+		'''
+		sx = Vector( self[ 0 ][ :3 ] ).length()
+		sy = Vector( self[ 1 ][ :3 ] ).length()
+		sz = Vector( self[ 2 ][ :3 ] ).length()
+
+		S = type( self )( [sx,0,0, 0,sy,0, 0,0,sz], 3 )  #deal with the 3x3 until as finding the inverse of a 4x4 is considerably slower than a 3x3
+
+		S = self.getScaleMatrix()
+		R = self.crop( 3 )
+		R = S.inverse() * R
+
+		return R, S
 	def getScaleMatrix( self ):
 		'''
 		return the scale matrix part of this matrix
@@ -990,9 +1007,7 @@ class Matrix(list):
 		'''
 		returns just the rotation part of this matrix - ie scale is factored out
 		'''
-		S = self.getScaleMatrix()
-		R = self.crop( 3 )
-		R = S.inverse() * R
+		R, S = self.decompose()
 
 		return R
 	def adjoint( self ):
@@ -1022,31 +1037,6 @@ class Matrix(list):
 		row2 = ( x.z, y.z, z.z )
 
 		return self.__class__(row0+row1+row2,size=3)
-	def decompose( self ):
-		'''decomposes the matrix into a rotation and scaling part.
-	    returns a tuple (rotation, scaling). the scaling part is given
-	    as a 3-tuple and the rotation a Matrix(size=3)'''
-		dummy = self.ortho()
-
-		x = dummy[0]
-		y = dummy[1]
-		z = dummy[2]
-		xl = x.magnitude()
-		yl = y.magnitude()
-		zl = z.magnitude()
-		scale = xl,yl,zl
-
-		x/=xl
-		y/=yl
-		z/=zl
-		dummy.setCol(0,x)
-		dummy.setCol(1,y)
-		dummy.setCol(2,z)
-		if dummy.det() < 0:
-			dummy.setCol(0,-x)
-			scale.x = -scale.x
-
-		return (dummy, scale)
 	def getEigenValues( self ):
 		m = self
 
