@@ -1,6 +1,5 @@
 
 from maya.OpenMaya import *
-from filesystem import trackableClassFactory
 from vectors import Vector, Matrix
 
 import sys
@@ -9,55 +8,6 @@ import time
 
 getAttr = cmd.getAttr
 setAttr = cmd.setAttr
-
-
-class _PyMObjectBase_(trackableClassFactory(MObject)):
-	'''
-	this class exists purely a as container for the trackable class...
-	'''
-	pass
-
-
-class PyMDependencyNode(_PyMObjectBase_):
-	TYPE = MFn.kDependencyNode
-	MITERATOR = MItDependencyNodes
-	_MITERATOR_GETITEM_METHOD_NAME = 'thisNode'  #maya's iterator classes all have different method names for getting the current item...  yay!
-
-	@classmethod
-	def IterAll( cls ):
-		'''
-		returns a fast generator that visits all nodes of this class's type in the scene
-		'''
-		iterNodes = cls.MITERATOR()
-		getItem = getattr( iterNodes, cls._MITERATOR_GETITEM_METHOD_NAME )
-		next = iterNodes.next  #cache next method for faster access inside the generator
-		while not iterNodes.isDone():
-			yield getItem()
-			next()
-
-
-class PyMDagNode(PyMDependencyNode):
-	TYPE = MFn.kDagNode
-	MITERATOR = MItDag
-	_MITERATOR_GETITEM_METHOD_NAME = 'currentItem'
-
-
-class PyMTransformNode(PyMDagNode):
-	TYPE = MFn.kTransform
-
-	@classmethod
-	def IterAll( cls ):
-		thisType = cls.TYPE
-		apiType = MObject.apiType
-		for mobject in PyMDagNode.IterAll():
-			if apiType( mobject ) == thisType:
-				yield mobject
-
-
-def findMostAppropriateType( mobject ):
-	mobjectType = mobject.apiType()
-
-	return _APITYPE_TO_PYTYPE_DICT.get( mobjectType, PyMDependencyNode )
 
 
 MObject.__MPlug__ = None
@@ -609,8 +559,21 @@ def getSelected():
 	return items
 
 
+def iterAll():
+	'''
+	returns a fast generator that visits all nodes of this class's type in the scene
+	'''
+	iterNodes = MItDependencyNodes()
+	getItem = iterNodes.thisNode
+	next = iterNodes.next  #cache next method for faster access inside the generator
+	while not iterNodes.isDone():
+		yield getItem()
+		next()
+
+
 def lsAll():
-	return list( PyMDependencyNode.IterAll() )
+
+	return list( iterAll() )
 
 
 def ls_( *a, **kw ):
