@@ -9,7 +9,7 @@ import apiExtensions
 
 from maya.OpenMaya import MObject, MFnMatrixAttribute, MFnCompoundAttribute, \
      MFnEnumAttribute, MFnNumericAttribute, MFnNumericData, MFnDependencyNode, \
-     MPoint, MVector, MSyntax, MGlobal, MArgDatabase
+     MPoint, MVector, MSyntax, MArgDatabase
 
 from maya.OpenMayaMPx import MPxNode
 
@@ -20,7 +20,7 @@ kUnknownParameter = OpenMaya.kUnknownParameter
 class MirrorNode(MPxNode):
 
 	NODE_ID = OpenMaya.MTypeId( 0x00115940 )
-	NODE_NAME = "rotationMirror"
+	NODE_TYPE_NAME = "rotationMirror"
 
 	inWorldMatrix = MObject()  #this is the input world matrix; the one we want mirrored
 	inParentMatrixInv = MObject()  #this is the input parent inverse matrix. ie the parent inverse matrix of the transform we want mirrored
@@ -184,11 +184,8 @@ class MirrorNode(MPxNode):
 		axis = Axis( dh_mirrorAxis.asShort() )
 
 		### DEAL WITH ROTATION AND POSITION SEPARATELY ###
-
-		#construct the rotation matrix
-		x = [inWorldMatrix(0,0), inWorldMatrix(0,1), inWorldMatrix(0,2)]
-		y = [inWorldMatrix(1,0), inWorldMatrix(1,1), inWorldMatrix(1,2)]
-		z = [inWorldMatrix(2,0), inWorldMatrix(2,1), inWorldMatrix(2,2)]
+		R = inWorldMatrix.asPy( 3 ).getRotationMatrix()  #this gets just the 3x3 rotation matrix - and factors out the scale
+		x, y, z = R  #extract basis vectors
 
 		#mirror the rotation axes and construct the mirrored rotation matrix
 		idxA, idxB = axis.otherAxes()
@@ -270,7 +267,7 @@ class CreateMirrorNode(MPxCommand):
 	CMD_NAME = 'rotationMirror'
 	_ARG_SPEC = [ ('-h', '-help', MSyntax.kNoArg, 'prints help'),
 	              ('-ax', '-axis', MSyntax.kString, 'the axis to mirror across (defaults to x)'),
-	              ('-m', '-translationMode', MSyntax.kString, 'the mode in which translation is mirrored - %s (defaults to %s)' % (' '.join( MirrorNode.MIRROR_MODE_NAMES ), MirrorNode.MIRROR_DEFAULT)),
+	              ('-m', '-translationMode', MSyntax.kString, 'the mode in which translation is mirrored - %s (defaults to %s)' % (' '.join( MirrorNode.MIRROR_MODE_NAMES ), MirrorNode.MIRROR_MODE_NAMES[ MirrorNode.MIRROR_DEFAULT ])),
 	              #('-s', '-space', MSyntax.kString, 'which space to mirror in - world or local (defaults to world)') ]
 	              ]
 
@@ -286,7 +283,10 @@ class CreateMirrorNode(MPxCommand):
 			syntax.addFlag( shortFlag, longFlag, syntaxType )
 
 		syntax.useSelectionAsDefault( True )
-		syntax.setObjectType( MSyntax.kSelectionList, 2, 2 )
+		syntax.setObjectType( MSyntax.kSelectionList, 1, 3 )
+
+		syntax.enableQuery( True )
+		syntax.enableEdit( True )
 
 		return syntax
 	@classmethod
@@ -301,7 +301,10 @@ class CreateMirrorNode(MPxCommand):
 				yield data
 
 	def grabArgDb( self, mArgs ):
-		argData = MArgDatabase( self.syntax(), mArgs )
+		try:
+			argData = MArgDatabase( self.syntax(), mArgs )
+		except RuntimeError:
+			return True, None
 
 		if argData.isFlagSet( self.kFlagHelp ):
 			self.printHelp()
@@ -313,9 +316,11 @@ class CreateMirrorNode(MPxCommand):
 		for shortFlag, longFlag, syntaxType, h in self.IterArgSpec():
 			longestFlag = max( longestFlag, len(longFlag) )
 
+		self.displayInfo( '%s - USAGE' % self.CMD_NAME )
+
 		printStr = '*%5s  %'+ str( longestFlag ) +'s: %s'
 		for shortFlag, longFlag, syntaxType, h in self.IterArgSpec():
-			print printStr % (shortFlag, longFlag, h)
+			self.displayInfo( printStr % (shortFlag, longFlag, h) )
 	def doIt( self, mArgs ):
 		ret, argData = self.grabArgDb( mArgs )
 		if ret:
@@ -330,29 +335,57 @@ class CreateMirrorNode(MPxCommand):
 			sel.getDependNode( n, obj )
 			objs.append( obj )
 
-		obj, tgt = objs
+		#
+		if argData.isQuery():
+			rotNode = objs[0]
 
-		#build the node and connect things up
-		rotNode = cmd.createNode( 'rotationMirror' )
-		cmd.connectAttr( '%s.worldMatrix' % obj, '%s.inWorldMatrix' % rotNode )
-		cmd.connectAttr( '%s.parentInverseMatrix' % obj, '%s.inParentInverseMatrix' % rotNode )
+			if argData.isFlagSet( self.kFlagAxis ):
+				self.setResult( cmd.getAttr( '%s.mirrorAxis' % rotNode ) )
 
-		cmd.connectAttr( '%s.parentInverseMatrix' % tgt, '%s.targetParentInverseMatrix' % rotNode )
-		cmd.connectAttr( '%s.jo' % tgt, '%s.targetJointOrient' % rotNode )
+			elif argData.isFlagSet( self.kFlagMode ):
+				self.setResult( cmd.getAttr( '%s.mirrorTranslation' % rotNode ) )
 
-		cmd.connectAttr( '%s.outTranslate' % rotNode, '%s.t' % tgt )
-		cmd.connectAttr( '%s.outRotate' % rotNode, '%s.r' % tgt )
+			return
+
+		#if we're in edit mode, find the node
+		elif argData.isEdit():
+			rotNode = objs[0]
+
+		#otherwise we're in creation mode - so build the node and connect things up
+		else:
+			obj, tgt = objs
+
+			#see if there is already a node connected
+			existing = cmd.listConnections( '%s.t' % tgt, '%s.r' % tgt, type=MirrorNode.NODE_TYPE_NAME )
+			if existing:
+				self.displayWarning( "There is a %s node already connected - use edit mode!" % MirrorNode.NODE_TYPE_NAME )
+				self.setResult( existing[ 0 ] )
+
+				return
+			else:
+				rotNode = cmd.createNode( 'rotationMirror' )
+				cmd.connectAttr( '%s.worldMatrix' % obj, '%s.inWorldMatrix' % rotNode )
+				cmd.connectAttr( '%s.parentInverseMatrix' % obj, '%s.inParentInverseMatrix' % rotNode )
+
+				cmd.connectAttr( '%s.parentInverseMatrix' % tgt, '%s.targetParentInverseMatrix' % rotNode )
+				cmd.connectAttr( '%s.jo' % tgt, '%s.targetJointOrient' % rotNode )
+
+				cmd.connectAttr( '%s.outTranslate' % rotNode, '%s.t' % tgt )
+				cmd.connectAttr( '%s.outRotate' % rotNode, '%s.r' % tgt )
+				cmd.select( obj )
+
+		#set the result to the node created...
+		self.setResult( rotNode )
 
 		#set any attributes passed in from the command-line
-		argList = [ mArgs.asString( n ) for n in range( mArgs.length() ) ]  #I can't figure out how to use the mind bogglingly retarded api to query command args...  retarded...
 		if argData.isFlagSet( self.kFlagAxis ):
-			#axisInt = Axis.FromStr( axisArg )
-			#cmd.setAttr( '%s.mirrorAxis' % rotNode, axisInt )
-			pass
+			axisInt = Axis.FromName( argData.flagArgumentString( self.kFlagAxis, 0 ) )
+			cmd.setAttr( '%s.mirrorAxis' % rotNode, axisInt )
 
 		if argData.isFlagSet( self.kFlagMode ):
-			#cmd.setAttr( '%s.mirrorTranslation' % rotNode, 2 )
-			pass
+			modeStr = argData.flagArgumentString( self.kFlagMode, 0 )
+			modeIdx = list( MirrorNode.MIRROR_MODE_NAMES ).index( modeStr )
+			cmd.setAttr( '%s.mirrorTranslation' % rotNode, modeIdx )
 	def undoIt( self ):
 		pass
 	def isUndoable( self ):
@@ -363,7 +396,7 @@ classesToRegister = [ CreateMirrorNode ]
 
 def initializePlugin( mobject ):
 	mplugin = OpenMayaMPx.MFnPlugin( mobject, 'macaronikazoo', '1' )
-	mplugin.registerNode( MirrorNode.NODE_NAME, MirrorNode.NODE_ID, MirrorNode.Creator, MirrorNode.Init )
+	mplugin.registerNode( MirrorNode.NODE_TYPE_NAME, MirrorNode.NODE_ID, MirrorNode.Creator, MirrorNode.Init )
 
 	for cls in classesToRegister:
 		cmdName = cls.CMD_NAME
@@ -372,7 +405,7 @@ def initializePlugin( mobject ):
 			mplugin.registerCommand( cmdName, cls.Creator, cls.SyntaxCreator )
 			mplugin.registerCommand( cmdName.lower(), cls.Creator, cls.SyntaxCreator )
 		except:
-			MGlobal.displayError( "Failed to register command: %s\n" % cmdName )
+			self.displayError( "Failed to register command: %s\n" % cmdName )
 			raise
 
 
@@ -387,7 +420,7 @@ def uninitializePlugin( mobject ):
 			mplugin.deregisterCommand( cmdName )
 			mplugin.deregisterCommand( cmdName.lower() )
 		except:
-			MGlobal.displayError( "Failed to unregister command: %s\n" % cmdName )
+			self.displayError( "Failed to unregister command: %s\n" % cmdName )
 			raise
 
 

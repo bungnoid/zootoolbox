@@ -1,10 +1,10 @@
 
 from maya.OpenMaya import *
 from filesystem import trackableClassFactory
+from vectors import Vector, Matrix
 
 import sys
 import maya.cmds as cmd
-import vectors
 import time
 
 getAttr = cmd.getAttr
@@ -516,7 +516,7 @@ MPlug.isHidden = _isHidden
 ### MVECTOR, MMATRIX CUSTOMIZATIONS ###
 
 def __asNice( self ):
-	return vectors.Vector( [self.x, self.y, self.z] )
+	return Vector( [self.x, self.y, self.z] )
 
 MVector.asNice = __asNice
 MPoint.asNice = __asNice
@@ -528,7 +528,7 @@ def __asNice( self ):
 		for j in range( 4 ):
 			values.append( self(i, j) )
 
-	return vectors.Matrix( values )
+	return Matrix( values )
 
 MMatrix.asNice = __asNice
 
@@ -545,6 +545,12 @@ MPoint.__repr__ = __str
 MPoint.__unicode__ = __str
 
 
+def _asPy( self ):
+	return Vector( (self.x, self.y, self.z) )
+
+MVector.asPy = _asPy
+
+
 def __str( self ):
 	return str( self.asNice() )
 
@@ -553,10 +559,21 @@ MMatrix.__repr__ = __str
 MMatrix.__unicode__ = __str
 
 
+def _asPy( self, size=4 ):
+	values = []
+	for i in range( size ):
+		for j in range( size ):
+			values.append( self( i, j ) )
+
+	return Matrix( values, size )
+
+MMatrix.asPy = _asPy
+
+
 def __asMaya( self ):
 	return MVector( *self )
 
-vectors.Vector.asMaya = __asMaya
+Vector.asMaya = __asMaya
 
 
 ### UTILITIES ###

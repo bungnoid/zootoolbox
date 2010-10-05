@@ -1,3 +1,8 @@
+'''
+super simple vector class and vector functionality.  i wrote this simply because i couldn't find
+anything that was easily accessible and quick to write.  this may just go away if something more
+comprehensive/mature is found
+'''
 
 import re
 import math
@@ -227,6 +232,21 @@ class Vector(list):
 	w = property( lambda self: self[ 3 ], lambda self, value: self.setIndex( 3, value ) )
 
 
+class Point(Vector):
+	def __init__( self, vals ):
+		if isinstance( vals, Point ):
+			list.__init__( self, vals )
+			return
+
+		selfLen = len( self )
+		if selfLen == 3:
+			vals.append( 1 )
+		else:
+			assert selfLen == 4
+
+		list.__init__( vals )
+
+
 class Colour(Vector):
 	NAMED_PRESETS = { "active": (0.26, 1, 0.64),
 	                  "black": (0, 0, 0),
@@ -408,7 +428,16 @@ class Axis(int):
 
 AX_X, AX_Y, AX_Z = map( Axis, range( 3 ) )
 
+"""
+class EulerRotation(Vector):
+	def __init__( self, vals, degrees=True ):
+		pass
+	def radians( self ):
+		return list( self )
+	def degrees( self ):
+		return list( map( math.degrees, self ) )
 
+"""
 class Quaternion(Vector):
 	def __init__( self, x=0, y=0, z=0, w=1 ):
 		'''
@@ -946,6 +975,26 @@ class Matrix(list):
 		new /= det
 
 		return new.transpose()
+	def getScaleMatrix( self ):
+		'''
+		return the scale matrix part of this matrix
+		'''
+		sx = Vector( self[ 0 ][ :3 ] ).length()
+		sy = Vector( self[ 1 ][ :3 ] ).length()
+		sz = Vector( self[ 2 ][ :3 ] ).length()
+
+		S = type( self )( [sx,0,0, 0,sy,0, 0,0,sz], 3 )
+
+		return S
+	def getRotationMatrix( self ):
+		'''
+		returns just the rotation part of this matrix - ie scale is factored out
+		'''
+		S = self.getScaleMatrix()
+		R = self.crop( 3 )
+		R = S.inverse() * R
+
+		return R
 	def adjoint( self ):
 		new = self.__class__.Zero(self.size)
 		for i in xrange(self.size):
