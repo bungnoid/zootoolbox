@@ -199,15 +199,13 @@ class MirrorNode(MPxNode):
 		z[ idxB ] = -z[ idxB ]
 
 		#factor scale back into the matrix
-		mirroredMatrix = S * Matrix( x + y + z, 3 )
+		mirroredMatrix = Matrix( x + y + z, 3 ) * S
+		mirroredMatrix = mirroredMatrix.expand( 4 )
 
 		#now put the rotation matrix in the space of the target object
 		dh_targetParentMatrixInv = dataBlock.inputValue( self.targetParentMatrixInv )
 		tgtParentMatrixInv = dh_targetParentMatrixInv.asMatrix()
-		matInv = Matrix( [ tgtParentMatrixInv(0,0), tgtParentMatrixInv(0,1), tgtParentMatrixInv(0,2),
-		                   tgtParentMatrixInv(1,0), tgtParentMatrixInv(1,1), tgtParentMatrixInv(1,2),
-		                   tgtParentMatrixInv(2,0), tgtParentMatrixInv(2,1), tgtParentMatrixInv(2,2) ], 3 )
-
+		matInv = tgtParentMatrixInv.asPy()
 
 		#put the rotation in the space of the target's parent
 		mirroredMatrix = mirroredMatrix * matInv
@@ -219,10 +217,12 @@ class MirrorNode(MPxNode):
 
 		jo = Matrix.FromEulerXYZ( tgtJoX, tgtJoY, tgtJoZ )
 		joInv = jo.inverse()
+		joInv = joInv.expand( 4 )
 		mirroredMatrix = mirroredMatrix * joInv
 
 		#grab euler values
-		eulerXYZ = outX, outY, outZ = mirroredMatrix.ToEulerXYZ()
+		R, S = mirroredMatrix.decompose()  #we need to decompose again to extract euler angles...
+		eulerXYZ = outX, outY, outZ = R.ToEulerXYZ()
 
 		dh_outRX = dataBlock.outputValue( self.outRotateX )
 		dh_outRY = dataBlock.outputValue( self.outRotateY )

@@ -102,7 +102,8 @@ class MelUIError(Exception): pass
 #this maps ui type strings to actual command objects - they're not always called the same
 TYPE_NAMES_TO_CMDS = { u'staticText': cmd.text,
                        u'field': cmd.textField,
-                       u'commandMenuItem': cmd.menuItem }
+                       u'commandMenuItem': cmd.menuItem,
+                       u'dividorMenuItem': cmd.menuItem }
 
 #stores a list of widget cmds that don't have docTag support - classes that wrap this command need to skip encoding the classname into the docTag.  obviously.
 WIDGETS_WITHOUT_DOC_TAG_SUPPORT = [ cmd.popupMenu ]
@@ -413,8 +414,13 @@ class BaseMelUI(trackableClassFactory( unicode )):
 		theCls = None
 		if uiCmd not in WIDGETS_WITHOUT_DOC_TAG_SUPPORT:
 			#see if the data stored in the docTag is a valid class name - it might not be if teh user has used the docTag for something (why would they? there is no need, but still check...)
-			possibleClassName = uiCmd( theStr, q=True, docTag=True )
-			theCls = BaseMelUI.GetNamedSubclass( possibleClassName )
+			try:
+				possibleClassName = uiCmd( theStr, q=True, docTag=True )
+
+			#menu item dividers have a weird type name when queried - "dividorMenuItem", which is a menuItem technically, but you can't query its docTag, so this catch statement is exclusively for this case as far as I know...
+			except RuntimeError: pass
+			else:
+				theCls = BaseMelUI.GetNamedSubclass( possibleClassName )
 
 		#if the data stored in the docTag doesn't map to a subclass, then we'll have to guess at the best class...
 		if theCls is None:
@@ -1575,9 +1581,9 @@ class MelMenu(_MelBaseMenu):
 		return iter([])
 	def getFullName( self ):
 		return str( self )
-	def _build( self, menu, menuParent ):
-		self.build( menu, menuParent )
-	def build( self, menu, menuParent ):
+	def _build( self ):
+		self.build()
+	def build( self ):
 		pass
 
 

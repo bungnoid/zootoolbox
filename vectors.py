@@ -376,9 +376,9 @@ class Axis(int):
 		if isinstance( idx, basestring ):
 			return cls.FromName( idx )
 
-		return int.__new__( cls, idx )
+		return int.__new__( cls, idx % 6 )
 	def __neg__( self ):
-		return Axis( (self + 3) % 6 )
+		return Axis( (self + 3) )
 	@classmethod
 	def FromName( cls, name ):
 		idx = list( cls.AXES ).index( name.lower().replace( '_', '-' ) )
