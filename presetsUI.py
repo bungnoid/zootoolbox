@@ -152,7 +152,9 @@ class PresetLayout(MelFormLayout):
 			files.append( s.copy() )
 
 		if self.locale == LOCAL:
-			self.promptForSubmit(files)
+			self.promptForSubmit( files )
+
+		self.sendEvent( 'presetsCopied', files )
 	def delete( self, *args ):
 		files = self.selected()
 		for s in files:
@@ -160,18 +162,23 @@ class PresetLayout(MelFormLayout):
 
 		self.updateList()
 		if self.locale == GLOBAL:
-			self.promptForSubmit(files)
+			self.promptForSubmit( files )
+
+		self.sendEvent( 'presetsDeleted', files )
 	def move( self, *args ):
 		files = []
+		movedFiles = []
 		for s in self.selected():
-			if self.locale == GLOBAL:
-				files.append( Preset.FromFile(s) )
-			else:
-				files.append( s )
-			s.move()
+			ff = s.move()
+			movedFiles.append( ff )
 
 		self.updateList()
-		self.promptForSubmit(files)
+
+		#if we've moved FROM the local locale, prompt to submit files...
+		if self.locale == LOCAL:
+			self.promptForSubmit( movedFiles )
+
+		self.sendEvent( 'presetsMoved', files )
 	def rename( self, *args ):
 		'''
 		performs the prompting and renaming of presets
@@ -184,10 +191,12 @@ class PresetLayout(MelFormLayout):
 		if not newName.endswith('.'+ self.ext):
 			newName += '.'+ self.ext
 
-		selected.rename(newName)
+		renamedPreset = selected.rename( newName )
 		self.updateList()
-		if self.locale == GLOBAL:
-			self.promptForSubmit([selected])
+		if self.locale == LOCAL:
+			self.promptForSubmit( [renamedPreset] )
+
+		self.sendEvent( 'presetRenamed', selected, renamedPreset )
 	def swap( self, *args ):
 		'''
 		performs the swapping from the local to global locale
@@ -278,6 +287,14 @@ class PresetWindow(BaseMelWindow):
 		cmd.menuItem(l='Sync to Global Presets', c=lambda *a: self.editor.syncall())
 
 		self.show()
+	def presetsCopied( self, presets ):
+		pass
+	def presetsDeleted( self, presets ):
+		pass
+	def presetsMoved( self, presets ):
+		pass
+	def presetRenamed( self, preset, renamedPreset ):
+		pass
 
 PresetUI = PresetWindow
 

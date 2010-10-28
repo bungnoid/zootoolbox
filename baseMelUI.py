@@ -18,7 +18,9 @@ import filesystem
 
 from maya.OpenMaya import MGlobal
 
-mayaVer = int( float( maya.mel.eval( 'getApplicationVersionAsFloat()' ) ) )
+mayaVer = int( maya.mel.eval( 'getApplicationVersionAsFloat' ) )
+
+displayInfo = MGlobal.displayInfo
 displayWarning = MGlobal.displayWarning
 displayError = MGlobal.displayError
 
@@ -270,6 +272,8 @@ class BaseMelUI(trackableClassFactory( unicode )):
 				try:
 					method( *methodArgs, **methodKwargs )
 				except:
+					import cgitb, sys
+					displayError( cgitb.text( sys.exc_info() ) )
 					displayWarning( 'Event Failed: %s, %s, %s' % (methodName, methodArgs, methodKwargs) )
 		else:
 			self.parent.processEvent( methodName, methodArgs, methodKwargs )
@@ -278,21 +282,7 @@ class BaseMelUI(trackableClassFactory( unicode )):
 	def setVisibility( self, visibility=True ):
 		'''
 		hides the widget
-
-		NOTE: hiding also makes the widget as small as possible because QT based UI
-		simply skips drawing the widget, it still considers it for layout purposes
-		unlike UI prior to 2011.  Previous size is stored before the widget is hidden
-		but there are possible cases where if the python instance isn't kept and the
-		widget IS kept, that errant behaviour will occur...
 		'''
-		if visibility:
-			if hasattr( self, '_preSize' ):
-				self.setSize( self._preSize )
-		else:
-			#cache the current size and set the size to as small as possible
-			self._preSize = self.getSize()
-			self.setSize( (1,1) )
-
 		self( e=True, vis=visibility )
 	def hide( self ):
 		self.setVisibility( False )
@@ -392,6 +382,11 @@ class BaseMelUI(trackableClassFactory( unicode )):
 		define a callback that gets triggered when this piece of UI gets deleted
 		'''
 		cmd.scriptJob( compressUndo=True, uiDeleted=(self, cb) )
+	def setUndoCB( self, cb ):
+		'''
+		define a callback that gets triggered when an undo event is issued
+		'''
+		cmd.scriptJob( compressUndo=True, parent=self, event=('Undo', cb) )
 	@classmethod
 	def FromStr( cls, theStr ):
 		'''
@@ -407,9 +402,12 @@ class BaseMelUI(trackableClassFactory( unicode )):
 		try:
 			uiTypeStr = cmd.objectTypeUI( theStr )
 		except RuntimeError:
-			uiTypeStr = cmd.objectTypeUI( theStr.split( '|' )[ -1 ] )
+			try:
+				uiTypeStr = cmd.objectTypeUI( theStr.split( '|' )[ -1 ] )
+			except RuntimeError:
+				uiTypeStr = ''
 
-		uiCmd = TYPE_NAMES_TO_CMDS.get( uiTypeStr, getattr( cmd, uiTypeStr, None ) )
+		uiCmd = TYPE_NAMES_TO_CMDS.get( uiTypeStr, getattr( cmd, uiTypeStr, cmd.control ) )
 
 		theCls = None
 		if uiCmd not in WIDGETS_WITHOUT_DOC_TAG_SUPPORT:
@@ -424,7 +422,7 @@ class BaseMelUI(trackableClassFactory( unicode )):
 
 		#if the data stored in the docTag doesn't map to a subclass, then we'll have to guess at the best class...
 		if theCls is None:
-			#print cmd.objectTypeUI( theStr )  ##NOTE: the typestr isn't ALWAYS the same name as the function used to interact with said control, so this debug line can be useful for spewing object type names...
+			#displayInfo( cmd.objectTypeUI( theStr ) )  ##NOTE: the typestr isn't ALWAYS the same name as the function used to interact with said control, so this debug line can be useful for spewing object type names...
 
 			theCls = BaseMelUI  #at this point default to be an instance of the base widget class
 			candidates = list( BaseMelUI.IterWidgetClasses( uiCmd ) )
@@ -473,6 +471,15 @@ class BaseMelLayout(BaseMelUI):
 		return children
 	def getNumChildren( self ):
 		return len( self.getChildren() )
+	def printUIHierarchy( self ):
+		def printChildren( children, depth ):
+			for child in children:
+				displayInfo( '%s%s' % ('  ' * depth, child) )
+				if isinstance( child, BaseMelLayout ):
+					printChildren( child.getChildren(), depth+1 )
+
+		displayInfo( self )
+		printChildren( self.getChildren(), 1 )
 	def clear( self ):
 		'''
 		deletes all children from the layout
@@ -919,7 +926,7 @@ class BaseMelWidget(BaseMelUI):
 			kw = { 'e': True, self.KWARG_VALUE_NAME: value }
 			self.WIDGET_CMD( self, **kw )
 		except TypeError, x:
-			print self.WIDGET_CMD
+			displayError( 'running setValue method using %s command' % self.WIDGET_CMD )
 			raise
 
 		if executeChangeCB:
@@ -978,9 +985,17 @@ class MelSpacer(MelLabel):
 		return MelLabel.__new__( cls, parent, w, h, l='' )
 
 
-class MelButton(MelLabel):
+class MelButton(BaseMelWidget):
 	WIDGET_CMD = cmd.button
 	KWARG_CHANGE_CB_NAME = 'c'
+
+	def bold( self, state=True ):
+		self( e=True, font='boldLabelFont' if state else 'plainLabelFont' )
+	def getLabel( self ):
+		return self( q=True, l=True )
+	def setLabel( self, label ):
+		self( e=True, l=label )
+
 
 class MelIconButton(MelButton):
 	WIDGET_CMD = cmd.iconTextButton
@@ -1179,7 +1194,8 @@ class _BaseSlider(BaseMelWidget):
 			self._postChangeCB( value )
 	def on_drag( self, value ):
 		if self._isDragging:
-			self._changeCB( value )
+			if callable( self._changeCB ):
+				self._changeCB( value )
 		else:
 			self._initialUndoState = cmd.undoInfo( q=True, state=True )
 			if self.DISABLE_UNDO_ON_DRAG:
@@ -1277,6 +1293,8 @@ class MelTextScrollList(BaseMelWidget):
 	def removeSelectedItems( self ):
 		for idx in self.getSelectedIdxs():
 			self.removeByIdx( idx )
+	def allowMultiSelect( self, state ):
+		self( e=True, ams=state )
 	def clear( self ):
 		self( e=True, ra=True )
 	def clearSelection( self ):
@@ -1581,9 +1599,9 @@ class MelMenu(_MelBaseMenu):
 		return iter([])
 	def getFullName( self ):
 		return str( self )
-	def _build( self ):
+	def _build( self, *a ):
 		self.build()
-	def build( self ):
+	def build( self, *a ):
 		pass
 
 
@@ -1602,7 +1620,7 @@ class MelOptionMenu(_MelBaseMenu):
 		menuItems = self.getMenuItems()
 		menuItems[ idx ].setValue( value )
 	def getMenuItems( self ):
-		itemNames = self( q=True, itemListLong=True ) or []
+		itemNames = self( q=True, itemListShort=True ) or []
 		return [ MelMenuItem.FromStr( itemName ) for itemName in itemNames ]
 	def selectByIdx( self, idx, executeChangeCB=True ):
 		self( e=True, select=idx+1 )  #indices are 1-based in mel land - fuuuuuuu alias!!!
@@ -1615,6 +1633,8 @@ class MelOptionMenu(_MelBaseMenu):
 		self.selectByIdx( idx, executeChangeCB )
 	def setValue( self, value, executeChangeCB=True ):
 		self.selectByValue( value, executeChangeCB )
+	def getSelectedIdx( self ):
+		return self( q=True, select=True ) - 1  #indices are 1-based in mel land - fuuuuuuu alias!!!
 
 
 class MelPopupMenu(_MelBaseMenu):
@@ -1697,9 +1717,7 @@ UI_FOR_PY_TYPES = { bool: MelCheckBox,
                     tuple: MelTextScrollList,
                     MayaNode: MelObjectSelector }
 
-def buildUIForObject( obj, parent, typeMapping=None ):
-	'''
-	'''
+def getBuildUIMethodForObject( obj, typeMapping=None ):
 	if typeMapping is None:
 		typeMapping = UI_FOR_PY_TYPES
 
@@ -1721,6 +1739,15 @@ def buildUIForObject( obj, parent, typeMapping=None ):
 			if bestMatch:
 				buildClass = aBuildClass
 				break
+
+	return buildClass
+
+
+def buildUIForObject( obj, parent, typeMapping=None ):
+	'''
+	'''
+
+	buildClass = getBuildUIMethodForObject( obj, typeMapping )
 
 	if buildClass is None:
 		raise MelUIError( "there is no build class defined for object's of type %s (%s)" % (type( obj ), obj) )
@@ -1813,7 +1840,11 @@ class BaseMelWindow(BaseMelUI):
 			helpMenu = new.getMenu( 'Help' )
 			MelMenuItem( helpMenu, l="Help...", en=helpPage is not None, c=lambda x: cmd.showHelp(helpPage, absolute=True) )
 
+		#validate the instance list - this should be done regularly, but not always because its kinda slow...
 		BaseMelUI.ValidateInstanceList()
+
+		#track the instance
+		cls._INSTANCE_LIST.append( new )
 
 		return new
 	def __init__( self, *a, **kw ): pass
@@ -1934,7 +1965,7 @@ class PyFuncLayout(MelColumnLayout):
 
 		MelButton( self, l='Execute %s' % names.camelCaseToNice( func.__name__ ), c=self.execute )
 	def changeCB( self, argName ):
-		print '%s arg changed!' % argName
+		displayInfo( '%s arg changed!' % argName )
 	def getArgDict( self ):
 		argDict = {}
 		for argName, ui in self.argUIDict.iteritems():

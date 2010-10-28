@@ -84,7 +84,7 @@ def partialPathName( self ):
 
 	dagPath = self.dagPath()
 	if dagPath is not None:
-		return dagPath.partialPathName()
+		return dagPath.partialPathName()  #already a unicode instance
 
 	if self.hasFn( MFn.kDependencyNode ):
 		return MFnDependencyNode( self ).name()
@@ -94,12 +94,15 @@ def partialPathName( self ):
 		node = MObject()
 		self.getDependNode( 0, node )
 
-		return str( MPlug( node, self ) )
+		return unicode( MPlug( node, self ) )
 
-	return '<instance of %s>' % self.__class__
+	return u'<instance of %s>' % self.__class__
+
+def __repr( self ):
+	return repr( self.partialPathName() )
 
 MObject.__str__ = MObjectHandle.__str__ = partialPathName
-MObject.__repr__ = MObjectHandle.__repr__ = partialPathName
+MObject.__repr__ = MObjectHandle.__repr__ = __repr
 MObject.__unicode__ = MObjectHandle.__unicode__ = partialPathName
 MObject.partialPathName = MObjectHandle.partialPathName = partialPathName
 MObject.this = None  #stops __getattr__ from being called

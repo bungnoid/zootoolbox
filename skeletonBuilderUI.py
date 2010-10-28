@@ -15,7 +15,7 @@ import control
 import meshUtils
 import baseMelUI
 import presetsUI
-import skinWeightsUI
+#import skinWeightsUI
 import spaceSwitchingUI
 
 Axis = rigUtils.Axis
@@ -403,7 +403,7 @@ class CommonButtonsLayout(MelColumn):
 		buttonForm.layout()
 
 		buttonForm = MelHLayout( skinCol )
-		MelButton( buttonForm, l='Open Skin Weights Tool', c=lambda *a: skinWeightsUI.SkinWeightsWindow() )
+		MelButton( buttonForm, l='Open Skin Weights Tool', en=False )  #c=lambda *a: skinWeightsUI.SkinWeightsWindow() )
 		MelButton( buttonForm, l='Generate Skin Weights', c=self.on_generateWeights )
 		buttonForm.layout()
 
@@ -973,7 +973,7 @@ class CreateEditRigTabLayout(MelTabLayout):
 		self.setLabel( 2, 'create rig' )
 
 		self.setSceneChangeCB( self.on_sceneOpen )
-		rigPrimitives.skeletonBuilderConversion.convertOldParts()
+		#rigPrimitives.skeletonBuilderConversion.convertOldParts()
 
 	### EVENT HANDLERS ###
 	def on_change( self ):
@@ -998,7 +998,6 @@ class SkeletonBuilderWindow(BaseMelWindow):
 	FORCE_DEFAULT_SIZE = True
 
 	def __init__( self ):
-		filesystem.reportUsageToAuthor( rigPrimitives.__author__ )
 		self.editor = CreateEditRigTabLayout( self )
 
 		tMenu = self.getMenu( 'Tools' )

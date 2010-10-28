@@ -65,7 +65,9 @@ def getNodesCreatedBy( function, *args, **kwargs ):
 
 	#now remove nodes from all containers from the newNodes list
 	newContainers = apiExtensions.filterByType( newNodes, apiExtensions.MFn.kSet )
-	newNodes = set( map( str, newNodes ) )
+
+	#NOTE: nodes are MObject instances at this point
+	newNodes = set( [ node for node in newNodes if node is not None ] )
 	for c in newContainers:
 		for n in sets( c, q=True ) or []:
 			if n in newNodes:
@@ -94,11 +96,20 @@ def buildContainer( typeClass, kwDict, nodes, controls ):
 	queried at a later date by their name
 	'''
 
+	#if typeClass is an instance, then set its container attribute, otherwise instantiate an instance and return it
+	if isinstance( typeClass, RigPart ):
+		theInstance = typeClass
+		typeClass = type( typeClass )
+	elif issubclass( typeClass, RigPart ):
+		theInstance = typeClass( None )
+
 	#build the container, and add the special attribute to it to
 	theContainer = createRigPartContainer( '%s_%s' % (typeClass.__name__, kwDict.get( 'idx', 'NOIDX' )) )
+	theInstance.container = theContainer
 
-	addAttr( theContainer, ln='_rigPrimitive', attributeType='compound', numberOfChildren=5 )
+	addAttr( theContainer, ln='_rigPrimitive', attributeType='compound', numberOfChildren=6 )
 	addAttr( theContainer, ln='typeName', dt='string', parent='_rigPrimitive' )
+	addAttr( theContainer, ln='script', dt='string', parent='_rigPrimitive' )
 	addAttr( theContainer, ln='version', at='long', parent='_rigPrimitive' )
 	addAttr( theContainer, ln='skeletonPart', at='message', parent='_rigPrimitive' )
 	addAttr( theContainer, ln='buildKwargs', dt='string', parent='_rigPrimitive' )
@@ -111,14 +122,17 @@ def buildContainer( typeClass, kwDict, nodes, controls ):
 
 	#now set the attribute values...
 	setAttr( '%s._rigPrimitive.typeName' % theContainer, typeClass.__name__, type='string' )
+	setAttr( '%s._rigPrimitive.script' % theContainer, inspect.getfile( typeClass ), type='string' )
 	setAttr( '%s._rigPrimitive.version' % theContainer, typeClass.__version__ )
 	setAttr( '%s._rigPrimitive.buildKwargs' % theContainer, str( kwDict ), type='string' )
 
 
 	#now add all the nodes
-	nodes = map( str, nodes )
-	controls = map( str, controls )
+	nodes = [ str( node ) if node is not None else node for node in nodes ]
+	controls = [ str( node ) if node is not None else node for node in controls ]
 	for node in set( nodes ) | set( controls ):
+		if node is None:
+			continue
 
 		if objectType( node, isAType='dagNode' ):
 			sets( node, e=True, add=theContainer )
@@ -142,7 +156,7 @@ def buildContainer( typeClass, kwDict, nodes, controls ):
 			triggered.setKillState( control, True )
 
 
-	return typeClass( theContainer )
+	return theInstance
 
 
 class RigPart(filesystem.trackableClassFactory()):
@@ -163,10 +177,17 @@ class RigPart(filesystem.trackableClassFactory()):
 
 	AUTO_PICKER = True
 
-	def __init__( self, partContainer ):
+	def __init__( self, partContainer, skeletonPart=None ):
+		if partContainer is not None:
+			assert isRigPartContainer( partContainer ), "Must pass a valid rig part container! (received %s - a %s)" % (partContainer, nodeType( partContainer ))
+
 		self.container = partContainer
+		self._skeletonPart = skeletonPart
+	def __unicode__( self ):
+		return u"%s_%d( %r )" % (self.__class__.__name__, self.getIdx(), self.container)
+	__str__ = __unicode__
 	def __repr__( self ):
-		return '%s_%d( %s )' % (self.__class__.__name__, self.getIdx(), self.container)
+		return repr( unicode( self ) )
 	def __hash__( self ):
 		'''
 		the hash for the container mobject uniquely identifies this rig control
@@ -289,14 +310,19 @@ class RigPart(filesystem.trackableClassFactory()):
 			return existingIdxs[ -1 ] + 1
 
 		return 0
+	def createSharedShape( self, name ):
+		return asMObject( createNode( 'nurbsCurve', n=name +'#', p=self.sharedShapeParent ) )
 	@classmethod
 	def Create( cls, skeletonPart, *a, **kw ):
 		'''
 		'''
 
+		if not cls.CanRigThisPart( skeletonPart ):
+			return
+
 		buildFunc = getattr( cls, '_build', None )
 		if buildFunc is None:
-			raise RigPartError( 'no such rig primitive' )
+			raise RigPartError( "The rigPart %s has no _build method!" % cls.__name__ )
 
 		assert isinstance( skeletonPart, SkeletonPart ), "Need a SkeletonPart instance, got a %s instead" % skeletonPart.__class__
 
@@ -309,7 +335,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		if defaults is None:
 			defaults = []
 
-		argNames = argNames[ 2: ]  #strip the first two args - which should be the class arg (usually cls) and the skeletonPart
+		argNames = argNames[ 2: ]  #strip the first two args - which should be the instance arg (usually self) and the skeletonPart
 		if vArgs is not None:
 			raise RigPartError( 'cannot have *a in rig build functions' )
 
@@ -326,6 +352,11 @@ class RigPart(filesystem.trackableClassFactory()):
 		kw[ 'idx' ] = idx
 
 
+		#construct an empty instance - empty RigPart instances are only valid inside this method...
+		self = cls( None )
+		self._skeletonPart = skeletonPart
+
+
 		#generate a default scale for the rig part
 		kw.setdefault( 'scale', getDefaultScale() / 10.0 )
 
@@ -336,38 +367,50 @@ class RigPart(filesystem.trackableClassFactory()):
 		qss = worldPart.qss
 
 
+		#create the shared shape transform - this is the transform under which all shared shapes are temporarily parented to, and all
+		#shapes under this transform are automatically added to all controls returned after the build function returns
+		self.sharedShapeParent = asMObject( createNode( 'transform', n='_tmp_sharedShape' ) )
+		defaultSharedShape = self.createSharedShape( '%s_sharedAttrs' % cls.GetPartName() )
+		kw[ 'sharedShape' ] = defaultSharedShape
+
+
 		#run the build function
-		newNodes, controls = getNodesCreatedBy( buildFunc, skeletonPart, **kw )
+		newNodes, controls = getNodesCreatedBy( self._build, skeletonPart, **kw )
+		realControls = [ c for c in controls if c is not None ]  #its possible for a build function to return None in the control list because it wants to preserve the length of the control list returned - so construct a list of controls that actually exist
 		if cls.ADD_CONTROLS_TO_QSS:
-			for c in controls:
-				if c is None: continue
+			for c in realControls:
 				sets( c, add=qss )
 
 
 		#make sure there are no intermediate shapes
-		for c in controls:
+		for c in realControls:
 			for shape in listRelatives( c, s=True, pa=True ) or []:
 				if getAttr( '%s.intermediateObject' % shape ):
 					delete( shape )
 
 
 		#build the container and initialize the rigPrimtive
-		newPart = buildContainer( cls, kw, newNodes, controls )
-		theContainer = newPart.container
+		buildContainer( self, kw, newNodes, controls )
 
 
-		#publish the controls to the container - this is done here instead of the buildContainer function because we only want
-		#controls published if the build function is called by Create - this allows build functions to call other build functions
-		#and wrap them up as containers, but still publish their nodes
-		controlNames = cls.CONTROL_NAMES or []  #CONTROL_NAMES can validly be None - so just use an empty list if this is the case
-		for control in controls:
+		#add shared shapes to all controls, and remove shared shapes that are empty
+		sharedShapeParent = self.sharedShapeParent
+		sharedShapes = listRelatives( sharedShapeParent, pa=True, s=True ) or []
+		for c in realControls:
+			if objectType( c, isAType='transform' ):
+				for shape in sharedShapes:
+					parent( shape, c, add=True, s=True )
 
-			if objectType( control, isAType='transform' ):
-				try: controlName = controlNames[ idx ]
-				except IndexError: controlName = 'c_%d' % idx
+		for shape in sharedShapes:
+			if not listAttr( shape, ud=True ):
+				delete( shape )
+
+		delete( sharedShapeParent )
+		del( self.sharedShapeParent )
 
 
 		#stuff the part container into the world container - we want a clean top level in the outliner
+		theContainer = self.container
 		sets( theContainer, e=True, add=worldPart.container )
 
 
@@ -376,7 +419,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		connectAttr( '%s.message' % skeletonPart.base, '%s._rigPrimitive.skeletonPart' % theContainer )
 
 
-		return newPart
+		return self
 	@classmethod
 	def GetControlName( cls, control ):
 		'''
@@ -438,8 +481,13 @@ class RigPart(filesystem.trackableClassFactory()):
 		'''
 		returns the skeleton part this rig part is driving
 		'''
+		if self._skeletonPart:
+			return self._skeletonPart
+
 		connected = listConnections( '%s.skeletonPart' % self.container )[ 0 ]
-		return SkeletonPart.InitFromItem( connected )
+		self._skeletonPart = skeletonPart = SkeletonPart.InitFromItem( connected )
+
+		return skeletonPart
 	def getSkeletonPartParity( self ):
 		return self.getSkeletonPart().getParity()
 	def getControlName( self, control ):
@@ -450,14 +498,17 @@ class RigPart(filesystem.trackableClassFactory()):
 		if self.CONTROL_NAMES is None:
 			return str( control )
 
-		cons = cmd.listConnections( '%s.message' % control, s=False, p=True, type='container' )
+		cons = cmd.listConnections( '%s.message' % control, s=False, p=True ) or []
 		for c in cons:
 			node = c.split( '.' )[0]
+			if not isRigPartContainer( node ):
+				continue
+
 			if objExists( node ):
 				if node != self.container:
 					continue
 
-				index = c[ c.rfind( '[' )+1:-1 ]
+				index = int( c[ c.rfind( '[' )+1:-1 ] )
 				name = self.CONTROL_NAMES[ index ]
 
 				return name
@@ -517,8 +568,14 @@ def buildDefaultSpaceSwitching( theJoint, control=None, additionalParents=(), ad
 	for s in spaces:
 		names.append( generateNiceControlName( s ) )
 
-	spaces += list( additionalParents )
-	names += list( additionalParentNames )
+	additionalParents = list( additionalParents )
+	additionalParentNames = list( additionalParentNames )
+
+	for n in range( len( additionalParentNames ), len( additionalParents ) ):
+		additionalParentNames.append( generateNiceControlName( additionalParents[ n ] ) )
+
+	spaces += additionalParents
+	names += additionalParentNames
 
 	#we don't care about space switching if there aren't any non world spaces...
 	if not spaces:

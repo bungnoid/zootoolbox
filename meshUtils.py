@@ -132,6 +132,14 @@ def extractFaces( faceList, delete=False ):
 		if children:
 			cmd.delete( children )
 
+		#unlock transform channels - if possible anyway
+		try:
+			for c in ('t', 'r', 's'):
+				setAttr( '%s.%s' % (dupeMesh, c), l=False )
+				for ax in ('x', 'y', 'z'):
+					setAttr( '%s.%s%s' % (dupeMesh, c, ax), l=False )
+		except RuntimeError: pass
+
 		#now delete all faces except those we want to keep
 		cmd.select( [ '%s.f[%d]' % (dupeMesh, idx) for idx in range( numFaces( dupeMesh ) ) ] )
 		cmd.select( [ '%s.f[%d]' % (dupeMesh, idx) for idx in faces ], deselect=True )
@@ -206,6 +214,11 @@ def extractMeshForJoints( joints, tolerance=0.25, expand=0 ):
 		#delete the mesh transform
 		cmd.delete( m )
 
+	#remove any intermediate objects...
+	for shape in listRelatives( grp, s=True, pa=True ):
+		if getAttr( '%s.intermediateObject' % shape ):
+			delete( shape )
+
 	return grp
 
 
@@ -237,7 +250,7 @@ def isPointInCube( point, volumePos, volumeScale, volumeBasis ):
 
 	#make the point's position relative to the volume, and transform it to the volume's local orientation
 	pointRel = point - volumePos
-	pointRel.change_space( *volumeBasis )
+	pointRel = pointRel.change_space( *volumeBasis )
 
 	if -x<= pointRel.x <=x  and  -y<= pointRel.y <=y  and  -z<= pointRel.z <=z:
 		acc = 0
@@ -258,7 +271,7 @@ def isPointInSphere( point, volumePos, volumeScale, volumeBasis ):
 
 	#make the point's position relative to the volume, and transform it to the volume's local orientation
 	pointRel = point - volumePos
-	pointRel.change_space(*volumeBasis)
+	pointRel = pointRel.change_space(*volumeBasis)
 
 	if -x<= pointRel.x <=x  and  -y<= pointRel.y <=y  and  -z<= pointRel.z <=z:
 		pointN = vectors.Vector(pointRel)
@@ -297,6 +310,7 @@ def findFacesInVolumeForMaya( meshes, volume, contained=False ):
 	allFaces = []
 	for mesh, faces in objFacesDict.iteritems():
 		allFaces.extend( ['%s.%s' % (mesh, f) for f in faces] )
+
 	return allFaces
 
 
@@ -470,8 +484,8 @@ def jointFacesForMaya( joint, tolerance=1e-4, contained=True ):
 		faceList = cmd.polyListComponentConversion( verts, toFace=True )
 		if faceList:
 			faceList = set( cmd.ls( faceList, fl=True ) )
-		for f in cmd.ls( cmd.polyListComponentConversion( verts, toFace=True, border=True ), fl=True ):
-			faceList.remove( f )
+			for f in cmd.ls( cmd.polyListComponentConversion( verts, toFace=True, border=True ), fl=True ):
+				faceList.remove( f )
 
 		jointFaces = list( faceList )
 	else:

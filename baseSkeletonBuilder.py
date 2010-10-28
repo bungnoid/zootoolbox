@@ -43,7 +43,8 @@ BONE_ROTATE_AXIS = Axis.FromVector( BONE_ROTATE_VECTOR )
 getLocalAxisInDirection = rigUtils.getLocalAxisInDirection
 getPlaneNormalForObjects = rigUtils.getPlaneNormalForObjects
 
-loadPlugin( 'zooMirror.py', quiet=True )
+_thisPath = filesystem.Path( __file__ ).up()
+loadPlugin( _thisPath / 'zooMirror.py', quiet=True )
 
 
 def getDefaultScale():
@@ -1609,10 +1610,7 @@ def buildEndPlacer( name=None ):
 	builds a placer for the end of a chain.  This is generally useful for aligning the last joint in a chain
 	but can also be useful for marking up interesting pivots on parts such as feet with foot edges etc...
 	'''
-	transform = createNode( 'transform' )
-	shape = createNode( 'vstAttachment', n='%sShape' % transform, p=transform )
-
-	return transform
+	return spaceLocator()[ 0 ]
 
 
 def jointSize( jointName, size ):
