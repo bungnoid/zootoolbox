@@ -369,7 +369,10 @@ class CreateMirrorNode(MPxCommand):
 				cmd.connectAttr( '%s.parentInverseMatrix' % obj, '%s.inParentInverseMatrix' % rotNode )
 
 				cmd.connectAttr( '%s.parentInverseMatrix' % tgt, '%s.targetParentInverseMatrix' % rotNode )
-				cmd.connectAttr( '%s.jo' % tgt, '%s.targetJointOrient' % rotNode )
+
+				joAttrpath = '%s.jo' % tgt
+				if cmd.objExists( joAttrpath ):
+					cmd.connectAttr( joAttrpath, '%s.targetJointOrient' % rotNode )
 
 				cmd.connectAttr( '%s.outTranslate' % rotNode, '%s.t' % tgt )
 				cmd.connectAttr( '%s.outRotate' % rotNode, '%s.r' % tgt )
