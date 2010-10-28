@@ -455,34 +455,41 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 
 import profileDecorators
 from maya.OpenMayaAnim import MFnSkinCluster
-from maya.OpenMaya import MSelectionList, MDagPath, MObject, MPlug, MIntArray, MDoubleArray, MDagPathArray, MFnComponentListData, MGlobal, MItMeshVertex
+from maya.OpenMaya import MIntArray, MDagPathArray
 
 #@profileDecorators.d_profile
 def setSkinWeights( skinCluster, vertJointWeightData ):
+	'''
+	vertJointWeightData is a list of 2-tuples containing the vertex component name, and a list of 2-tuples
+	containing the joint name and weight.  ie it looks like this:
+	[ ('someMesh.vtx[0]', [('joint1', 0.25), 'joint2', 0.75)]),
+	  ('someMesh.vtx[1]', [('joint1', 0.2), 'joint2', 0.7, 'joint3', 0.1)]),
+	  ... ]
+	'''
 
+	#convert the vertex component names into vertex indices
 	idxJointWeight = []
 	for vert, jointsAndWeights in vertJointWeightData:
 		idx = int( vert[ vert.rindex( '[' )+1:-1 ] )
 		idxJointWeight.append( (idx, jointsAndWeights) )
 
+	#get an MObject for the skin cluster node
 	skinCluster = apiExtensions.asMObject( skinCluster )
 	skinFn = MFnSkinCluster( skinCluster )
 
-
+	#construct a dict mapping joint names to joint indices
 	jApiIndices = {}
 	_tmp = MDagPathArray()
 	skinFn.influenceObjects( _tmp )
 	for n in range( _tmp.length() ):
 		jApiIndices[ str( _tmp[n].node() ) ] = skinFn.indexForInfluenceObject( _tmp[n] )
 
-
 	weightListP = skinFn.findPlug( "weightList" )
 	weightListObj = weightListP.attribute()
 	weightsP = skinFn.findPlug( "weights" )
-	tmpP = MPlug()
 
 	tmpIntArray = MIntArray()
-	baseFmtStr = str( skinCluster ) +'.weightList[%d]'
+	baseFmtStr = str( skinCluster ) +'.weightList[%d]'  #pre build this string: fewer string ops == faster-ness!
 
 	for vertIdx, jointsAndWeights in idxJointWeight:
 

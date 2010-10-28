@@ -5,7 +5,6 @@ from api import mel
 from maya.cmds import *
 from filesystem import Path, removeDupes, BreakException, getArgDefault
 from vectors import Vector
-from pymel.core import PyNode
 
 import maya.cmds as cmd
 import filesystem
@@ -106,7 +105,6 @@ class PlaceDesc(object):
 		if isinstance( p, basestring ): return p
 		if isinstance( p, int ): return self.WORLD
 		if p is None: return self.WORLD
-		if isinstance( p, PyNode ): return str( p )
 
 		return p
 	def getLocation( self, obj ):

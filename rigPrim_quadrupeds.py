@@ -68,12 +68,12 @@ def quadrupedIkFkLeg( thigh, knee, ankle, clavicle, **kw ):
 	delete( pointConstraint( clavicle, dummyGrp ) )
 	parent( dummyGrp, rootControl )
 
-	aimVector = BONE_AIM_AXIS * parityMult
-	sideClavAxis = getObjectAxisInDirection( clavCtrlSpace, Vector( (1, 0, 0) ) ).asVector()
-	sideCtrlAxis = getObjectAxisInDirection( legCtrl, Vector( (1, 0, 0) ) ).asVector()
+	aimVector = BONE_AIM_VECTOR * parityMult
+	sideClavAxis = getObjectAxisInDirection( clavCtrlSpace, BONE_AIM_VECTOR ).asVector()
+	sideCtrlAxis = getObjectAxisInDirection( legCtrl, BONE_AIM_VECTOR ).asVector()
 
-	aim = aimConstraint( legCtrl, clavCtrlSpace, aimVector=(1,0,0), upVector=sideClavAxis, worldUpVector=sideCtrlAxis, worldUpObject=legCtrl, worldUpType='objectrotation', mo=True )[ 0 ]
-	aimNode = aimConstraint( dummyGrp, clavCtrlSpace, weight=0, aimVector=(1,0,0) )[ 0 ]
+	aim = aimConstraint( legCtrl, clavCtrlSpace, aimVector=BONE_AIM_VECTOR, upVector=sideClavAxis, worldUpVector=sideCtrlAxis, worldUpObject=legCtrl, worldUpType='objectrotation', mo=True )[ 0 ]
+	aimNode = aimConstraint( dummyGrp, clavCtrlSpace, weight=0, aimVector=BONE_AIM_VECTOR )[ 0 ]
 
 	revNode = createNode( 'reverse' )
 	addAttr( clavCtrl, ln='autoMotion', at='float', min=0, max=1, dv=1 )

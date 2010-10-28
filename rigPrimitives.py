@@ -1,38 +1,63 @@
 
-from skeletonBuilderCore import *
-from rigPrim_base import __author__, RigPart, WorldPart, RigSubPart, PrimaryRigPart
-from rigPrim_bipedLimbs import IkFkArm, IkFkLeg
-from rigPrim_curves import *
-from rigPrim_hands import Hand
-from rigPrim_heads import Head
-from rigPrim_misc import ControlHierarchy, WeaponControlHierarchy
-from rigPrim_quadrupeds import QuadrupedIkFkLeg
-from rigPrim_root import Root
-from rigPrim_spines import FkSpine
+
+import sys
+import skeletonBuilder
+import baseRigPrimitive
+
+from filesystem import Path
+from skeletonBuilder import *
+from baseRigPrimitive import *
+
+__author__ = 'hamish@macaronikazoo.com'
+
+RIG_PART_SCRIPT_PREFIX = 'rigPrim_'
 
 
 ### !!! DO NOT IMPORT RIG SCRIPTS BELOW THIS LINE !!! ###
 
-#now populate a dictionary that associates the skeleton part classes with a list of valid rigging classes - this dict can be used to lookup a list of methods to expose to a user in a UI
-_rigMethodDict = {}
-for cls in RigPart.GetSubclasses():
-	try:
-		assoc = cls.SKELETON_PRIM_ASSOC
-	except AttributeError: continue
+def _iterRigPartScripts():
+	for p in sys.path:
+		p = Path( p )
+		if 'maya' in p:  #
+			for f in p.files():
+				if f.hasExtension( 'py' ):
+					if f.name().startswith( RIG_PART_SCRIPT_PREFIX ):
+						yield f
 
-	if assoc is None:
-		continue
+for f in _iterRigPartScripts():
+	__import__( f.name() )
 
-	for partCls in assoc:
+
+def _setupSkeletonPartRigMethods():
+	'''
+	sets up the rig method associations on the skeleton parts.  This is a list on each skeleton part containing
+	the rigging methods that are compatible with that skeleton part
+	'''
+
+	_rigMethodDict = {}
+	for cls in RigPart.GetSubclasses():
 		try:
-			_rigMethodDict[ partCls ].append( (cls.PRIORITY, cls) )
-		except KeyError:
-			_rigMethodDict[ partCls ] = [ (cls.PRIORITY, cls) ]
+			assoc = cls.SKELETON_PRIM_ASSOC
+		except AttributeError: continue
 
-for partCls, rigTypes in _rigMethodDict.iteritems():
-	rigTypes.sort()
-	rigTypes = [ rigType for priority, rigType in rigTypes ]
-	partCls.RigTypes = rigTypes
+		if assoc is None:
+			continue
+
+		for partCls in assoc:
+			if partCls is None:
+				continue
+
+			try:
+				_rigMethodDict[ partCls ].append( (cls.PRIORITY, cls) )
+			except KeyError:
+				_rigMethodDict[ partCls ] = [ (cls.PRIORITY, cls) ]
+
+	for partCls, rigTypes in _rigMethodDict.iteritems():
+		rigTypes.sort()
+		rigTypes = [ rigType for priority, rigType in rigTypes ]
+		partCls.RigTypes = rigTypes
+
+_setupSkeletonPartRigMethods()
 
 
 #end

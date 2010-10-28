@@ -208,7 +208,7 @@ def getMappingFromPreset( presetName ):
 	'''
 	parses a mapping file and returns the mapping dict
 	'''
-	p = findPreset( presetName, 'valve', 'mapping', LOCAL )
+	p = findPreset( presetName, 'zoo', 'mapping', LOCAL )
 	return p.read()
 
 

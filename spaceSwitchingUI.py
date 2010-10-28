@@ -7,7 +7,6 @@ import names
 import control
 import baseMelUI
 import spaceSwitching
-import bugReporterUI
 
 
 class ParentsScrollList(MelObjectScrollList):
@@ -199,7 +198,7 @@ class SpaceSwitchingWindow(BaseMelWindow):
 
 	DEFAULT_SIZE = 400, 350
 	DEFAULT_MENU = None
-	HELP_MENU = 'spaceSwitching', 'hamish@valvesoftware.com', 'https://intranet.valvesoftware.com/wiki/index.php/Space_Switching'
+	#HELP_MENU = 'spaceSwitching', 'hamish@macaronikazoo.com', None
 
 	FORCE_DEFAULT_SIZE = True
 

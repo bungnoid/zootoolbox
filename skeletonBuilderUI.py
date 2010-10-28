@@ -4,25 +4,40 @@ from maya import cmds as cmd
 from filesystem import Path
 from baseMelUI import *
 
+import os
 import api
 import names
+import skeletonBuilderPresets
 import rigPrimitives
-import rigPrim_base
+import baseRigPrimitive
 import rigUtils
 import control
+import meshUtils
 import baseMelUI
+import presetsUI
+import skinWeightsUI
 import spaceSwitchingUI
 
 Axis = rigUtils.Axis
 
-ui = None
+
+class Callback(object):
+	'''
+	stupid little callable object for when you need to "bake" temporary args into a
+	callback - useful mainly when creating callbacks for dynamicly generated UI items
+	'''
+	def __init__( self, func, *args, **kwargs ):
+		self.func = func
+		self.args = args
+		self.kwargs = kwargs
+	def __call__( self, *args ):
+		return self.func( *self.args, **self.kwargs )
+
 
 #stores UI build methods keyed by arg name
 UI_FOR_NAMED_RIG_ARGS = {}
 
-BaseSkeletonPart = rigPrimitives.BaseSkeletonPart
 SkeletonPart = rigPrimitives.SkeletonPart
-SkeletonPreset = rigPrimitives.SkeletonPreset
 
 ShapeDesc = control.ShapeDesc
 
@@ -77,9 +92,9 @@ class ListEditor(BaseMelWindow):
 
 class MelListEditorButton(MelButton):
 	def __init__( self, parent, *a, **kw ):
-		kw[ 'label' ] = 'define parents'
-		kw[ 'c' ] = self.openEditor
 		MelButton.__init__( self, parent, *a, **kw )
+		self.setChangeCB( self.openEditor )
+		self.setLabel( 'define parents' )
 	def setValue( self, value, executeChangeCB=False ):
 		self.value = value
 	def getValue( self ):
@@ -90,14 +105,63 @@ class MelListEditorButton(MelButton):
 		win = ListEditor( self.value, self )
 		win.show()
 
-
 #hook up list/tuple types to a button - we don't want a text scroll list showing up in the part UI, but a button to bring up said editor is fine
 UI_FOR_PY_TYPES[ list ] = MelListEditorButton
 UI_FOR_PY_TYPES[ tuple ] = MelListEditorButton
 
 
+class MelFileBrowser(MelHLayout):
+	def __init__( self, parent, *a, **kw ):
+		self.UI_filepath = MelTextField( self )
+		self.UI_browse = MelButton( self, l='browse', c=self.on_browse, w=50 )
+
+		self.setWeight( self.UI_browse, 0 )
+		self.layout()
+	def enable( self, state ):
+		self.UI_filepath.enable( state )
+		self.UI_browse.enable( state )
+	def setValue( self, value, executeChangeCB=False ):
+		'''
+		the value we recieve should be a fullpath - but we want to store is as a scene relative path
+		'''
+		value = Path( value )
+
+		#make sure it is actually an absolute path...
+		if value.isAbs():
+			curSceneDir = Path( cmd.file( q=True, sn=True ) ).up()
+			value = value - curSceneDir
+
+		self.UI_filepath.setValue( value, executeChangeCB )
+	def getValue( self ):
+		'''
+		return as an absolute path
+		'''
+		return Path( cmd.file( q=True, sn=True ) ).up() / self.UI_filepath.getValue()
+	def setChangeCB( self, cb ):
+		self.UI_filepath.setChangeCB( cb )
+
+	### EVENT HANDLERS ###
+	def on_browse( self, *a ):
+		curValue = self.getValue()
+		ext = curValue.getExtension() or 'txt'
+
+		if curValue.isFile():
+			curValue = curValue.up()
+		elif not curValue.isDir():
+			curValue = Path( cmd.file( q=True, sn=True ) ).up( 2 )
+
+		if not curValue.exists:
+			curValue = Path( '' )
+
+		filepath = cmd.fileDialog( directoryMask=curValue / ("/*.%s" % ext) )
+		if filepath:
+			self.setValue( filepath, True )
+
+baseMelUI.UI_FOR_PY_TYPES[ Path ] = MelFileBrowser
+
+
 class MelOptionMenu_SkeletonPart(MelOptionMenu):
-	PART_CLASS = BaseSkeletonPart
+	PART_CLASS = SkeletonPart
 
 	def __new__( cls, parent, *a, **kw ):
 		self = MelOptionMenu.__new__( cls, parent, *a, **kw )
@@ -119,7 +183,7 @@ class MelOptionMenu_SkeletonPart(MelOptionMenu):
 
 
 class MelOptionMenu_Arm(MelOptionMenu_SkeletonPart):
-	PART_CLASS = rigPrimitives.Arm
+	PART_CLASS = rigPrimitives.SkeletonPart.GetNamedSubclass( 'Arm' )
 
 
 class MelOptionMenu_Shape(MelOptionMenu):
@@ -166,8 +230,9 @@ class MelOptionMenu_Axis(MelOptionMenu):
 		return MelOptionMenu.setValue( self, value, executeChangeCB )
 
 
-baseMelUI.UI_FOR_PY_TYPES[ rigPrimitives.BaseSkeletonPart ] = MelOptionMenu_SkeletonPart
-baseMelUI.UI_FOR_PY_TYPES[ rigPrimitives.Arm ] = MelOptionMenu_Arm
+#define some UI mappings based on arg types/names...
+baseMelUI.UI_FOR_PY_TYPES[ rigPrimitives.SkeletonPart ] = MelOptionMenu_SkeletonPart
+baseMelUI.UI_FOR_PY_TYPES[ MelOptionMenu_Arm.PART_CLASS ] = MelOptionMenu_Arm
 baseMelUI.UI_FOR_PY_TYPES[ ShapeDesc ] = MelOptionMenu_Shape
 UI_FOR_NAMED_RIG_ARGS[ 'axis' ] = MelOptionMenu_Axis
 UI_FOR_NAMED_RIG_ARGS[ 'direction' ] = MelOptionMenu_Axis
@@ -189,7 +254,220 @@ class SeparatorLabelLayout(MelForm):
 		      ac=((self.UI_separator, 'left', 5, self.UI_label)) )
 
 
-class SkeletonPartCreateLayout(MelForm):
+class SkeletonPresetWindow(presetsUI.PresetWindow):
+	def __init__( self ):
+		presetsUI.PresetWindow.__init__( self, rigPrimitives.TOOL_NAME, ext=skeletonBuilderPresets.XTN )
+	def presetsCopied( self, presets ):
+		for layout in BuildingLayout.IterInstances():
+			layout.rePopulatePresets()
+	def presetsDeleted( self, presets ):
+		for layout in BuildingLayout.IterInstances():
+			layout.rePopulatePresets()
+	def presetsMoved( self, presets ):
+		for layout in BuildingLayout.IterInstances():
+			layout.rePopulatePresets()
+	def presetRenamed( self, preset, renamedPreset ):
+		for layout in BuildingLayout.IterInstances():
+			layout.rePopulatePresets()
+
+
+class SkeletonPresetLayout(MelHSingleStretchLayout):
+	BUTTON_LBL_TEMPLATE = 'Build a %s Preset'
+
+	def __new__( cls, parent, preset ):
+		return MelHSingleStretchLayout.__new__( cls, parent )
+	def __init__( self, parent, preset ):
+		MelHSingleStretchLayout.__init__( self, parent )
+		self.preset = preset
+
+		MelButton( self, l=names.camelCaseToNice( preset.name() ), c=self.on_load, w=160 )
+		spac = MelSpacer( self )
+		MelButton( self, l='Overwrite', c=self.on_overwrite, w=100 )
+		if preset.locale == presetsUI.LOCAL:
+			self.UI_publish = MelButton( self, l='Publish', c=self.on_publish, w=100 )
+
+		#MelButton( self, l='Delete', c=self.on_remove, w=100 )
+
+		self.setStretchWidget( spac )
+		self.layout()
+	def on_load( self, *a ):
+		skeletonBuilderPresets.loadPresetFile( self.preset )
+	def on_overwrite( self, *a ):
+		BUTTONS = OK, CANCEL = 'Ok', 'Cancel'
+		ret = confirmDialog( t='Are You Sure?', m='Are you sure you want to overwrite the preset %s?' % self.preset.name(), b=BUTTONS, db=CANCEL )
+		if ret == CANCEL:
+			return
+
+		skeletonBuilderPresets.writePresetToFile( self.preset )
+	def on_publish( self, *a ):
+		raise NotImplemented( "you need to define this yourself!" )
+		#movedPreset = self.preset.move()
+		#self.preset = movedPreset
+		#self.UI_publish.delete()
+		#self.layout()
+
+		#p4 = P4File()
+		#change = p4.getChangeNumFromDesc( '%s skeleton builder preset publish submission' % movedPreset.name() )
+		#p4.setChange( change, movedPreset )
+		#p4.submit( change )
+		#print 'submitted %s' % movedPreset
+	def on_remove( self, *a ):
+		pass
+
+
+class SkeletonPartOptionMenu(MelOptionMenu):
+	DYNAMIC = False
+	STATIC_CHOICES = [ partCls.__name__ for partCls in SkeletonPart.GetSubclasses() if partCls.AVAILABLE_IN_UI ]
+
+
+class ManualPartCreationLayout(MelHSingleStretchLayout):
+	def __init__( self, parent, *a, **kw ):
+		MelHSingleStretchLayout.__init__( self, parent, *a, **kw )
+
+		self.UI_partType = SkeletonPartOptionMenu( self )
+
+		self.UI_convert = MelButton( self, l='Convert Selection To Skeleton Part', c=self.on_convert )
+		self.setSelectionChangeCB( self.on_selectionChange )
+
+		self.setStretchWidget( self.UI_convert )
+		self.layout()
+
+		self.on_selectionChange()
+
+	### EVENT HANDLERS ###
+	def on_convert( self, *a ):
+		partTypeStr = self.UI_partType.getValue()
+		partType = SkeletonPart.GetNamedSubclass( partTypeStr )
+		sel = cmd.ls( sl=True )
+		newPart = partType( sel )
+		newPart.convert( {} )
+		self.sendEvent( 'manualPartCreated', newPart )
+	def on_selectionChange( self, *a ):
+		sel = cmd.ls( sl=True )
+		if not sel:
+			self.UI_convert.disable()
+		else:
+			self.UI_convert.enable()
+
+
+class CommonButtonsLayout(MelColumn):
+	def __init__( self, parent ):
+		MelColumn.__init__( self, parent, rowSpacing=4, adj=True )
+
+		### SETUP PART DRIVING RELATIONSHIPS
+		SeparatorLabelLayout( self, 'Part Connection Controls' )
+		buttonForm = MelHLayout( self )
+		MelButton( buttonForm, l='Drive All Parts', c=self.on_allDrive )
+		MelButton( buttonForm, l='Drive Parts With First Selected', c=self.on_drive )
+		MelButton( buttonForm, l='Break Driver For Selected', c=self.on_breakDrive )
+		MelButton( buttonForm, l='Break All Drivers', c=self.on_breakAllDrive )
+		buttonForm.layout()
+
+
+		### SETUP VISUALIZATION CONTROLS
+		SeparatorLabelLayout( self, 'Visualization' )
+		buttonForm = MelHLayout( self )
+		MelButton( buttonForm, l='Visualization ON', c=self.on_visOn )
+		MelButton( buttonForm, l='Visualization OFF', c=self.on_visOff )
+		buttonForm.layout()
+
+
+		### SETUP ALIGNMENT CONTROL BUTTONS
+		SeparatorLabelLayout( self, 'Part Alignment' )
+		buttonForm = MelHLayout( self )
+		MelButton( buttonForm, l='Re-Align Selected Part', c=self.on_reAlign )
+		MelButton( buttonForm, l='Re-Align ALL Parts', c=self.on_reAlignAll )
+		MelButton( buttonForm, l='Finalize Alignment', c=self.on_finalize )
+		buttonForm.layout()
+
+
+		### SETUP SKINNING CONTROL BUTTONS
+		skinFrame = MelFrameLayout( self, l='Skinning Tools', cl=True, cll=True, bs='etchedOut' )
+		skinCol = MelColumnLayout( skinFrame )
+
+		buttonForm = MelHLayout( skinCol )
+		self.UI_skinOff = MelButton( buttonForm, l='Turn Skinning Off', c=self.on_skinOff )
+		self.UI_skinOn = MelButton( buttonForm, l='Turn Skinning On', c=self.on_skinOn )
+		MelButton( buttonForm, l='Reset All Skin Clusters', c=self.on_resetSkin )
+		buttonForm.layout()
+		self.updateSkinButtons()
+
+
+		### SETUP VOLUME BUILDER CONTROL BUTTONS
+		SeparatorLabelLayout( skinCol, 'Volume Tools' )
+		buttonForm = MelHLayout( skinCol )
+		MelButton( buttonForm, l='Create Volumes', c=self.on_buildVolumes )
+		MelButton( buttonForm, l='Extract Selected To Volume', c=self.on_extractSelected )
+		MelButton( buttonForm, l='Fit Selected Volumes', c=self.on_fitVolumes )
+		MelButton( buttonForm, l='Remove Volumes', c=self.on_removeVolumes )
+		buttonForm.layout()
+
+		buttonForm = MelHLayout( skinCol )
+		MelButton( buttonForm, l='Open Skin Weights Tool', c=lambda *a: skinWeightsUI.SkinWeightsWindow() )
+		MelButton( buttonForm, l='Generate Skin Weights', c=self.on_generateWeights )
+		buttonForm.layout()
+
+		self.setSceneChangeCB( self.on_sceneOpen )
+	def updateSkinButtons( self ):
+		state = rigUtils.getSkinClusterEnableState()
+		self.UI_skinOn( e=True, en=not state )
+		self.UI_skinOff( e=True, en=state )
+
+	def on_allDrive( self, e=None ):
+		rigPrimitives.setupAutoMirror()
+	def on_drive( self, e=None ):
+		selParts = rigPrimitives.getPartsFromObjects( cmd.ls( sl=True ) )
+		if len( selParts ) <= 1:
+			print 'WARNING :: please select two or more parts - the first part selected will drive consequent parts'
+			return
+
+		firstPart = selParts.pop( 0 )
+		for p in selParts:
+			firstPart.driveOtherPart( p )
+	def on_breakDrive( self, e=None ):
+		for p in rigPrimitives.getPartsFromObjects( cmd.ls( sl=True ) ):
+			p.breakDriver()
+	def on_breakAllDrive( self, e=None ):
+		for p in rigPrimitives.SkeletonPart.IterAllParts():
+			p.breakDriver()
+	def on_reAlign( self, e=None ):
+		rigPrimitives.realignSelectedParts()
+	def on_reAlignAll( self, e=None ):
+		rigPrimitives.realignAllParts()
+	def on_finalize( self, e=None ):
+		rigPrimitives.finalizeAllParts()
+	def on_visOn( self, e=None ):
+		for p in rigPrimitives.SkeletonPart.IterAllParts():
+			p.visualize()
+	def on_visOff( self, e=None ):
+		for p in rigPrimitives.SkeletonPart.IterAllParts():
+			p.unvisualize()
+	def on_skinOff( self, e=None ):
+		rigUtils.disableSkinClusters()
+		self.updateSkinButtons()
+	def on_skinOn( self, e=None ):
+		rigUtils.enableSkinClusters()
+		self.updateSkinButtons()
+	@api.d_showWaitCursor
+	def on_resetSkin( self, e=None ):
+		for sc in ls( typ='skinCluster' ):
+			rigUtils.resetSkinCluster( sc )
+	def on_buildVolumes( self, e=None ):
+		rigPrimitives.buildAllVolumes()
+	def on_fitVolumes( self, e=None ):
+		rigPrimitives.shrinkWrapSelection()
+	def on_removeVolumes( self, e=None ):
+		rigPrimitives.removeAllVolumes()
+	def on_extractSelected( self, e=None ):
+		cmd.select( meshUtils.extractFaces( cmd.ls( sl=True, fl=True ) ) )
+		api.mel.setSelectMode( "objects", "Objects" )
+	def on_generateWeights( self, e=None ):
+		rigPrimitives.volumesToSkinning()
+	def on_sceneOpen( self, *a ):
+		self.updateSkinButtons()
+
+
+class BuildPartLayout(MelForm):
 	'''
 	ui for single skeleton part creation
 	'''
@@ -209,7 +487,7 @@ class SkeletonPartCreateLayout(MelForm):
 
 		#now populate the ui for the part's args
 		self.kwarg_UIs = {}  #keyed by arg name
-		kwargList = partClass.GetDefaultBuildKwargs()
+		kwargList = partClass.GetDefaultBuildKwargList()
 		self.UI_argsLayout = MelForm( self )
 
 		#everything has a parent attribute, so build it first
@@ -224,7 +502,7 @@ class SkeletonPartCreateLayout(MelForm):
 
 			#determine the function to use for building the UI for the arg
 			buildMethodFromName = UI_FOR_NAMED_RIG_ARGS.get( arg, None )
-			buildMethodFromType = baseMelUI.UI_FOR_PY_TYPES.get( type( default ), baseMelUI.MelTextField )
+			buildMethodFromType = getBuildUIMethodForObject( default ) or MelTextField
 
 			buildMethod = buildMethodFromName or buildMethodFromType
 
@@ -270,59 +548,7 @@ class SkeletonPartCreateLayout(MelForm):
 		self.builderUI.rePopulate()
 
 
-class SkeletonPresetLayout(SkeletonPartCreateLayout):
-	BUTTON_LBL_TEMPLATE = 'Build a %s Preset'
-
-	def getKwargDict( self ):
-		kwargs = {}
-		for arg, ui in self.kwarg_UIs.iteritems():
-			kwargs[ arg ] = ui.getValue()
-
-		kwargs[ 'scale' ] = self.builderUI.getScale()
-
-		return kwargs
-	def on_create( self, e ):
-		kwargs = self.getKwargDict()
-		self.partClass( **kwargs )
-		self.builderUI.rePopulate()
-
-
-class SkeletonPartOptionMenu(MelOptionMenu):
-	DYNAMIC = False
-	STATIC_CHOICES = [ partCls.__name__ for partCls in BaseSkeletonPart.GetSubclasses() if partCls.AVAILABLE_IN_UI ]
-
-
-class ManualPartCreationLayout(MelHSingleStretchLayout):
-	def __init__( self, parent, *a, **kw ):
-		MelHSingleStretchLayout.__init__( self, parent, *a, **kw )
-
-		self.UI_partType = SkeletonPartOptionMenu( self )
-
-		self.UI_convert = MelButton( self, l='Convert Selection To Skeleton Part', c=self.on_convert )
-		self.setSelectionChangeCB( self.on_selectionChange )
-
-		self.setStretchWidget( self.UI_convert )
-		self.layout()
-
-		self.on_selectionChange()
-
-	### EVENT HANDLERS ###
-	def on_convert( self, *a ):
-		partTypeStr = self.UI_partType.getValue()
-		partType = SkeletonPart.GetNamedSubclass( partTypeStr )
-		sel = cmd.ls( sl=True )
-		newPart = partType( sel )
-		newPart.on_manualCreation()
-		self.sendEvent( 'manualPartCreated', newPart )
-	def on_selectionChange( self, *a ):
-		sel = cmd.ls( sl=True )
-		if not sel:
-			self.UI_convert.disable()
-		else:
-			self.UI_convert.enable()
-
-
-class BuilderLayout(MelScrollLayout):
+class BuildingLayout(MelScrollLayout):
 	'''
 	ui for skeleton part creation
 	'''
@@ -347,13 +573,14 @@ class BuilderLayout(MelScrollLayout):
 		cmd.text( l='Create Skeleton from Preset', align='left' )
 		cmd.text( l='', height=5 )
 
-		self.UI_list = []
-
 		### BUILD THE PRESET CREATION BUTTONS ###
-		presets = SkeletonPreset.GetSubclasses()
-		for preset in presets:
-			if preset.AVAILABLE_IN_UI:
-				self.UI_list.append( SkeletonPresetLayout( self.UI_col, preset, self ) )
+		self.UI_presetsCol = MelColumnLayout( self.UI_col )
+		self.rePopulatePresets()
+
+		hLayout = MelHLayout( self.UI_col )
+		MelButton( hLayout, l='Create Preset', c=self.on_createPreset )
+		MelButton( hLayout, l='Manage Presets', c=self.on_managePresets )
+		hLayout.layout()
 
 		setParent( self.UI_col )
 		cmd.separator( horizontal=True )
@@ -361,131 +588,44 @@ class BuilderLayout(MelScrollLayout):
 		cmd.text( l='', height=5 )
 
 		### BUILD THE PART CREATION BUTTONS ###
-		parts = BaseSkeletonPart.GetSubclasses()
+		self.UI_list = []
+		parts = SkeletonPart.GetSubclasses()
 		for part in parts:
 			if part.AVAILABLE_IN_UI:
-				self.UI_list.append( SkeletonPartCreateLayout( self.UI_col, part, self ) )
+				self.UI_list.append( BuildPartLayout( self.UI_col, part, self ) )
 
 		### BUILD UI FOR MANUAL PART CREATION ###
 		MelSeparator( self.UI_col )
 		MelLabel( self.UI_col, l='Manually Create Part From Existing Joints', align='left' )
 		MelLabel( self.UI_col, l='', height=2 )
 		ManualPartCreationLayout( self.UI_col )
-
-		self.on_guess()
 	def rePopulate( self ):
 		for ui in self.UI_list:
 			ui.rePopulate()
+	def rePopulatePresets( self ):
+		self.UI_presetsCol.clear()
+
+		for locale, presets in skeletonBuilderPresets.listPresets().iteritems():
+			for preset in presets:
+				SkeletonPresetLayout( self.UI_presetsCol, preset )
 	def getScale( self ):
 		return self.UI_scale.getValue()
 	def on_guess( self, e=None ):
 		scale = rigPrimitives.getDefaultScale()
 		self.UI_scale.setValue( scale )
+	def on_createPreset( self, *a ):
+		BUTTONS = OK, CANCEL = 'Ok', 'Cancel'
+		ret = promptDialog( t='Preset Name', m='Enter the name for the preset', b=BUTTONS, db=OK )
+		if ret == OK:
+			name = promptDialog( q=True, tx=True )
+			assert name, "Please enter a name!"
+			preset = skeletonBuilderPresets.writePreset( name )
+			SkeletonPresetLayout( self.UI_presetsCol, preset )
+	def on_managePresets( self, *a ):
+		SkeletonPresetWindow()
 
 
-class CommonButtonsLayout(MelColumn):
-	def __init__( self, parent ):
-		MelColumn.__init__( self, parent, rowSpacing=4, adj=True )
-
-		### SETUP PART DRIVING RELATIONSHIPS
-		SeparatorLabelLayout( self, 'Part Connection Controls' )
-		buttonForm = MelForm( self )
-		a = MelButton( buttonForm, l='Drive Parts With First Selected Part', c=self.on_drive )
-		b = MelButton( buttonForm, l='Break Driver For Selected Parts', c=self.on_breakDrive )
-
-		buttonForm( e=True,
-		            af=((a, 'left', 0),
-		                (b, 'right', 0)),
-		            ap=((a, 'right', 0, 50),
-		                (b, 'left', 0, 50)) )
-
-
-		### SETUP ALIGNMENT CONTROL BUTTONS
-		SeparatorLabelLayout( self, 'Part Alignment' )
-		buttonForm = MelForm( self )
-		a = MelButton( buttonForm, l='Re-Align Selected Part', c=self.on_reAlign )
-		b = MelButton( buttonForm, l='Re-Align ALL Parts', c=self.on_reAlignAll )
-		c = MelButton( buttonForm, l='Finalize Alignment', c=self.on_finalize )
-
-		buttonForm( e=True,
-		            af=((a, 'left', 0),
-		                (c, 'right', 0)),
-		            ap=((a, 'right', 0, 33),
-		                (b, 'left', 0, 33),
-		                (b, 'right', 0, 67),
-		                (c, 'left', 0, 67)) )
-
-
-		### SETUP VISUALIZATION CONTROLS
-		SeparatorLabelLayout( self, 'Visualization' )
-		buttonForm = MelForm( self )
-		a = MelButton( buttonForm, l='Visualization ON', c=self.on_visOn )
-		b = MelButton( buttonForm, l='Visualization OFF', c=self.on_visOff )
-
-		buttonForm( e=True,
-		            af=((a, 'left', 0),
-		                (b, 'right', 0)),
-		            ap=((a, 'right', 0, 50),
-		                (b, 'left', 0, 50)) )
-
-
-		### SETUP SKINNING CONTROL BUTTONS
-		SeparatorLabelLayout( self, 'Skinning Tools' )
-		buttonForm = MelForm( self )
-		a = self.UI_skinOff = MelButton( buttonForm, l='Turn Skinning Off', c=self.on_skinOff )
-		b = self.UI_skinOn = MelButton( buttonForm, l='Turn Skinning On', c=self.on_skinOn )
-		c = MelButton( buttonForm, l='Reset All Skin Clusters', c=self.on_resetSkin )
-		self.updateSkinButtons()
-
-		buttonForm( e=True,
-		            af=((a, 'left', 0),
-		                (c, 'right', 0)),
-		            ap=((a, 'right', 0, 33),
-		                (b, 'left', 0, 33),
-		                (b, 'right', 0, 67),
-		                (c, 'left', 0, 67)) )
-	def updateSkinButtons( self ):
-		state = rigUtils.getSkinClusterEnableState()
-		self.UI_skinOn( e=True, en=not state )
-		self.UI_skinOff( e=True, en=state )
-
-	def on_drive( self, e=None ):
-		selParts = rigPrimitives.getPartsFromObjects( cmd.ls( sl=True ) )
-		if len( selParts ) <= 1:
-			print 'WARNING :: please select two or more parts - the first part selected will drive consequent parts'
-			return
-
-		firstPart = selParts.pop( 0 )
-		for p in selParts:
-			firstPart.driveOtherPart( p )
-	def on_breakDrive( self, e=None ):
-		for p in rigPrimitives.getPartsFromObjects( cmd.ls( sl=True ) ):
-			p.breakDriver()
-	def on_reAlign( self, e=None ):
-		rigPrimitives.realignSelectedParts()
-	def on_reAlignAll( self, e=None ):
-		rigPrimitives.realignAllParts()
-	def on_finalize( self, e=None ):
-		rigPrimitives.finalizeAllParts()
-	def on_visOn( self, e=None ):
-		for p in rigPrimitives.SkeletonPart.IterAllParts():
-			p.visualize()
-	def on_visOff( self, e=None ):
-		for p in rigPrimitives.SkeletonPart.IterAllParts():
-			p.unvisualize()
-	def on_skinOff( self, e=None ):
-		rigUtils.disableSkinClusters()
-		self.updateSkinButtons()
-	def on_skinOn( self, e=None ):
-		rigUtils.enableSkinClusters()
-		self.updateSkinButtons()
-	@api.d_showWaitCursor
-	def on_resetSkin( self, e=None ):
-		for sc in ls( typ='skinCluster' ):
-			rigUtils.resetSkinCluster( sc )
-
-
-class SkeletonPartEditingLayout(MelForm):
+class EditPartLayout(MelForm):
 	ARGS_TO_HIDE = [ 'parent', 'partScale', 'idx' ]
 
 	def __new__( cls, parent, part ):
@@ -504,7 +644,7 @@ class SkeletonPartEditingLayout(MelForm):
 		#remove any existing children
 		self.clear()
 		part = self.part
-		assert isinstance( part, BaseSkeletonPart )
+		assert isinstance( part, SkeletonPart )
 
 		#pimp out the UI
 		lbl = MelButton( self, l=part.getPartName(), w=140, c=self.on_select )
@@ -522,9 +662,9 @@ class SkeletonPartEditingLayout(MelForm):
 
 			#determine the function to use for building the UI for the arg
 			buildMethodFromName = UI_FOR_NAMED_RIG_ARGS.get( arg, None )
-			buildMethodFromType = baseMelUI.UI_FOR_PY_TYPES.get( type( argValue ), baseMelUI.MelTextField )
+			buildMethodFromType = getBuildUIMethodForObject( argValue ) or MelTextField
 
-			buildMethod = buildMethodFromName or buildMethodFromType
+			buildMethod = buildMethodFromName or buildMethodFromType  #prioritize the method from name over the method from type
 
 			argWidget = buildMethod( argsForm )
 			argWidget.setValue( argValue )
@@ -566,7 +706,7 @@ class SkeletonPartEditingLayout(MelForm):
 		self.part.rebuild( **self.getBuildKwargs() )
 		self.populate()
 	def on_select( self, e=None ):
-		cmd.select( self.part.base )
+		cmd.select( self.part.items )
 
 
 class EditingLayout(MelScrollLayout):
@@ -578,11 +718,11 @@ class EditingLayout(MelScrollLayout):
 		col = MelColumn( self, rowSpacing=4, adj=True )
 		self.UI_partForms = []
 		for part in SkeletonPart.IterAllPartsInOrder():
-			partRigForm = SkeletonPartEditingLayout( col, part )
+			partRigForm = EditPartLayout( col, part )
 			self.UI_partForms.append( partRigForm )
 
 
-class SkeletonPartRiggingLayout(MelForm):
+class RigPartLayout(MelForm):
 	'''
 	ui for single rig primitive
 	'''
@@ -663,14 +803,14 @@ class SkeletonPartRiggingLayout(MelForm):
 
 		zeroWeightTypes = MelCheckBox, MelOptionMenu
 
-		argNamesAndDefaults = rigClass.GetDefaultBuildKwargs()
+		argNamesAndDefaults = rigClass.GetDefaultBuildKwargList()
 		for arg, default in argNamesAndDefaults:
 			argValue = rigKwargs.get( arg, default )
 			argLbl = MelLabel( argsForm, label=names.camelCaseToNice( arg ) )
 
 			#determine the function to use for building the UI for the arg
 			buildMethodFromName = UI_FOR_NAMED_RIG_ARGS.get( arg, None )
-			buildMethodFromType = baseMelUI.UI_FOR_PY_TYPES.get( type( default ), baseMelUI.MelTextField )
+			buildMethodFromType = getBuildUIMethodForObject( default ) or MelTextField
 
 			buildMethod = buildMethodFromName or buildMethodFromType
 
@@ -717,7 +857,7 @@ class SkeletonPartRiggingLayout(MelForm):
 	def on_argCB( self, e=None ):
 		self.part.setRigKwargs( self.getRigKwargs() )
 	def on_select( self, e=None ):
-		cmd.select( self.part.base )
+		cmd.select( self.part.items )
 	def on_manualRig( self, e=None ):
 		rigPrimitives.finalizeAllParts()
 		self.part.rig()
@@ -739,7 +879,6 @@ class RiggingLayout(MelForm):
 		buttonParent = self.UI_buttons
 		setParent( buttonParent )
 		optsLbl = MelLabel( buttonParent, label='Rig Build Options', align='left' )
-		#optsLbl.bold( True )
 
 		buildRigForm = MelForm( buttonParent )
 		self.UI_reference = MelCheckBox( buildRigForm, label='reference model' )
@@ -769,7 +908,7 @@ class RiggingLayout(MelForm):
 
 		self.UI_partForms = []
 		for part in SkeletonPart.IterAllPartsInOrder():
-			partRigForm = SkeletonPartRiggingLayout( col, part )
+			partRigForm = RigPartLayout( col, part )
 			self.UI_partForms.append( partRigForm )
 	def on_buildRig( self, e=None ):
 		autoFinalize = True
@@ -781,23 +920,16 @@ class RiggingLayout(MelForm):
 				api.doConfirm( t='Scene not saved!', m="Looks like your current scene isn't saved\n\nPlease save it first so I know where to save the rig.  thanks!", b=('OK',), db='OK' )
 				return
 
-		prefix = rigPrimitives.helpers.stripKnownAssetSuffixes( curScene.name() )
-
-		ret, prefix = api.doPrompt( t='enter name', m='enter the name of the character', tx=prefix, b=('OK', 'Cancel'), db='OK' )
-		if ret == 'OK':
-			if not prefix:
-				raise rigPrimitives.SkeletonError( "Please enter a valid prefix for the character!" )
-
-			rigPrimitives.buildRigForModel( None, autoFinalize, referenceModel )
+		rigPrimitives.buildRigForModel( None, autoFinalize, referenceModel )
 
 
-class SkeletonTabLayout(MelTabLayout):
+class CreateEditRigTabLayout(MelTabLayout):
 	def __init__( self, parent, *a, **kw ):
 		MelTabLayout.__init__( self, parent, *a, **kw )
 
 		### THE SKELETON CREATION TAB
 		insetForm = self.SZ_skelForm = MelForm( self )
-		self.UI_builder = ed = BuilderLayout( insetForm )
+		self.UI_builder = ed = BuildingLayout( insetForm )
 		self.UI_commonButtons = bts = CommonButtonsLayout( insetForm )
 
 		insetForm( e=True,
@@ -841,6 +973,7 @@ class SkeletonTabLayout(MelTabLayout):
 		self.setLabel( 2, 'create rig' )
 
 		self.setSceneChangeCB( self.on_sceneOpen )
+		rigPrimitives.skeletonBuilderConversion.convertOldParts()
 
 	### EVENT HANDLERS ###
 	def on_change( self ):
@@ -850,6 +983,7 @@ class SkeletonTabLayout(MelTabLayout):
 			self.UI_rigger.populate()
 	def on_sceneOpen( self, *a ):
 		self.setSelectedTabIdx( 0 )
+		rigPrimitives.skeletonBuilderConversion.convertOldParts()
 
 
 class SkeletonBuilderWindow(BaseMelWindow):
@@ -865,14 +999,19 @@ class SkeletonBuilderWindow(BaseMelWindow):
 
 	def __init__( self ):
 		filesystem.reportUsageToAuthor( rigPrimitives.__author__ )
-		self.editor = SkeletonTabLayout( self )
+		self.editor = CreateEditRigTabLayout( self )
 
 		tMenu = self.getMenu( 'Tools' )
 		cmd.menu( tMenu, e=True, pmc=self.buildToolsMenu )
 
+		dMenu = self.getMenu( 'Dev' )
+		cmd.menu( dMenu, e=True, pmc=self.buildDevMenu )
+
 		#close related windows...
 		RigBuilderWindow.Close()
 		ControlBuildingWindow.Close()
+		UserAlignListerWindow.Close()
+		PartExplorerWindow.Close()
 
 		self.show()
 	def buildToolsMenu( self,  *a ):
@@ -881,28 +1020,155 @@ class SkeletonBuilderWindow(BaseMelWindow):
 
 		enableState = rigUtils.getSkinClusterEnableState()
 
-		MelMenuItem( menu, l='Enable Skin Clusters', cb=enableState, c=self.on_enable )
-		MelMenuItem( menu, l='Disable Skin Clusters', cb=not enableState, c=self.on_disable )
-		MelMenuItemDiv( menu )
-		MelMenuItem( menu, l='Reset Skin Clusters', c=self.on_resetSkins )
-		MelMenuItemDiv( menu )
 		MelMenuItem( menu, l='Space Switching Tool', c=lambda *a: spaceSwitchingUI.SpaceSwitchingWindow() )
 		MelMenuItem( menu, l='Stand Alone Rig Builder Tool', c=lambda *a: RigBuilderWindow() )
 		MelMenuItem( menu, l='Control Creation Tool', c=lambda *a: ControlBuildingWindow() )
+		MelMenuItemDiv( menu )
+		MelMenuItem( menu, l='Mark Selected As User Aligned', c=self.on_markUserAligned )
+		MelMenuItem( menu, l='Clear User Aligned On Selected', c=self.on_clearUserAligned )
+		MelMenuItem( menu, l='User Aligned Editor', c=lambda *a: UserAlignListerWindow() )
+		MelMenuItemDiv( menu )
+		MelMenuItem( menu, l='Clean My Huge Rig', c=lambda *a: rigPrimitives.cleanMeshControls() )
+	def buildDevMenu( self, *a ):
+		menu = self.getMenu( 'Dev' )
+		menu.clear()
 
-		def debugToggle( val ):
-			rigPrim_base._PART_DEBUG_MODE = val
+		MelMenuItem( menu, l='Skeleton Part Code Explorer', c=lambda *a: PartExplorerWindow() )
+		MelMenuItemDiv( menu )
+		MelMenuItem( menu, l='Reboot Tool', c=self.on_reboot )
 
-		MelMenuItem( menu, l='DEBUG MODE', cb=rigPrim_base._PART_DEBUG_MODE, c=debugToggle )
-	def on_resetSkins( self, e=None ):
-		for sc in cmd.ls( typ='skinCluster' ):
-			rigUtils.resetSkinCluster( sc )
-	def on_enable( self, e=None ):
-		rigUtils.enableSkinClusters()
-	def on_disable( self, e=None ):
-		rigUtils.disableSkinClusters()
+	### EVENT HANDLERS ###
+	def on_markUserAligned( self, *a ):
+		for j in cmd.ls( sl=True, type='joint' ) or []:
+			rigPrimitives.setAlignSkipState( j, True )
+	def on_clearUserAligned( self, *a ):
+		for j in cmd.ls( sl=True, type='joint' ) or []:
+			rigPrimitives.setAlignSkipState( j, False )
+	def on_reboot( self, *a ):
+		self.close()
+		import reloadMayaTools
+		reloadMayaTools.flushMaya()
+		import skeletonBuilderUI
+		skeletonBuilderUI.SkeletonBuilderWindow()
 
 SkeletonBuilderUI = SkeletonBuilderWindow
+
+
+class PartExplorerLayout(MelTabLayout):
+	def __init__( self, parent ):
+		MelTabLayout.__init__( self, parent )
+
+		#do skeleton parts
+		skeletonPartScroll = MelScrollLayout( self )
+		theCol = MelColumnLayout( skeletonPartScroll )
+
+		def getFile( cls ):
+			clsFile = Path( inspect.getfile( cls ) )
+			if clsFile.setExtension( 'py' ).exists:
+				return clsFile.setExtension( 'py' )
+
+			return clsFile
+
+		for cls in SkeletonPart.IterSubclasses():
+			clsFile = getFile( cls )
+
+			col = MelColumnLayout( theCol )
+
+			MelSeparator( col, h=5 )
+
+			hLayout = MelHSingleStretchLayout( col )
+			MelLabel( hLayout, l=cls.GetPartName(), align='left' ).bold( True )
+			MelSpacer( hLayout, w=10 )
+			lbl = MelLabel( hLayout, l=clsFile, align='left' )
+			hLayout.setStretchWidget( lbl )
+			hLayout.layout()
+
+			hLayout = MelHLayout( col )
+			MelButton( hLayout, l='Explore To', c=Callback( api.mel.zooExploreTo, clsFile ), h=20 )
+			MelButton( hLayout, l='Edit', c=Callback( os.system, 'start %s' % clsFile ), h=20 )
+			hLayout.layout()
+
+		#do rig parts
+		rigPartScroll = MelScrollLayout( self )
+		theCol = MelColumnLayout( rigPartScroll )
+
+		for cls in rigPrimitives.RigPart.IterSubclasses():
+			clsFile = getFile( cls )
+
+			col = MelColumnLayout( theCol )
+
+			MelSeparator( col, h=5 )
+
+			hLayout = MelHSingleStretchLayout( col )
+			MelLabel( hLayout, l=cls.GetPartName(), align='left' ).bold( True )
+			MelSpacer( hLayout, w=10 )
+			lbl = MelLabel( hLayout, l=clsFile, align='left' )
+			hLayout.setStretchWidget( lbl )
+			hLayout.layout()
+
+			hLayout = MelHLayout( col )
+			MelButton( hLayout, l='Explore To', c=Callback( api.mel.zooExploreTo, clsFile ), h=20 )
+			MelButton( hLayout, l='Edit', c=Callback( os.system, 'start %s' % clsFile ), h=20 )
+			hLayout.layout()
+
+		#setup labels
+		self.setLabel( 0, 'Skeleton Parts' )
+		self.setLabel( 1, 'Rig Parts' )
+	def on_change( self ):
+		self.sendEvent( 'layout' )
+
+
+class PartExplorerWindow(BaseMelWindow):
+	WINDOW_NAME = 'skeletonBuilderPartExplorer'
+	WINDOW_TITLE = '%s: Part Code Explorer' % SkeletonBuilderWindow.WINDOW_TITLE
+
+	DEFAULT_MENU = None
+
+	DEFAULT_SIZE = 450, 250
+	FORCE_DEFAULT_SIZE = True
+
+	def __init__( self ):
+		PartExplorerLayout( self )
+		self.show()
+		self.layout()
+
+
+class UserAlignListerLayout(MelVSingleStretchLayout):
+	def __init__( self, parent ):
+		def itemAsStr( item ):
+			if rigPrimitives.getAlignSkipState( item ):
+				return '* %s' % item
+
+			return '  %s' % item
+
+		UI_itemList = MelObjectScrollList( self )
+		UI_itemList.itemAsStr = itemAsStr
+
+		for part in SkeletonPart.IterAllPartsInOrder():
+			for item in part:
+				UI_itemList.append( item )
+
+		hLayout = MelHLayout( self )
+		MelButton( hLayout, l='Mark As User Aligned' )
+		MelButton( hLayout, l='Clear User Aligned' )
+		hLayout.layout()
+
+		self.setStretchWidget( UI_itemList )
+		self.layout()
+
+
+class UserAlignListerWindow(BaseMelWindow):
+	WINDOW_NAME = 'skeletonBuilderUserAlignedJointsWindow'
+	WINDOW_TITLE = '%s: User Aligned Joints' % SkeletonBuilderWindow.WINDOW_TITLE
+
+	DEFAULT_MENU = None
+
+	DEFAULT_SIZE = 350, 200
+
+	def __init__( self ):
+		self.setSceneChangeCB( lambda: self.close() )  #close on scene load...
+		UserAlignListerLayout( self )
+		self.show()
 
 
 def load():
@@ -939,7 +1205,7 @@ class RigBuilderLayout(MelVSingleStretchLayout):
 		for part in SkeletonPart.IterAllPartsInOrder():
 			self.appendNewPart( part )
 	def appendNewPart( self, newPart ):
-		partLayout = SkeletonPartRiggingLayout( self.SZ_partLayout, newPart )
+		partLayout = RigPartLayout( self.SZ_partLayout, newPart )
 		self.UI_partLayouts.append( partLayout )
 	def manualPartCreated( self, newPart ):
 		self.appendNewPart( newPart )
@@ -965,7 +1231,7 @@ class RigBuilderLayout(MelVSingleStretchLayout):
 
 class RigBuilderWindow(BaseMelWindow):
 	WINDOW_NAME = 'rigBuilderTool'
-	WINDOW_TITLE = 'Manual Rig Builder Tool'
+	WINDOW_TITLE = '%s: Manual Rig Builder Tool' % SkeletonBuilderWindow.WINDOW_TITLE
 
 	DEFAULT_SIZE = 475, 300
 	DEFAULT_MENU = None
@@ -1036,7 +1302,7 @@ class ControlBuildingLayout(MelForm):
 
 class ControlBuildingWindow(BaseMelWindow):
 	WINDOW_NAME = 'controlBuildingWindow'
-	WINDOW_TITLE = 'Control Builder'
+	WINDOW_TITLE = '%s: Control Builder' % SkeletonBuilderWindow.WINDOW_TITLE
 
 	DEFAULT_SIZE = 400, 350
 	DEFAULT_MENU = 'Help'

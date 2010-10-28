@@ -1,14 +1,13 @@
+
 from cacheDecorators import *
 
 import os
 import re
 import sys
-import time
 import stat
 import shutil
 import cPickle
 import datetime
-import subprocess
 
 
 #the mail server used to send mail
@@ -43,7 +42,7 @@ def cleanPath( pathString ):
 	path = str( pathString ).strip().replace( OTHER_SEPARATOR, PATH_SEPARATOR )
 	isUNC = path.startswith( UNC_PREFIX )
 	while path.find( UNC_PREFIX ) != -1:
-		path = path.replace( UNC_PREFIX, PATH_SEPARATOR)
+		path = path.replace( UNC_PREFIX, PATH_SEPARATOR )
 
 	if isUNC:
 		path = PATH_SEPARATOR + path
@@ -52,53 +51,80 @@ def cleanPath( pathString ):
 
 
 ENV_REGEX = re.compile( "\%[^%]+\%" )
-def resolve( path, envDict=None, raiseOnMissing=False ):
+findall = re.findall
+
+def resolveAndSplit( path, envDict=None, raiseOnMissing=False ):
 	'''
 	recursively expands all environment variables and '..' tokens in a pathname
 	'''
 	if envDict is None:
 		envDict = os.environ
 
-	#first resolve any env variables
-	global ENV_REGEX
-	matches = re.findall( ENV_REGEX, path )
-	missingVars = set()
-	while matches:
-		for match in matches:
-			try:
-				path = str( path ).replace( match, envDict[ match[ 1:-1 ] ] )
-			except KeyError:
-				if raiseOnMissing: raise
-				missingVars.add( match )
-		matches = set( re.findall( ENV_REGEX, path ) )
+	path = str( path )
 
-		#remove any variables that have been found to be missing...
-		[ matches.remove( missing ) for missing in missingVars ]
+	#first resolve any env variables
+	if '%' in path:  #performing this check is faster than doing the regex
+		matches = findall( ENV_REGEX, path )
+		missingVars = set()
+		while matches:
+			for match in matches:
+				try:
+					path = path.replace( match, envDict[ match[ 1:-1 ] ] )
+				except KeyError:
+					if raiseOnMissing:
+						raise
+
+					missingVars.add( match )
+
+			matches = set( findall( ENV_REGEX, path ) )
+
+			#remove any variables that have been found to be missing...
+			for missing in missingVars:
+				matches.remove( missing )
 
 	#now resolve any subpath navigation
-	path = str( path ).replace( OTHER_SEPARATOR, PATH_SEPARATOR )
-	isUNC = path.startswith( UNC_PREFIX )
+	if OTHER_SEPARATOR in path:  #believe it or not, checking this first is faster
+		path = path.replace( OTHER_SEPARATOR, PATH_SEPARATOR )
+
+	#is the path a UNC path?
+	isUNC = path[ :2 ] == UNC_PREFIX
 	if isUNC:
 		path = path[ 2: ]
 
+	#remove duplicate separators
+	duplicateSeparator = UNC_PREFIX
+	while duplicateSeparator in path:
+		path = path.replace( duplicateSeparator, PATH_SEPARATOR )
+
 	pathToks = path.split( PATH_SEPARATOR )
 	pathsToUse = []
+	pathsToUseAppend = pathsToUse.append
 	for n, tok in enumerate( pathToks ):
 		if tok == "..":
 			try: pathsToUse.pop()
 			except IndexError:
-				if raiseOnMissing: raise
+				if raiseOnMissing:
+					raise
+
 				pathsToUse = pathToks[ n: ]
 				break
 		else:
-			pathsToUse.append( tok )
+			pathsToUseAppend( tok )
 
-	#finally convert it back into a path
+	#finally convert it back into a path and pop out the last token if its empty
 	path = PATH_SEPARATOR.join( pathsToUse )
-	if isUNC:
-		return UNC_PREFIX + path
+	if not pathsToUse[-1]:
+		pathsToUse.pop()
 
-	return path
+	#if its a UNC path, stick the UNC prefix
+	if isUNC:
+		return UNC_PREFIX + path, pathsToUse, True
+
+	return path, pathsToUse, isUNC
+
+
+def resolve( path, envDict=None, raiseOnMissing=False ):
+	return resolveAndSplit( path, envDict, raiseOnMissing )[0]
 
 resolvePath = resolve
 
@@ -119,27 +145,26 @@ class Path(str):
 		return cls.__CASE_MATTERS
 
 	def __new__( cls, path='', caseMatters=None, envDict=None ):
-		if path is None:
-			path = ''
-
-		resolvedPath = resolve( cleanPath( path ), envDict )
-		new = str.__new__( cls, resolvedPath )
-		new.isUNC = resolvedPath.startswith( UNC_PREFIX )
-		new.hasTrailing = resolvedPath.endswith( PATH_SEPARATOR )
-
-		return new
-	@d_initCache
-	def __init__( self, path='', caseMatters=None, envDict=None ):
 		'''
 		if case doesn't matter for the path instance you're creating, setting caseMatters
 		to False will do things like caseless equality testing, caseless hash generation
 		'''
 
-		self._passed = path
+		if path is None:
+			path = ''
+
+		resolvedPath, pathTokens, isUnc = resolveAndSplit( path, envDict )
+		new = str.__new__( cls, resolvedPath )
+		new.isUNC = isUnc
+		new.hasTrailing = resolvedPath.endswith( PATH_SEPARATOR )
+		new._splits = tuple( pathTokens )
+		new._passed = path
 
 		#case sensitivity, if not specified, defaults to system behaviour
 		if caseMatters is not None:
-			self.__CASE_MATTERS = caseMatters
+			new.__CASE_MATTERS = caseMatters
+
+		return new
 	@classmethod
 	def Temp( cls ):
 		'''
@@ -158,10 +183,14 @@ class Path(str):
 
 		return randomPathName
 	def __nonzero__( self ):
-		if self.strip() == '':
+		'''
+		a Path instance is "non-zero" if its not '' or '/'  (although I guess '/' is actually a valid path on *nix)
+		'''
+		selfStripped = self.strip()
+		if selfStripped == '':
 			return False
 
-		if self.strip() == PATH_SEPARATOR:
+		if selfStripped == PATH_SEPARATOR:
 			return False
 
 		return True
@@ -173,50 +202,52 @@ class Path(str):
 		return self.__class__( other, self.__CASE_MATTERS ) + self
 	__rdiv__ = __radd__
 	def __getitem__( self, item ):
-		toks = self.split()
-		return toks[ item ]
+		return self._splits[ item ]
 	def __getslice__( self, a, b ):
-		toks = self.split()
-		newPath = PATH_SEPARATOR.join( toks[ a:b ] ) + ('', PATH_SEPARATOR)[ self.hasTrailing ]
-
-		return self.__class__( newPath, self.__CASE_MATTERS )
+		return self._toksToPath( self._splits[ a:b ], False, self.hasTrailing )
 	def __len__( self ):
 		if not self:
 			return 0
 
-		return len( self.split() )
+		return len( self._splits )
 	def __contains__( self, item ):
 		if not self.__CASE_MATTERS:
-			return item.lower() in [ s.lower() for s in self.split() ]
+			return item.lower() in [ s.lower() for s in self._splits ]
 
-		return item in self.split()
+		return item in list( self._splits )
 	def __hash__( self ):
 		'''
 		the hash for two paths that are identical should match - the most reliable way to do this
 		is to use a tuple from self.split to generate the hash from
 		'''
 		if not self.__CASE_MATTERS:
-			return hash( tuple( [ s.lower() for s in self.split() ] ) )
+			return hash( tuple( [ s.lower() for s in self._splits ] ) )
 
-		return hash( tuple( self.split() ) )
-	def _toksToPath( self, toks ):
+		return hash( tuple( self._splits ) )
+	def _toksToPath( self, toks, isUNC=False, hasTrailing=False ):
 		'''
 		given a bunch of path tokens, deals with prepending and appending path
 		separators for unc paths and paths with trailing separators
 		'''
-		if self.isUNC:
+		if isUNC:
 			toks = ['', ''] + toks
 
-		if self.hasTrailing:
+		if hasTrailing:
 			toks.append( '' )
 
 		return self.__class__( PATH_SEPARATOR.join( toks ), self.__CASE_MATTERS )
 	def resolve( self, envDict=None, raiseOnMissing=False ):
+		'''
+		will re-resolve the path given a new envDict
+		'''
 		if envDict is None:
 			return self
 		else:
-			return Path( self.unresolved(), self.__CASE_MATTERS, envDict )
+			return Path( self._passed, self.__CASE_MATTERS, envDict )
 	def unresolved( self ):
+		'''
+		returns the un-resolved path - this is the exact string that the path was instantiated with
+		'''
 		return self._passed
 	def isEqual( self, other ):
 		'''
@@ -271,23 +302,11 @@ class Path(str):
 		returns the absolute path as is reported by os.path.abspath
 		'''
 		return self.__class__( os.path.abspath( str( self ) ) )
-	@d_cacheValue
 	def split( self ):
 		'''
-		splits a path into directory/file tokens
+		returns the splits tuple - ie the path tokens
 		'''
-		isUNC = self.isUNC
-		newPath = str.replace( self, UNC_PREFIX, '' )
-		if newPath.startswith( PATH_SEPARATOR ):
-			newPath = newPath[1:]
-
-		hasTrailing = newPath.endswith( PATH_SEPARATOR )
-		if hasTrailing:
-			newPath = newPath[ :-1 ]
-
-		toks = newPath.split( PATH_SEPARATOR )
-
-		return toks
+		return list( self._splits )
 	def asDir( self ):
 		'''
 		makes sure there is a trailing / on the end of a path
@@ -295,7 +314,7 @@ class Path(str):
 		if self.hasTrailing:
 			return self
 
-		return self.__class__( '%s%s' % (self, PATH_SEPARATOR), self.__CASE_MATTERS )
+		return self.__class__( '%s%s' % (self._passed, PATH_SEPARATOR), self.__CASE_MATTERS )
 	asdir = asDir
 	def asFile( self ):
 		'''
@@ -304,7 +323,7 @@ class Path(str):
 		if not self.hasTrailing:
 			return self
 
-		return self.__class__( str( self )[ :-1 ], self.__CASE_MATTERS )
+		return self.__class__( self._passed[ :-1 ], self.__CASE_MATTERS )
 	asfile = asFile
 	def isDir( self ):
 		'''
@@ -353,13 +372,16 @@ class Path(str):
 		except:
 			#i think this only happens if the file doesn't exist - so return true
 			return True
-	@d_cacheValue
 	def getExtension( self ):
 		'''
 		returns the extension of the path object - an extension is defined as the string after a
 		period (.) character in the final path token
 		'''
-		endTok = self[ -1 ]
+		try:
+			endTok = self[ -1 ]
+		except IndexError:
+			return ''
+
 		idx = endTok.rfind( '.' )
 		if idx == -1:
 			return ''
@@ -380,24 +402,30 @@ class Path(str):
 		while xtn.startswith( '.' ):
 			xtn = xtn[ 1: ]
 
-		toks = self.split()
-		endTok = toks[ -1 ]
+		toks = list( self.split() )
+		try:
+			endTok = toks.pop()
+		except IndexError:
+			endTok = ''
+
 		idx = endTok.rfind( '.' )
 		name = endTok
 		if idx >= 0:
 			name = endTok[ :idx ]
 
-		if xtn: newEndTok = '%s.%s' % (name, xtn)
-		else: newEndTok = name
+		if xtn:
+			newEndTok = '%s.%s' % (name, xtn)
+		else:
+			newEndTok = name
 
 		if renameOnDisk:
 			self.rename( newEndTok, True )
 		else:
-			toks[ -1 ] = newEndTok
+			toks.append( newEndTok )
 
-		return self._toksToPath( toks )
+		return self._toksToPath( toks, self.isUNC, self.hasTrailing )
 	extension = property(getExtension, setExtension)
-	def isExtension( self, extension ):
+	def hasExtension( self, extension ):
 		'''
 		returns whether the extension is of a certain value or not
 		'''
@@ -407,15 +435,18 @@ class Path(str):
 			extension = extension.lower()
 
 		return ext == extension
-	hasExtension = isExtension
-	@d_cacheValueWithArgs
+	isExtension = hasExtension
 	def name( self, stripExtension=True, stripAllExtensions=False ):
 		'''
 		returns the filename by itself - by default it also strips the extension, as the actual filename can
 		be easily obtained using self[-1], while extension stripping is either a multi line operation or a
 		lengthy expression
 		'''
-		name = self[ -1 ]
+		try:
+			name = self[ -1 ]
+		except IndexError:
+			return ''
+
 		if stripExtension:
 			pIdx = -1
 			if stripAllExtensions:
@@ -435,23 +466,23 @@ class Path(str):
 		if not levels:
 			return self
 
-		toks = self.split()
+		toks = list( self._splits )
 		levels = max( min( levels, len(toks)-1 ), 1 )
 		toksToJoin = toks[ :-levels ]
 		if self.hasTrailing:
 			toksToJoin.append( '' )
 
-		return self._toksToPath( toksToJoin )
+		return self._toksToPath( toksToJoin, self.isUNC, self.hasTrailing )
 	def replace( self, search, replace='', caseMatters=None ):
 		'''
 		a simple search replace method - works on path tokens.  if caseMatters is None, then the system
 		default case sensitivity is used
 		'''
 		idx = self.find( search, caseMatters )
-		toks = self.split()
+		toks = list( self.split() )
 		toks[ idx ] = replace
 
-		return self._toksToPath( toks )
+		return self._toksToPath( toks, self.isUNC, self.hasTrailing )
 	def find( self, search, caseMatters=None ):
 		'''
 		returns the index of the given path token
@@ -483,7 +514,8 @@ class Path(str):
 		If running under an env where file case doesn't matter, this method will return a Path instance
 		whose case matches the file on disk.  It assumes the file exists
 		'''
-		if self.doesCaseMatter(): return self
+		if self.doesCaseMatter():
+			return self
 
 		for f in self.up().files():
 			if f == self:
@@ -531,7 +563,7 @@ class Path(str):
 				f.delete()
 
 			win32api.SetFileAttributes( self, win32con.FILE_ATTRIBUTE_NORMAL )
-			shutil.rmtree( self.asDir(), True )
+			shutil.rmtree( str( self.asDir() ), True )
 	remove = delete
 	def rename( self, newName, nameIsLeaf=False, doP4=True ):
 		'''
@@ -544,7 +576,7 @@ class Path(str):
 
 		newPath = Path( newName )
 		if nameIsLeaf:
-			newPath = Path( self ).up() / newName
+			newPath = self.up() / newName
 
 		if self.isfile():
 			tgtExists = newPath.exists
@@ -605,7 +637,7 @@ class Path(str):
 				except: pass
 
 			try:
-				shutil.copy2( self, target )
+				shutil.copy2( str( self ), str( target ) )
 			#this happens when src and dest are the same...  its pretty harmless, so we do nothing...
 			except shutil.Error:
 				pass
@@ -684,20 +716,33 @@ class Path(str):
 		'''
 		returns self as a path relative to another
 		'''
+
+		if not self:
+			return None
+
 		path = self
 		other = Path( other )
 
+		pathToks = path.split()
+		otherToks = other.split()
+
+		caseMatters = self.__CASE_MATTERS
+		if not caseMatters:
+			pathToks = [ t.lower() for t in pathToks ]
+			otherToks = [ t.lower() for t in otherToks ]
+
 		#if the first path token is different, early out - one is not a subset of the other in any fashion
 		lenPath, lenOther = len( path ), len( other )
-		if other[0].lower() != path[0].lower():
-			return None
+		if caseMatters:
+			if otherToks[0] != pathToks[0]:
+				return None
 		elif lenPath < lenOther:
 			return None
 
 		newPathToks = []
 		pathsToDiscard = lenOther
-		for pathN, otherN in zip(path, other):
-			if pathN.lower() == otherN.lower():
+		for pathN, otherN in zip( path[ 1: ], other[ 1: ] ):
+			if pathN == otherN:
 				continue
 			else:
 				newPathToks.append( '..' )
@@ -722,8 +767,9 @@ class Path(str):
 		NOTE: this method is alias'd by __lshift__ and so can be accessed using the << operator:
 		d:/main/content/mod/models/someModel.ma << '%VCONTENT%' results in %VCONTENT%/mod/models/someModel.ma
 		'''
+
 		#if not isinstance(other, Path): other = Path(other)
-		toks = toksLower = tuple(self.split())
+		toks = toksLower = self._splits
 		otherToks = Path( other ).split()
 		newToks = []
 		n = 0
@@ -774,7 +820,10 @@ class Path(str):
 		returns whether the current instance begins with a given path fragment.  ie:
 		Path('d:/temp/someDir/').startswith('d:/temp') returns True
 		'''
-		otherToks = Path( other, self.__CASE_MATTERS ).split()
+		if not isinstance( other, type( self ) ):
+			other = Path( other, self.__CASE_MATTERS )
+
+		otherToks = other.split()
 		selfToks = self.split()
 		if not self.__CASE_MATTERS:
 			otherToks = [ t.lower() for t in otherToks ]
@@ -796,8 +845,8 @@ class Path(str):
 		#would screw up the cache, causing really hard to track down bugs...  not sure what the best answer to this is,
 		#but this is clearly not it...  the caching decorator could always return copies of mutable objects, but that
 		#sounds wasteful...  for now, this is a workaround
-		otherToks = Path( other ).split()[:]
-		selfToks = self.split()[:]
+		otherToks = list( Path( other ).split() )
+		selfToks = list( self._splits )
 		otherToks.reverse()
 		selfToks.reverse()
 		if not self.__CASE_MATTERS:
@@ -809,18 +858,6 @@ class Path(str):
 				return False
 
 		return True
-	def belongsToContent( self, gameInfo ):
-		for mod in gameInfo.getSearchMods():
-			if self.isUnder( content() / mod ):
-				return True
-
-		return False
-	def belongsToGame( self, gameInfo ):
-		for mod in gameInfo.getSearchMods():
-			if self.isUnder( game() / mod ):
-				return True
-
-		return False
 	def _list_filesystem_items( self, itemtest, namesOnly=False, recursive=False ):
 		'''
 		does all the listing work - itemtest can generally only be one of os.path.isfile or
@@ -828,24 +865,38 @@ class Path(str):
 		string to the filesystem item
 		'''
 		if not self.exists:
-			return []
+			return
 
-		start = len(self)
-		items = []
 		if recursive:
 			walker = os.walk( self )
 			for path, subs, files in walker:
-				items.append( Path(path, self.__CASE_MATTERS) )
-				fileItems = [path + Path(item, self.__CASE_MATTERS) for item in files]
-				items.extend( fileItems )
+				path = Path( path, self.__CASE_MATTERS )
 
-			#first item is always ./
-			try: items.pop(0)
-			except IndexError: pass
-		else: items = [ self / item for item in os.listdir( self ) ]
+				for sub in subs:
+					p = path / sub
+					if itemtest( p ):
+						if namesOnly:
+							p = p.name()
 
-		if namesOnly: return [ item[ start: ] for item in items if itemtest( item ) ]
-		return [ item for item in items if itemtest( item ) ]
+						yield p
+					else: break  #if this doesn't match, none of the other subs will
+
+				for item in files:
+					p = path / item
+					if itemtest( p ):
+						if namesOnly:
+							p = p.name()
+
+						yield p
+					else: break  #if this doesn't match, none of the other items will
+		else:
+			for item in os.listdir( self ):
+				p = self / item
+				if itemtest( p ):
+					if namesOnly:
+						p = p.name()
+
+					yield p
 	def dirs( self, namesOnly=False, recursive=False ):
 		'''
 		lists all sub-directories.  If namesOnly is True, then only directory names (relative to
@@ -866,6 +917,19 @@ def findInPyPath( filename ):
 	the sys.path variable
 	'''
 	for p in map( Path, sys.path ):
+		loc = p / filename
+		if loc.exists:
+			return loc
+
+	return None
+
+
+def findInPath( filename ):
+	'''
+	given a filename or path fragment, will return the full path to the first matching file found in
+	the PATH env variable
+	'''
+	for p in map( Path, os.environ[ 'PATH' ].split( ';' ) ):
 		loc = p / filename
 		if loc.exists:
 			return loc

@@ -1,19 +1,26 @@
-from rigPrim_base import *
+
+from baseRigPrimitive import *
 from spaceSwitching import build, NO_TRANSLATION, NO_ROTATION
 
 
 class BaseSplineIK(PrimaryRigPart):
 	__version__ = 0
-	PRIORITY = 10
-	SKELETON_PRIM_ASSOC = ( ArbitraryChain, )
+	PRIORITY = 11
+	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'ArbitraryChain' ), )
 	CONTROL_NAMES = 'base', 'mid', 'end'
 
 	@classmethod
 	def CanRigThisPart( cls, skeletonPart ):
 		return len( skeletonPart ) >= 3
-	@classmethod
-	def _build( cls, skeletonPart, **kw ):
-		return buildControlsForMPath( skeletonPart, **kw )
+	def _build( self, skeletonPart, **kw ):
+		return buildControlsForMPath( skeletonPart.base, skeletonPart.end, **kw )
+
+
+def range2( count, start=0 ):
+	n = start
+	while n < count:
+		yield n
+		n += 1
 
 
 def buildMPath( objs, squish=True, **kw ):
@@ -46,7 +53,7 @@ def buildMPath( objs, squish=True, **kw ):
 	if currentUnit( q=True, l=True ) == "m":
 		unitComp = 100.0
 
-	for n in range2( numObjs, 1 ):
+	for n in range( 1, numObjs ):
 		mpath = createNode( 'pointOnCurveInfo' )
 		proxy = group( em=True, n='%s_proxy' % objs[ n ] )
 
@@ -55,7 +62,7 @@ def buildMPath( objs, squish=True, **kw ):
 		connectAttr( '%s.px' % mpath, '%s.tx' % proxy )
 		connectAttr( '%s.py' % mpath, '%s.ty' % proxy )
 		connectAttr( '%s.pz' % mpath, '%s.tz' % proxy )
-		setAttr( '%s.parameter' % mpath, knots[ n ] )  #were using ($knots[$n]/$unitComp) but it seems this is buggy - invalid knot values are returned for a straight curve...  so it seems assuming $n is valid works in all test cases I've tried...
+		setAttr( '%s.parameter' % mpath, knots[ n-1 ] )  #were using ($knots[$n]/$unitComp) but it seems this is buggy - invalid knot values are returned for a straight curve...  so it seems assuming $n is valid works in all test cases I've tried...
 		delete( orientConstraint( objs[ n ], proxy ) )
 
 		mpaths[ objs[ n ] ] = mpath

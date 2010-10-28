@@ -33,72 +33,7 @@ kWorld = MSpace.kWorld
 kTransform = MSpace.kTransform
 kObject = MSpace.kObject
 
-
-def range2( count, start=0 ):
-	n = start
-	while n < count:
-		yield n
-		n += 1
-
-
-class Axis(int):
-	BASE_AXES = 'x', 'y', 'z'
-	AXES = ( 'x', 'y', 'z', \
-	         '-x', '-y', '-z' )
-
-	def __new__( cls, idx ):
-		if isinstance( idx, basestring ):
-			return cls.FromName( idx )
-
-		return int.__new__( cls, idx )
-	def __neg__( self ):
-		return Axis( (self + 3) % 6 )
-	@classmethod
-	def FromName( cls, name ):
-		idx = list( cls.AXES ).index( name.lower().replace( '_', '-' ) )
-		return cls( idx )
-	@classmethod
-	def FromVector( cls, vector ):
-		'''
-		returns the closest axis to the given vector
-		'''
-		assert len( cls.BASE_AXES ) >= len( vector )
-
-		listV = list( vector )
-		idx, value = 0, listV[ 0 ]
-		for n, v in enumerate( listV ):
-			if v > value:
-				value = v
-				idx = n
-
-		return cls( idx )
-	def asVector( self ):
-		v = Vector( [0, 0, 0] )
-		v[ self % 3 ] = 1 if self < 3 else -1
-
-		return v
-	def isNegative( self ):
-		return self > 2
-	def asName( self ):
-		return self.AXES[ self ]
-	def asCleanName( self ):
-		'''
-		returns the axis name without a negative regardless
-		'''
-		return self.AXES[ self ].replace( '-', '' )
-	def asEncodedName( self ):
-		'''
-		returns the axis name, replacing the - with an _
-		'''
-		return self.asName().replace( '-', '_' )
-	def otherAxes( self ):
-		'''
-		returns the other two axes that aren't this axis
-		'''
-		allAxes = [ 0, 1, 2 ]
-		allAxes.remove( self % 3 )
-
-		return list( map( Axis, allAxes ) )
+Axis = vectors.Axis
 
 
 def getObjectBasisVectors( obj ):
@@ -244,17 +179,34 @@ def getAnkleToWorldRotation( ankle, fwdAxisName='z', performRotate=False ):
 
 def getWristToWorldRotation( wrist, performRotate=False ):
 	'''
+	returns the world space rotation values to align the given object to world axes.  If
+	performRotate is True the object will be rotated to this alignment.  The rotation
+	values are returned as euler rotation values in degrees
 	'''
-	basis = map(api.MVectorToVector, api.getObjectBases( wrist ))
-	rots = [0, 0, 0]
-	for n, axis in enumerate( Axis.AXES[ :3 ] ):
-		axis = Vector.Axis( axis )
-		if axis.dot( basis[n] ) < 0:
-			rots[n] = 180
+	worldAxisVectors = [ Axis( n ).asVector() for n in range( 3 ) ]
+
+	worldMatrix, worldScale = Matrix( getAttr( '%s.worldMatrix' % wrist ) ).decompose()
+	bases = x, y, z = map( Vector, worldMatrix.crop( 3 ) )
+
+	newBases = []
+	for basis in bases:
+		dots = []
+		for n in range( 3 ):
+			#find the world axis that this basis vector is closest to
+			worldAxisVector = Axis( n ).asVector()
+			dot = basis.dot( worldAxisVector )
+			dots.append( (abs(dot), n if dot >=0 else n+3) )  #if the dot is negative, shift the axis index by 3 (which makes it negative)
+
+		dots.sort()
+		newBases.append( Axis( dots[-1][1] ).asVector() )
+
+	newBases = map( list, newBases )
+	matrixValues = newBases[0] + newBases[1] + newBases[2]
+	worldRotMatrix = Matrix( matrixValues, 3 )
+	rots = worldRotMatrix.ToEulerXYZ( True )
 
 	if performRotate:
-		rots.append( wrist )
-		rotate( rots[0], rots[1], rots[2], str( wrist ), a=True, ws=True )
+		rotate( rots[0], rots[1], rots[2], wrist, a=True, ws=True )
 
 	return tuple( rots )
 
@@ -329,7 +281,10 @@ def getObjsScale( objs ):
 
 def getJointBounds( joints, threshold=0.65, space=SPACE_OBJECT ):
 	'''
-	if useLocalSpace is True then the b
+	if the joints are skinned, then the influenced verts that have weights greater than the given
+	influenced are transformed into the space specified (if SPACE_OBJECT is used, the space of the
+	first joint is used), and the bounds of the verts in this space are returned as a 2-tuple of
+	bbMin, bbMax
 	'''
 
 	global MVector, MTransformationMatrix, Vector
@@ -370,7 +325,7 @@ def getJointBounds( joints, threshold=0.65, space=SPACE_OBJECT ):
 		#we do this so we can get the width, height and depth of the bounds of the verts
 		#in the space oriented along the joint
 		vPosInJointSpace = Vector( vPos )
-		vPosInJointSpace.change_space( vJointBasisX, vJointBasisY, vJointBasisZ )
+		vPosInJointSpace = vPosInJointSpace.change_space( vJointBasisX, vJointBasisY, vJointBasisZ )
 
 		bbox.expand( MPoint( *vPosInJointSpace ) )
 
@@ -381,9 +336,53 @@ def getJointBounds( joints, threshold=0.65, space=SPACE_OBJECT ):
 	return bbMin, bbMax
 
 
-def getJointSizeAndCentre( joints, threshold=0.65, space=SPACE_OBJECT ):
-	minB, maxB = getJointBounds( joints, threshold, space )
-	vec = maxB - minB
+def getJointSizeAndCentre( joints, threshold=0.65, space=SPACE_OBJECT, ignoreSkinning=False ):
+	if ignoreSkinning:
+		vec = Vector.Zero()
+	else:
+		minB, maxB = getJointBounds( joints, threshold, space )
+		vec = maxB - minB
+
+	#if the bounding box is a point then lets see if we can derive a useful size for the joint based on existing children
+	if not vec:
+
+		#make sure we're dealing with a list of joints...
+		if not isinstance( joints, (list, tuple) ):
+			joints = [ joints ]
+
+		children = listRelatives( joints, pa=True, typ='transform' ) or []
+
+		#if there are no children then we fall back on averaging the "radius" attribute for all given joints...
+		if not children:
+			radSum = sum( getAttr( '%s.radius' % j ) for j in joints )
+			s = float( radSum ) / len( joints ) * 5  #5 is an arbitrary number - tune it as required...
+
+			return Vector( (s, s, s) ), Vector( (0, 0, 0) )
+
+		theJoint = joints[ 0 ]
+		theJointPos = Vector( xform( theJoint, q=True, ws=True, rp=True ) )
+
+		#determine the basis vectors for <theJoint>.  we want to transform the joint's size into the appropriate space
+		if space == SPACE_OBJECT:
+			theJointBasisVectors = getObjectBasisVectors( theJoint )
+		elif space == SPACE_LOCAL:
+			theJointBasisVectors = getLocalBasisVectors( theJoint )
+		elif space == SPACE_WORLD:
+			theJointBasisVectors = Vector( (1,0,0) ), Vector( (0,1,0) ), Vector( (0,0,1) )
+		else: raise TypeError( "Invalid space specified" )
+
+		bbox = MBoundingBox()
+		bbox.expand( MPoint( 0, 0, 0 ) )  #make sure zero is included in the bounding box - zero is the position of <theJoint>
+		for j in joints[ 1: ] + children:
+			pos = Vector( xform( j, q=True, ws=True, rp=True ) ) - theJointPos
+			pos = pos.change_space( *theJointBasisVectors )
+			bbox.expand( MPoint( *pos ) )
+
+		minB, maxB = bbox.min(), bbox.max()
+		minB = Vector( (minB.x, minB.y, minB.z) )
+		maxB = Vector( (maxB.x, maxB.y, maxB.z) )
+		vec = maxB - minB
+
 	centre = (minB + maxB) / 2.0
 
 	return Vector( map( abs, vec ) ), centre
@@ -518,7 +517,7 @@ def chainLength( startNode, endNode ):
 		dif = curPos - parPos
 		length += dif.get_magnitude()
 
-		if p == startNode:
+		if apiExtensions.cmpNodes( p, startNode ):  #cmpNodes is more reliable than just string comparing - cmpNodes casts to MObjects and compares object handles
 			break
 
 		curNode = p
@@ -630,41 +629,55 @@ def setupBaseLimbTwister( joint, aimObject, upObject, aimAxis ):
 	if not isinstance( aimAxis, Axis ):
 		aimAxis = Axis.FromName( aimAxis )
 
-	otherAxes_onAim = [ ax.asVector() for ax in aimAxis.otherAxes() ]
+	upAxes = [ ax.asVector() for ax in aimAxis.otherAxes() ]
 
 	joint = apiExtensions.asMObject( joint )
 	upObject = apiExtensions.asMObject( upObject )
 
-	jWorldInvMatrix = joint.getWorldInverseMatrix()
+	jWorldMatrix = joint.getWorldMatrix()
+	upVectorsWorld = [ ax * jWorldMatrix for ax in upAxes ]
+
 	upWorldInvMatrix = upObject.getWorldInverseMatrix()
 
-	#we want to transform the aimObject's two different axes into the space of the joint -
-	#transform the joint's axes into world space vectors
-	otherAxes_onUp = []
-	otherAxes_onUp.append( otherAxes_onAim[0] * jWorldInvMatrix * upWorldInvMatrix )
-	otherAxes_onUp.append( otherAxes_onAim[1] * jWorldInvMatrix * upWorldInvMatrix )
+	#we want to transform the aimObject's two different axes into the space of the up object
+	upVectorsLocal = [ upVectorsWorld[0] * upWorldInvMatrix,
+	                   upVectorsWorld[1] * upWorldInvMatrix ]
 
-	matrixMult = createNode( 'pointMatrixMult' )
+	matrixMult = createNode( 'pointMatrixMult', n='bicepTwister_primaryUpAxis' )
+	setAttr( '%s.inPoint' % matrixMult, *upVectorsLocal[0] )
+	setAttr( '%s.vectorMultiply' % matrixMult, True )
 	connectAttr( '%s.worldMatrix[0]' % upObject, '%s.inMatrix' % matrixMult )
 
 	vectorProduct = createNode( 'vectorProduct' )
 	connectAttr( '%s.output' % matrixMult, '%s.input1' % vectorProduct )
 	setAttr( '%s.operation' % vectorProduct, 1 )
-	setAttr( '%s.normalizeOutput' % vectorProduct, True )
 
-	aimNode = aimConstraint( aimObject, joint, aim=aimAxis.asVector(), wuo=upObject )[0]
-	connectAttr( '%s.constraintVector' % aimNode, '%s.input2' % vectorProduct )
+	aimNode = aimConstraint( aimObject, joint, aim=aimAxis.asVector(), wuo=upObject, wut='objectrotation' )[0]
+	addAttr( aimNode, ln='upAndAimDot', at='double' )
+
+	#create an expression to normalize the constraintVector attribute coming out of the aimConstraint node - its not normalized, and the vector product node doesn't normalize inputs (wtf?!)
+	expressionStr = '''float $mag = sqrt( (%(aimNode)s.constraintVectorX * %(aimNode)s.constraintVectorX) + (%(aimNode)s.constraintVectorY * %(aimNode)s.constraintVectorY) + (%(aimNode)s.constraintVectorZ * %(aimNode)s.constraintVectorZ) ) + 1;
+float $normX = %(aimNode)s.constraintVectorX / $mag;
+float $normY = %(aimNode)s.constraintVectorY / $mag;
+float $normZ = %(aimNode)s.constraintVectorZ / $mag;
+%(vectorProduct)s.input2X = %(matrixMult)s.outputX * $normX;
+%(vectorProduct)s.input2Y = %(matrixMult)s.outputX * $normY;
+%(vectorProduct)s.input2Z = %(matrixMult)s.outputX * $normZ;''' % locals()
+
+	expression( s=expressionStr )
 
 	sdkDriver = '%s.outputX' % vectorProduct
-	for up, worldUp, driverValue in zip( otherAxes_onAim, otherAxes_onUp, (0, 1) ):  #((0, 0.1), (0.9, 1)) ):
-		for upAxisValue, worldUpAxisValue, axisName in zip( up, worldUp, Axis.BASE_AXES ):
-			axisName = axisName.upper()
-			#for driverValue in driverValues:
-			setDrivenKeyframe( '%s.upVector%s' % (aimNode, axisName), value=upAxisValue,
-		                       currentDriver=sdkDriver, driverValue=driverValue, itt='linear', ott='linear' )
+	connectAttr( sdkDriver, '%s.upAndAimDot' % aimNode )
 
-			setDrivenKeyframe( '%s.worldUpVector%s' % (aimNode, axisName), value=worldUpAxisValue,
-		                       currentDriver=sdkDriver, driverValue=driverValue, itt='linear', ott='linear' )
+	for upAxis, upVector, driverValues in zip( upAxes, upVectorsLocal, ((0, 0.1), (0.9, 1)) ):
+		for driverValue in driverValues:
+			for upAxisValue, upVectorValue, axisName in zip( upAxis, upVector, Axis.BASE_AXES ):
+				axisName = axisName.upper()
+				setDrivenKeyframe( '%s.upVector%s' % (aimNode, axisName), value=upAxisValue,
+					               currentDriver=sdkDriver, driverValue=driverValue, itt='linear', ott='linear' )
+
+				setDrivenKeyframe( '%s.worldUpVector%s' % (aimNode, axisName), value=upVectorValue,
+					               currentDriver=sdkDriver, driverValue=driverValue, itt='linear', ott='linear' )
 
 	for axisName in Axis.BASE_AXES:
 		axisName = axisName.upper()
