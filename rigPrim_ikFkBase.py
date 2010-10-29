@@ -65,7 +65,7 @@ class IkFkBase(RigSubPart):
 
 
 		### BUILD THE POLE CONTROL
-		polePos = mel.zooFindPolePosition( "-multiplier 5 -end %s" % str( driverLower ) )
+		polePos = rigUtils.findPolePosition( driverLower, driverMid, driverUpper, 5 )
 		poleControl = buildControl( "%s_poleControl%s" % (nameScheme[ 0 ], suffix), PlaceDesc( elbow, PlaceDesc.WORLD ), shapeDesc=ShapeDesc( 'sphere', None ), colour=colour, constrain=False, parent=worldControl, scale=scale*0.5 )
 		poleControlSpace = getNodeParent( poleControl )
 		attrState( poleControlSpace, 'v', lock=False, show=True )

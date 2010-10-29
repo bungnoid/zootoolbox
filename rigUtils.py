@@ -69,6 +69,51 @@ def getPlaneNormalForObjects( objA, objB, objC, defaultVector=MAYA_UP ):
 	return normal
 
 
+def findPolePosition( end, mid=None, start=None, distanceMultiplier=1 ):
+
+	if not objExists( end ):
+		return Vector.Zero()
+
+	try:
+		if mid is None:
+			mid = listRelatives( end, p=True, pa=True )[0]
+		if start is None:
+			start = listRelatives( mid, p=True, pa=True )[0]
+	except TypeError:
+		return Vector.Zero()
+
+	joint0, joint1, joint2 = start, mid, end
+
+	pos0 = Vector( xform( joint0, q=True, ws=True, rp=True ) )
+	pos1 = Vector( xform( joint1, q=True, ws=True, rp=True ) )
+	pos2 = Vector( xform( joint2, q=True, ws=True, rp=True ) )
+
+	#this is the rough length of the presumably "limb" we're finding the pole vector position for
+	lengthFactor = (pos1-pos0).length() + (pos2-pos1).length()
+
+	#
+	vec01 = pos1 - pos0
+	vec02 = pos2 - pos0
+	projAB = vec02 * (vec01 * vec02)
+
+	midway = (pos0 + pos2) / 2.0
+
+	sub = pos1 - (pos0 + projAB)
+	mag = sub.length()
+
+	#if the magnitude is really small just return the position of the mid object
+	if mag < 1e-4:
+		return pos1
+
+	mult = (lengthFactor * distanceMultiplier) / mag
+
+	polePos = midway + (sub * mult)#Vector( [midway[0] + (sub[0] * mult),
+		#midway[1] + (sub[1] * mult),
+		#midway[2] + (sub[2] * mult)] )
+
+	return polePos
+
+
 def largestT( obj ):
 	'''
 	returns the index of the translation axis with the highest absolute value
