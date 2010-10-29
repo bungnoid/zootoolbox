@@ -94,8 +94,8 @@ global proc string[] zooListTools( string $type ) {
 		"zooGreaseMonkey","zooBoltOnIK","zooBodgeK","zooGraphFilter","zooHUDCtrl",
 		"zooKeyCommands","zooKeymaster","zooRemind","zooRenamer","zooTriggerator",
 		"zooVisMan","zooXferAnim" };
-	string $riggingTools[] = { "zooAutoSave","zooTriggered","zooCST","zooBoltOnIK",
-		"zooBodgeK","zooHeavy","zooNameSpacey","zooRemind","zooRenamer",
+	string $riggingTools[] = { "zooAutoSave","zooTriggered","skeletonBuilder","zooCST",
+		"zooBoltOnIK", "zooBodgeK","zooHeavy","zooNameSpacey","zooRemind","zooRenamer",
 		"zooSurgeon","zooWeightSave","zooTriggerator","zooReblender" };
 	string $otherTools[] = { "p4menu","zooAutoSave","zooChangeLog",
 		"zooNameSpacey","zooRemind","zooRenamer","zooToggleUI","zooPanelCycler" };
@@ -262,6 +262,8 @@ global proc string zooToolCmd( string $tool ) {
 			return "source zooBoltOnIK; zooBoltOnIKWin;";
 		case "zooCam":
 			return( $mmMsg +"zooHotkeyer zooCam \"zooCam;\" \"zooCamKillUI;\" \"-default l -enableMods 0 -ann zooCam marking menu script for managing in scene cameras\";" );
+		case "skeletonBuilder":
+			return "python( \"import skeletonBuilderUI; skeletonBuilderUI.SkeletonBuilderWindow()\" );";
 		case "zooKeyCommands":
 			return "source zooKeyCommandsWin;";
 		case "zooKeymaster":
@@ -296,6 +298,8 @@ global proc string zooToolIcon( string $tool ) {
 	switch( $tool ) {
 		default:
 			return $tool;
+		case "skeletonBuilder":
+			return "zooCST";
 		case "zooAlign":
 		case "toggle_lights":
 		case "toggle_texturing":
@@ -311,6 +315,8 @@ global proc string zooToolIcon( string $tool ) {
 			return "zooAutoSave_0";
 		case "zooTriggered":
 			return "zooTriggered_0";
+		case "zooTriggerator":
+			return "triggerator";
 		case "zooToggleUI":
 			return "zooIcon";
 		case "zooReblender":
@@ -339,6 +345,8 @@ global proc string zooToolOverlay( string $tool ) {
 			return "shad";
 		case "zooCam":
 			return "cam";
+		case "zooCST":
+			return "CST";
 		case "zooFitTimeline":
 			return "fit";
 		case "zooSetMenu":

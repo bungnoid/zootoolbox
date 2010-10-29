@@ -1026,15 +1026,15 @@ class SkeletonBuilderWindow(BaseMelWindow):
 		MelMenuItem( menu, l='Mark Selected As User Aligned', c=self.on_markUserAligned )
 		MelMenuItem( menu, l='Clear User Aligned On Selected', c=self.on_clearUserAligned )
 		MelMenuItem( menu, l='User Aligned Editor', c=lambda *a: UserAlignListerWindow() )
-		MelMenuItemDiv( menu )
-		MelMenuItem( menu, l='Clean My Huge Rig', c=lambda *a: rigPrimitives.cleanMeshControls() )
+		#MelMenuItemDiv( menu )
+		#MelMenuItem( menu, l='Clean My Huge Rig', c=lambda *a: rigPrimitives.cleanMeshControls() )
 	def buildDevMenu( self, *a ):
 		menu = self.getMenu( 'Dev' )
 		menu.clear()
 
 		MelMenuItem( menu, l='Skeleton Part Code Explorer', c=lambda *a: PartExplorerWindow() )
-		MelMenuItemDiv( menu )
-		MelMenuItem( menu, l='Reboot Tool', c=self.on_reboot )
+		#MelMenuItemDiv( menu )
+		#MelMenuItem( menu, l='Reboot Tool', c=self.on_reboot )
 
 	### EVENT HANDLERS ###
 	def on_markUserAligned( self, *a ):
