@@ -20,82 +20,8 @@ zooSpaceSwitching;
 //added
 //------
 global proc int zooObjMenu( string $parent, string $obj ) {
-	string $cmdNames[] = {};
-	string $defaultCmdName = "<empty cmd>";
-	int $cmdSlots[] = `zooObjMenuListCmds $obj`;
-	int $menusFromConnects = 0;
-	int $killStatus = 0;
-
-	//source all dependencies
-	global int $zooObjMenuLoaded;
-	if( !$zooObjMenuLoaded ) {
-		for( $script in `zooObjMenuDependencies -scripts` ) if( catch(eval( "source "+ $script ))) warning( "You don't have "+ $script +" installed" );
-		$zooObjMenuLoaded = 1;
-		}
-
-	setParent -m $parent;
-	int $numCmds = `size $cmdSlots`;
-	for( $n=0; $n<$numCmds; $n++ ) {
-		string $defaultCmdStr = ( "zooObjMenuEditCmd "+ $obj +" "+ $cmdSlots[$n] );
-		string $cmdName = `zooGetObjMenuCmdName $obj $cmdSlots[$n]`;
-		string $cmdStr = "eval(zooPopulateCmdStr(\""+ $obj +"\",(`zooGetObjMenuCmdStr "+ $obj +" "+ $cmdSlots[$n] +"`),{}))";
-		int $cbState = -1;
-
-		//so if the menu name starts with "parent to " then it assumed to be a menu item built by zooSpaceSwitching
-		if( `match "^parent to " $cmdName` != "" ) {
-			string $tgts[] = {};
-			string $names[] = {};
-			string $name = `substitute "^parent to " $cmdName ""`;
-
-			$cbState = 0;
-			zooGetSpaceTargetsNames $obj $tgts $names;
-			int $idx = `zooGetIdxOfElement_str $names $name`;
-			int $curIdx = -1;
-			if( `objExists ( $obj +".parent" )` ) $curIdx = `getAttr ( $obj +".parent" )`;
-			if( $idx == $curIdx ) $cbState = 1;
-			}
-
-		if( $cmdName == "" ) $cmdName = $defaultCmdName;
-		if( $cmdStr == "" ) $cmdStr = $defaultCmdStr;
-		if( $cbState == -1 ) menuItem -l $cmdName -c $cmdStr;
-		else menuItem -l $cmdName -cb $cbState -c $cmdStr;
-		}
-
-	//the showMenusFromConnects attribute determines whether the object in question should show right click menus from any items connected to this one via triggered connects
-	if( `objExists ( $obj +".showMenusFromConnects" )`) $menusFromConnects = `getAttr ( $obj +".showMenusFromConnects" )`;
-	if( $menusFromConnects ) {
-		string $connects[] = `zooGetConnects $obj`;
-		if( `size $connects` ) menuItem -d 1;
-		for( $con in $connects ) {
-			int $cmdSlots[] = `zooObjMenuListCmds $con`;
-			int $numCmds = `size $cmdSlots`;
-
-			for( $n=0; $n<$numCmds; $n++ ) {
-				string $defaultCmdStr = ( "zooObjMenuEditCmd "+ $con +" "+ $cmdSlots[$n] );
-				string $cmdName = `zooGetObjMenuCmdName $con $cmdSlots[$n]`;
-				string $cmdStr = "eval(zooPopulateCmdStr(\""+ $con +"\",(`zooGetObjMenuCmdStr "+ $con +" "+ $cmdSlots[$n] +"`),{}))";
-
-				if( $cmdName == "" ) $cmdName = $defaultCmdName;
-				if( $cmdStr == "" ) $cmdStr = $defaultCmdStr;
-				menuItem -l $cmdName -c $cmdStr;
-				}
-			}
-		}
-
-	if( $numCmds ) {
-		menuItem -d 1;
-		menuItem -l "edit cmd..." -c( "zooObjMenuEditCmd "+ $obj + " -1" );
-		}
-	menuItem -l "new cmd..." -c( "zooObjMenuNewCmd "+ $obj );
-
-	//should we die after menu build?
-	if( `objExists ( $obj +".zooObjMenuDie" )` ) $killStatus = `getAttr ( $obj +".zooObjMenuDie" )`;
-	if( !$killStatus ) {
-	menuItem -d 1;
-	menuItem -d 1;
-	}
-
-	return $killStatus;
+	python( "import triggeredUI" );
+	return python( "triggeredUI.buildMenuItems( '"+ $parent +"', '"+ $obj +"' )" );
 	}
 
 

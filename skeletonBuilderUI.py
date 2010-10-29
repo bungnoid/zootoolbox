@@ -983,7 +983,7 @@ class CreateEditRigTabLayout(MelTabLayout):
 			self.UI_rigger.populate()
 	def on_sceneOpen( self, *a ):
 		self.setSelectedTabIdx( 0 )
-		rigPrimitives.skeletonBuilderConversion.convertOldParts()
+		#rigPrimitives.skeletonBuilderConversion.convertOldParts()
 
 
 class SkeletonBuilderWindow(BaseMelWindow):

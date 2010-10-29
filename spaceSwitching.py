@@ -357,9 +357,7 @@ def findSpaceAttrNode( obj ):
 			cmdStrObj = ChangeSpaceCmd( slotCmd )
 			connectToken = cmdStrObj.getConnectToken()
 
-			try:
-				return trigger.resolve( connectToken )
-			except MayaNodeError: return None
+			return trigger.resolve( connectToken )
 
 
 #end

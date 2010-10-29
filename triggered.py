@@ -1,9 +1,15 @@
+
+from maya.cmds import *
+
+import re
+import time
+
+import api
 import maya.cmds as cmd
-import re, time, api
 
 mel = api.mel
 melecho = api.melecho
-objExists = cmd.objExists
+
 
 class Trigger(object):
 	'''
@@ -19,8 +25,11 @@ class Trigger(object):
 	PRESET_TOOL_TO_MOVE = "setToolTo $gMove;"
 	PRESET_TOOL_TO_ROTATE = "setToolTo $gRotate;"
 
-	def __init__( self, object ):
-		self.obj = str( object )
+	def __init__( self, obj ):
+		if isinstance( obj, Trigger ):
+			obj = obj.obj
+
+		self.obj = obj
 	@classmethod
 	def CreateTrigger( cls, object, cmdStr=DEFAULT_CMD_STR, connects=None ):
 		'''
@@ -43,6 +52,12 @@ class Trigger(object):
 		new.setMenuInfo(slot, name, cmdStr)
 
 		return new
+	def __str__( self ):
+		return str( self.obj )
+	def __unicode__( self ):
+		return unicode( self.obj )
+	def __repr__( self ):
+		return repr( self.__unicode__() )
 	def __getitem__( self, slot ):
 		'''
 		returns the connect at index <slot>
@@ -200,15 +215,18 @@ class Trigger(object):
 
 		return connects
 	def listAllConnectSlots( self, connects=None, emptyValue=None ):
-		'''returns a non-spare list of connects - unlike the connects method output, this is just a list of names.  slots
-		that have no connect attached to them have <emptyValue> as their value'''
-		if connects is None: connects = self.connects()
+		'''
+		returns a non-sparse list of connects - unlike the connects method output, this is just a list of
+		names.  slots that have no connect attached to them have <emptyValue> as their value
+		'''
+		if connects is None:
+			connects = self.connects()
 
 		#build the non-sparse connects list -first we need to find the largest connect idx, and then build a non-sparse list
 		biggest = max( [c[1] for c in connects] ) + 1
 		newConnects = [emptyValue]*biggest
-		for name,idx in connects:
-			newConnects[idx] = name
+		for name, idx in connects:
+			newConnects[idx] = str( name )
 
 		return newConnects
 	def getConnectSlots( self, object ):
@@ -302,13 +320,14 @@ class Trigger(object):
 		returns a resolved cmd string.  the cmd string can be either passed in, or if you specify the slot number
 		the the cmd string will be taken as the given slot's menu command
 		'''
+		cmdStr = str( cmdStr )
 		connects = self.listAllConnectSlots(emptyValue=self.INVALID)
 
 		#if the connects list is empty, early out
 		if not connects: return cmdStr
 
 		#resolve # tokens - these represent self
-		cmdStr = cmdStr.replace('#',self.obj)
+		cmdStr = cmdStr.replace( '#', str( self.obj ) )
 
 		#resolve ranged connect array tokens:  @<start>,<end> - these represent what is essentially a list slice - although they're end value inclusive unlike python slices...
 		compile = re.compile

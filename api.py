@@ -21,6 +21,7 @@ import traceback, datetime
 import math
 
 melEval = maya.mel.eval
+mayaVer = melEval( 'getApplicationVersionAsFloat()' )
 
 Callback = utils.Callback
 
@@ -247,7 +248,6 @@ def sortByHierarchy( objs ):
 def pyArgToMelArg(arg):
 	#given a python arg, this method will attempt to convert it to a mel arg string
 	if isinstance(arg, basestring): return '"%s"' % cmd.encodeString(arg)
-	elif isinstance(arg, PyNode): return '"%s"' % cmd.encodeString( str( arg ) )
 
 	#if the object is iterable then turn it into a mel array string
 	elif hasattr(arg, '__iter__'): return '{%s}' % ','.join(map(pyArgToMelArg, arg))
@@ -679,101 +679,8 @@ def lengthyPerforceOpWarning( *a, **kw ):
 
 filesystem.P4_LENGTHY_CALLBACK = lengthyPerforceOpWarning
 def addPerforceMenuItems( filepath, **kwargs ):
-	'''
-	keyword args:
-	  others=[iterable]  if others is an iterable, they get included in any perforce operation on the primary file (specified using filepath)
-	  previous=True      controls whether the previous revisions menu is displayed
-	'''
-	#defaults
-	DEF_NUM_PREV = 10
-	DEF_SHOW_PREV = kwargs.get('previous', True)
-
-	p4Enabled = isPerforceEnabled()
-	if not p4Enabled:
-		cmd.menuItem(en=False, l='Perforce Integration Disabled', ann='perforce is not available')
-		cmd.menuItem(l='Re-Enable Perforce Integration', c=lambda *a: enablePerforce(), ann='attempt to re-enable the perforce connection')
-		return
-
-	asPath = Path(filepath)
-	p4 = P4Data(asPath)
-	status = p4.getStatus()
-	filepath = str(asPath.resolve())
-	isManaged = p4.managed()
-	exists = asPath.exists
-
-	#build a list of files to operate on
-	files = [filepath]
-	others = kwargs.get('others', None)
-	if others:
-		for f in others:
-			files.append(f)
-
-	thisScene = Path( cmd.file( q=True, sn=True ) )
-	def doReload():
-		if thisScene in files:
-			ans = cmd.confirmDialog( m="Do you want to reload the file?", b=("Yes", "No"), db="No" )
-			if ans == "Yes": cmd.file( thisScene, f=True, o=True, ignoreVersion=True )
-
-	if exists:
-		if isManaged:
-			action = status.get('action')
-			otherOpen = status.get('otherOpen')
-
-			if otherOpen is not None:
-				for person in otherOpen:
-					cmd.menuItem(l='ALSO OPENED BY %s' % person, boldFont=True, ann='this file is also opened by %s' % person)
-
-			isEdit = False
-			if action == 'add' or action == 'edit':
-				isEdit = True
-
-			headRev, haveRev = int(status.get('headRev', 0)), int(status.get('haveRev', 0))
-
-
-			def onRevert(*x):
-				p4 = P4Data()
-				for f in files: p4.revert(f)
-				doReload()
-			otherStr = ''
-			if isEdit:
-				if headRev==0: otherStr = ' (Open for Add)'
-				else: otherStr = ' (Open for Edit)'
-			if isEdit:
-				cmd.menuItem( l='Revert%s' % otherStr, c=onRevert, ann='open the file for add')
-
-
-			#build the previous revisions menu if desired
-			if DEF_SHOW_PREV and headRev>1:
-				cmd.menuItem(l='Sync to...', sm=True, ann='sync to a previous revision for this file')
-				num = min( headRev, kwargs.get( 'numPrev', DEF_NUM_PREV ) )
-				for n in range( num ):
-					nRev = headRev - n
-					def onSyncRev( files, rev ):
-						p4 = P4File()
-						for f in files: p4.sync( f, rev=rev )
-						doReload()
-					cmd.menuItem(cb=haveRev==nRev, l='Sync to rev %s/%s' % (nRev, headRev), c=Callback(onSyncRev, files, nRev), ann='sync to revision %s of %s' % (nRev, headRev))
-				cmd.menuItem(d=True)
-
-				def onSyncRev(*x):
-					ans, num = doPrompt(t='Enter revision number', m='Enter revision number', db=OK)
-					if ans == OK and num:
-						p4 = P4Data()
-						for f in files: p4.sync(f, rev=num)
-						doReload()
-				cmd.menuItem(l='Sync to rev...', c=onSyncRev, ann='opens a window for you to specify which revision to sync to')
-				cmd.setParent('..', m=True)
-
-		elif p4.isUnderClient():
-			def onAdd(*x):
-				p4 = P4Data()
-				for f in files: p4.add(f)
-			cmd.menuItem(l='Add to perforce', c=onAdd, ann='open the file for add')
-		else:
-			cmd.menuItem(en=False, l='Not under perforce root', ann='the file doesnt appear to be under the perforce client')
-	else:
-		cmd.menuItem(en=False, l="File doesn't exist" )
-
+	pass
+	
 
 def addExploreToMenuItems( filepath ):
 	if filepath is None:
@@ -1039,8 +946,6 @@ _ANIM_LAYER_ATTRS = [ 'mute',
 					 'override',
 					 #'passthrough',
 					 'weight',
-					 'rotationInterpolateMode',
-					 'scaleInterpolateMode',
 					 #'parentMute',
 					 #'childsoloed',
 					 #'siblingSolo',
@@ -1049,6 +954,14 @@ _ANIM_LAYER_ATTRS = [ 'mute',
 					 'selected',
 					 'collapse',
 					 'backgroundWeight' ]
+
+if mayaVer >= 2011:
+		_ANIM_LAYER_ATTRS += [ 'rotationAccumulationMode',
+		                       'scaleAccumulationMode' ]
+else:
+	_ANIM_LAYER_ATTRS += [ 'rotationInterpolateMode',
+	                       'scaleInterpolateMode' ]
+
 
 def d_restoreAnimLayers( f ):
 	'''
@@ -1073,21 +986,22 @@ def d_restoreAnimLayers( f ):
 				valueDict[ attr ] = cmd.getAttr( '%s.%s' % (l, attr) )
 
 		#run the function
-		f( *a, **kw )
+		try:
+			f( *a, **kw )
+		finally:
+			#restore selection and all layer attributes
+			for l, valueDict in preDict.iteritems():
+				for attr, value in valueDict.iteritems():
+					try: cmd.setAttr( '%s.%s' % (l, attr), value )
+					except RuntimeError: pass
 
-		#restore selection and all layer attributes
-		for l, valueDict in preDict.iteritems():
-			for attr, value in valueDict.iteritems():
-				try: cmd.setAttr( '%s.%s' % (l, attr), value )
-				except RuntimeError: pass
+			for l in cmd.ls( typ='animLayer' ):
+				cmd.animLayer( l, e=True, selected=False )
 
-		for l in cmd.ls( typ='animLayer' ):
-			cmd.animLayer( l, e=True, selected=False )
+			for l in selectedLayers:
+				cmd.animLayer( l, e=True, selected=True )
 
-		for l in selectedLayers:
-			cmd.animLayer( l, e=True, selected=True )
-
-		cmd.animLayer( forceUIRefresh=True )
+			cmd.animLayer( forceUIRefresh=True )
 
 	func.__name__ = f.__name__
 	func.__doc__ = f.__doc__
