@@ -8,7 +8,7 @@ DEFAULT_XTN = 'preset'
 
 #define where the base directories are for presets
 kLOCAL_BASE_DIR = Path('%HOME%/presets/')
-kGLOBAL_BASE_DIR = Path('%VTOOLS%/presets')
+kGLOBAL_BASE_DIR = Path( __file__ )
 
 class PresetException(Exception):
 	def __init__( self, *args ):
@@ -53,7 +53,7 @@ def savePreset( locale, tool, presetName, ext=DEFAULT_XTN, contentsStr='' ):
 	given a contents string, this convenience method will store it to a preset file
 	'''
 	preset = Preset(locale, tool, presetName, ext)
-	preset.write(contentsStr, locale==GLOBAL)
+	preset.write( contentsStr )
 
 	return preset
 
@@ -169,7 +169,7 @@ def dataFromPresetPath( path ):
 	else:
 		raise PresetException("%s isn't under the local or the global preset dir" % file)
 
-	tool = pathCopy[ -2 ][ 1: ]
+	tool = pathCopy[ -2 ]
 	ext = pathCopy.getExtension()
 	name = pathCopy.name()
 

@@ -393,6 +393,7 @@ class CommonButtonsLayout(MelColumn):
 		self.updateSkinButtons()
 
 
+		"""
 		### SETUP VOLUME BUILDER CONTROL BUTTONS
 		SeparatorLabelLayout( skinCol, 'Volume Tools' )
 		buttonForm = MelHLayout( skinCol )
@@ -406,6 +407,7 @@ class CommonButtonsLayout(MelColumn):
 		MelButton( buttonForm, l='Open Skin Weights Tool', en=False )  #c=lambda *a: skinWeightsUI.SkinWeightsWindow() )
 		MelButton( buttonForm, l='Generate Skin Weights', c=self.on_generateWeights )
 		buttonForm.layout()
+		"""
 
 		self.setSceneChangeCB( self.on_sceneOpen )
 	def updateSkinButtons( self ):

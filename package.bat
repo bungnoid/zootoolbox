@@ -5,6 +5,7 @@ mkdir ..\scriptPackages
 mkdir ..\scriptPackages\prefs
 mkdir ..\scriptPackages\prefs\icons
 mkdir ..\scriptPackages\scripts
+mkdir ..\scriptPackages\scripts\presets
 mkdir ..\scriptPackages\scripts\filesystem
 mkdir ..\scriptPackages\scripts\CST
 mkdir ..\scriptPackages\scripts\rigger
@@ -16,6 +17,7 @@ copy prefs\icons\*.* ..\scriptPackages\prefs\icons
 
 copy *.py                                                 ..\scriptPackages\scripts\
 copy filesystem\*.py                                      ..\scriptPackages\scripts\filesystem\
+robocopy presets\                                         ..\scriptPackages\scripts\presets\ /s /xa:h /xd .svn
 copy dagMenuProc_v2009.mel                                ..\scriptPackages\scripts\
 copy gatherFileDeps.mel                                   ..\scriptPackages\scripts\
 copy listProcs.mel                                        ..\scriptPackages\scripts\

@@ -201,7 +201,11 @@ class Path(str):
 	def __getitem__( self, item ):
 		return self._splits[ item ]
 	def __getslice__( self, a, b ):
-		return self._toksToPath( self._splits[ a:b ], False, self.hasTrailing )
+		isUNC = self.isUNC
+		if a:
+			isUNC = False
+
+		return self._toksToPath( self._splits[ a:b ], isUNC, self.hasTrailing )
 	def __len__( self ):
 		if not self:
 			return 0
@@ -226,6 +230,7 @@ class Path(str):
 		given a bunch of path tokens, deals with prepending and appending path
 		separators for unc paths and paths with trailing separators
 		'''
+		toks = list( toks )
 		if isUNC:
 			toks = ['', ''] + toks
 
@@ -253,12 +258,16 @@ class Path(str):
 		same filesystem object.  NOTE: this doesn't take into account any sort of linking on *nix
 		systems...
 		'''
-		other = Path( other, self.__CASE_MATTERS )
+		if not isinstance( other, Path ):
+			other = Path( other, self.__CASE_MATTERS )
 
-		if self.__CASE_MATTERS:
-			return str( self ) == str( other )
-		else:
-			return str.lower( self ) == str.lower( other )
+		selfStr = str( self.asFile() )
+		otherStr = str( other.asFile() )
+		if not self.__CASE_MATTERS:
+			selfStr = selfStr.lower()
+			otherStr = otherStr.lower()
+
+		return selfStr == otherStr
 	__eq__ = isEqual
 	def __ne__( self, other ):
 		return not self.isEqual( other )
@@ -320,7 +329,7 @@ class Path(str):
 		if not self.hasTrailing:
 			return self
 
-		return self.__class__( self._passed[ :-1 ], self.__CASE_MATTERS )
+		return self.__class__( str( self )[ :-1 ], self.__CASE_MATTERS )
 	asfile = asFile
 	def isDir( self ):
 		'''
@@ -654,11 +663,11 @@ class Path(str):
 			otherToks = [ t.lower() for t in otherToks ]
 
 		#if the first path token is different, early out - one is not a subset of the other in any fashion
+		if otherToks[0] != pathToks[0]:
+			return None
+
 		lenPath, lenOther = len( path ), len( other )
-		if caseMatters:
-			if otherToks[0] != pathToks[0]:
-				return None
-		elif lenPath < lenOther:
+		if lenPath < lenOther:
 			return None
 
 		newPathToks = []
@@ -690,9 +699,8 @@ class Path(str):
 		d:/main/content/mod/models/someModel.ma << '%VCONTENT%' results in %VCONTENT%/mod/models/someModel.ma
 		'''
 
-		#if not isinstance(other, Path): other = Path(other)
 		toks = toksLower = self._splits
-		otherToks = Path( other ).split()
+		otherToks = Path( other, self.__CASE_MATTERS, envDict=envDict ).split()
 		newToks = []
 		n = 0
 		if not self.__CASE_MATTERS:

@@ -12,7 +12,6 @@ class ToolCB(object):
 	def __init__( self, melStr ):
 		self.cmdStr = melStr
 	def __call__( self, *a ):
-		print self.cmdStr
 		evalMel( self.cmdStr )
 
 
@@ -20,7 +19,7 @@ class ToolCB(object):
 #in the UI, and a tuple containing the annotation string and the button press callback to invoke when that
 #tool's toolbox button is pressed.
 #NOTE: the press callback should take *a as its args
-TOOL_CATS = ( ('rigging', (('Skeleton Builder', "Skeleton Builder is what zooCST initially set out to be", loadSkeletonBuilderUI),
+TOOL_CATS = ( ('rigging', (('Skeleton Builder - the new CST', "Skeleton Builder is what zooCST initially set out to be", loadSkeletonBuilderUI),
                            ('zooCST', 'The ghetto version of Skeleton Builder', None),
                            ('zooTriggered', 'zooTriggered is one of the most powerful rigging companions around.  It allows the rigger to attach name independent MEL commands to an object.  These commands can be run either on the selection of the object, or by right clicking over that object.\n\nIt allows context sensitive scripted commands to be added to a character rig, which allows the rigger to create more intuitive rigs.  Being able to add name independent MEL scripts to a rig can open up entire new worlds of possibilities, as does selection triggered MEL commands.', None),
                            ('zooTriggerator', '''zooTriggerator is an interface for building and managing triggered viewport interfaces.  It builds collapsible, in-viewport folders that contain selection triggers.\n\nThey can be used to build selection triggers for complex rigs to make an easy to use interface for animators to use.''', None),
@@ -90,7 +89,7 @@ class ToolboxTabs(MelTabLayout):
 
 class ToolboxWindow(BaseMelWindow):
 	WINDOW_NAME = 'zooToolBox'
-	WINDOW_TITLE = ''
+	WINDOW_TITLE = 'zooToolBox    ::macaroniKazoo::'
 
 	DEFAULT_SIZE = 400, 300
 	FORCE_DEFAULT_SIZE = True
