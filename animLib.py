@@ -696,7 +696,6 @@ class ClipPreset(Preset):
 
 		#generate the icon for the clip and add it to perforce if appropriate
 		icon = generateIcon( self )
-		icon.asP4().add()
 
 
 class ClipManager(PresetManager):

@@ -127,8 +127,8 @@ global proc zooBuildKeyCommandsPresetsPopup( string $parent ) {
 	setParent -m $parent;
 	menu -e -dai $parent;
 
-	menuItem -l "setKeyframe (all attributes)" -c( "zooSetKeyCommandsWindowCmd \"setKeyframel\";" );
-	menuItem -l "setKeyframe (transforms only)" -c( "zooSetKeyCommandsWindowCmd \"setKeyframe -at t -at r -at s;\"" );
+	menuItem -l "setKeyframe (all attributes)" -c( "zooSetKeyCommandsWindowCmd \"setKeyframe;\";" );
+	menuItem -l "setKeyframe (pos and rot only)" -c( "zooSetKeyCommandsWindowCmd \"setKeyframe -at t -at r -at parent;\"" );
 	menuItem -l "zooChangeSpace" -c( "zooSetKeyCommandsWindowCmd \"zooChangeSpace \\\"-attr parent 0\\\" #;\"" );
 	menuItem -l "change rotate order" -c( "zooSetKeyCommandsWindowCmd \"xform -p 1 -roo zxy #;\\nsetKeyframe;\\nsetAttr #.rotateOrder 0;\\n//NOTE: you still need to manually change the\\n//rotation order attribute after this script\\n//finishes\\n//\\n//This script just makes sure all previously\\n//set keys are oriented correctly for the\\n//new rotation order\"" );
 	menuItem -d 1;

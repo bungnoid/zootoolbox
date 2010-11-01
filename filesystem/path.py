@@ -138,9 +138,6 @@ class Path(str):
 	__CASE_MATTERS = os.name != 'nt'
 
 	@classmethod
-	def DoP4( cls ):
-		return False
-	@classmethod
 	def DoesCaseMatter( cls ):
 		return cls.__CASE_MATTERS
 
@@ -532,26 +529,10 @@ class Path(str):
 		'''
 		if not self.exists:
 			os.makedirs( str( self ) )
-	def delete( self, doP4=True ):
+	def delete( self ):
 		'''
-		WindowsError is raised if the file cannot be deleted.  if the file is managed by perforce, then a p4 delete is performed
+		WindowsError is raised if the file cannot be deleted.
 		'''
-		if doP4 and self.DoP4():
-			try:
-				asP4 = self.asP4()
-				if asP4.managed():
-					if asP4.action is None:
-						asP4.delete()
-						return
-					else:
-						asP4.revert()
-						asP4.delete()
-
-						#only return if the file doesn't exist anymore - it may have been open for add in
-						#which case we still need to do a normal delete...
-						if not self.exists: return
-			except Exception, e: pass
-
 		if self.isfile():
 			try:
 				os.remove( self )
@@ -565,55 +546,26 @@ class Path(str):
 			win32api.SetFileAttributes( self, win32con.FILE_ATTRIBUTE_NORMAL )
 			shutil.rmtree( str( self.asDir() ), True )
 	remove = delete
-	def rename( self, newName, nameIsLeaf=False, doP4=True ):
+	def rename( self, newName, nameIsLeaf=False ):
 		'''
 		it is assumed newPath is a fullpath to the new dir OR file.  if nameIsLeaf is True then
 		newName is taken to be a filename, not a filepath.  the instance is modified in place.
-		if the file is in perforce, then a p4 rename (integrate/delete) is performed
 		'''
-		reAdd, change = False, None
-		asP4 = None
-
 		newPath = Path( newName )
 		if nameIsLeaf:
 			newPath = self.up() / newName
 
 		if self.isfile():
 			tgtExists = newPath.exists
-			if doP4 and self.DoP4():
-				try:
-					asP4 = P4File( self )
-
-					#if its open for add, revert - we're going to rename the file...
-					if asP4.action == 'add':
-						asP4.revert()
-						change = asP4.getChange()
-						reAdd = True
-
-					#so if we're managed by p4 - try a p4 rename, and return on success.  if it
-					#fails however, then just do a normal rename...
-					if asP4.managed():
-						asP4.rename( newPath )
-						self.setPath( str(newPath) )
-						return
-
-					#if the target exists and is managed by p4, make sure its open for edit
-					if tgtExists and asP4.managed( newPath ):
-						asP4.edit( newPath )
-				except Exception: pass
 
 			#now perform the rename
 			os.rename( self, newPath )
-
-			if reAdd:
-				asP4.add( newPath )
-				asP4.setChange( change, newPath )
 		elif self.isdir():
 			raise NotImplementedError('dir renaming not implemented yet...')
 
 		return newPath
 	move = rename
-	def copy( self, target, nameIsLeaf=False, doP4=True ):
+	def copy( self, target, nameIsLeaf=False ):
 		'''
 		same as rename - except for copying.  returns the new target name
 		'''
@@ -622,19 +574,6 @@ class Path(str):
 			if nameIsLeaf:
 				asPath = self.up() / target
 				target = asPath
-
-			if doP4 and self.DoP4():
-				try:
-					asP4 = P4File( self )
-					tgtAsP4 = P4File( target )
-					if asP4.managed() and tgtAsP4.isUnderClient():
-						'''
-						so if we're managed by p4 - try a p4 rename, and return on success.  if it
-						fails however, then just do a normal rename...
-						'''
-						asP4.copy( target )
-						return target
-				except: pass
 
 			try:
 				shutil.copy2( str( self ), str( target ) )
@@ -660,37 +599,24 @@ class Path(str):
 			fileId.close()
 
 			return lines
-	def write( self, contentsStr, doP4=True ):
+	def write( self, contentsStr ):
 		'''
-		writes a given string to the file defined by self.  if doP4 is true, the file will be either
-		checked out of p4 before writing or add to perforce after writing if its not managed already
+		writes a given string to the file defined by self.
 		'''
 		#make sure the directory to we're writing the file to exists
 		self.up().create()
 
 		existedBeforeWrite = self.exists
 		isUnderClient = False
-		if doP4 and self.DoP4():
-			asP4 = self.asP4()
-			isUnderClient = asP4.isUnderClient()
-			if existedBeforeWrite and isUnderClient:
-				asP4.edit()
 
 		fileId = file( self, 'w' )
 		fileId.write( str(contentsStr) )
 		fileId.close()
-
-		if doP4 and not existedBeforeWrite and isUnderClient:
-			asP4.add()
-	def pickle( self, toPickle, doP4=True ):
+	def pickle( self, toPickle ):
 		'''
 		similar to the write method but pickles the file
 		'''
 		Path( self ).up().create()
-
-		existedBeforeWrite = self.exists
-		if existedBeforeWrite and doP4 and self.DoP4():
-			self.edit()
 
 		#make sure the file is writeable - it may have been made unwriteable by copying from a non writeable source (ie from p4)
 		if not self.getWritable():
@@ -699,10 +625,6 @@ class Path(str):
 		fileId = file( self, 'wb' )
 		cPickle.dump( toPickle, fileId, PICKLE_PROTOCOL )
 		fileId.close()
-
-		if not existedBeforeWrite and doP4 and self.DoP4():
-			#need to explicitly add pickled files as binary type files, otherwise p4 mangles them
-			self.asP4().add(type=P4File.BINARY)
 	def unpickle( self ):
 		'''
 		unpickles the file

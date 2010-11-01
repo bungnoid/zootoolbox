@@ -4,6 +4,7 @@ both by position and by index, and as such can be used to restore weights using 
 for this tool is found in zooSkinWeights
 '''
 
+from skinWeightsBase import *
 from api import melPrint
 from filesystem import removeDupes
 from maya.cmds import *
@@ -623,6 +624,22 @@ def autoSkinToVolumeMesh( mesh, skeletonMeshRoot ):
 	delete( dupes )
 
 	return jointRemap
+
+
+def transferSkinning( sourceMesh, targetMesh ):
+	sourceSkinCluster = api.mel.findRelatedSkinCluster( sourceMesh )
+	if not sourceSkinCluster:
+		raise SkeletonError( "Cannot find a skin cluster on %s" % sourceMesh )
+
+	#if there isn't a skin cluster already, create one
+	targetSkinCluster = api.mel.findRelatedSkinCluster( targetMesh )
+	if not targetSkinCluster:
+		influences = skinCluster( sourceSkinCluster, q=True, inf=True )
+		targetSkinCluster = skinCluster( targetMesh, influences, toSelectedBones=True )[0]
+
+	copySkinWeights( sourceSkin=sourceSkinCluster, destinationSkin=targetSkinCluster, noMirror=True, surfaceAssociation='closestPoint', smooth=True )
+
+	return targetSkinCluster
 
 
 #end

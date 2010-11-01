@@ -35,8 +35,7 @@ global proc zooImportTriggers( string $preset, string $optionStr, string $search
 	$temp = `zooGetFlagArguments $optionStr clear`; if( `size $temp` ) $clear = $temp[0];
 	$temp = `zooGetFlagArguments $optionStr threshold`; if( `size $temp` ) $threshold = $temp[0];
 
-	string $presetFile = `zooGetPresetDirectory $locale zooTriggered` + $preset +".trigger";
-	string $fileContents[] = `zooReadFile $presetFile "-strip 1"`;
+	string $fileContents[] = zooReadPreset($locale, "zooTriggered", "trigger", $preset);
 	string $trigger = "";
 	string $trigCmd = "";
 	string $connectStr = "";
@@ -114,8 +113,7 @@ global proc zooImportTriggers( string $preset, string $optionStr, string $search
 
 
 global proc string[] zooGetNamespacesFromFile( string $preset, string $locale ) {
-	string $presetFile = `zooGetPresetDirectory $locale zooTriggered` + $preset +".trigger";
-	string $fileContents[] = `zooReadFile $presetFile "-strip 1"`;
+	string $fileContents[] = `zooReadPreset $locale zooTriggered "trigger" $preset`;
 	string $namespaces[] = {};
 
 	for( $n=0; $n<`size $fileContents`; $n++ ) {

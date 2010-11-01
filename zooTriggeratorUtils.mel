@@ -38,6 +38,13 @@ global proc zooTriggeratorUtils() {
 	}
 
 
+global proc int isOutline( string $shape ) {
+	if( `objExists ( $shape +".outline" )`) return true;
+	string $cons[] = `listConnections ( $shape +".instObjGroups[*]" )`;
+	return `size $cons` == 0;
+	}
+
+
 global proc int zooWOSForObject( string $obj, int $state ) {
 	string $sel[] = `ls -sl`;
 	switch( $state ) {
@@ -97,6 +104,7 @@ global proc zooExportFolder( string $folder, string $filename ){
 
 			$allConnects = `zooAddArray_str $allConnects (zooGetConnects($triggers[$i]))`;
 			for( $shape in $shapes ) {
+				if( isOutline($shape) ) continue;
 				string $shapeExportStr = `zooWriteShapeData $shape 0`;
 				$shapeExportStr = `zooReplaceNewlines $shapeExportStr ","`;
 				$baseStr = $baseStr + "s="+ $shapeExportStr +"\n";
@@ -181,7 +189,7 @@ global proc zooImportFolder( string $preset, string $optionStr ) {
 		else if( $prefix == "m=" ) $objMenus[`size $objMenus`] = $data;
 		}
 
-	zooCreateOutlines $firstObjectCreated 1;
+	//zooCreateOutlines $firstObjectCreated 1;
 
 	return;
 	}
@@ -428,10 +436,12 @@ global proc zooCreateOutlines( string $folderName, int $recursive ) {
 			if( `size $shapes` > 1 ) continue;  //if there is more than one shape, chances are it already has an outline
 			string $dupe[] = `duplicate -rr -rc $triggers[$i]`;
 			string $shapes[] = `listRelatives -pa -s $dupe[0]`;
+			addAttr -ln outline -at message $shapes[0];
 			$shapes = `parent -add -s $shapes[0] $triggers[$i]`;
 			string $cons[] = `listConnections -s 0 -p 1 -c 1 -type shadingEngine $shapes[0]`;
 			for( $j=0; $j<`size $cons`; $j+=2 ) disconnectAttr $cons[$j] $cons[$j+1];
 			scale -cp $scale $scale $scale ( $shapes[0] +".vtx[*]" );
+			delete $dupe;
 			}
 		}
 	}

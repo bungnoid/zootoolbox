@@ -108,8 +108,8 @@ global proc string zooPopulateCmdStr( string $trigger, string $cmdStr, string $o
 //------
 global proc string zooPopulateCmdStrRaw( string $trigger, string $cmdStr, string $optionalStrings[] ) {
 	string $optionalAsStr = "[r'''"+ `zooArrayToStr_str $optionalStrings "''',r'''"` +"''']";
-	python( "import triggered" );
-	$cmdStr = python( "triggered.Trigger('"+ $trigger +"').resolve('"+ encodeString($cmdStr) +"',"+ $optionalAsStr +")" );
+	python( "import triggered;" );
+	$cmdStr = python( "triggered.Trigger('"+ $trigger +"').resolve('''"+ encodeString($cmdStr) +"''',"+ $optionalAsStr +")" );
 
 	return $cmdStr;
 	}
@@ -308,17 +308,7 @@ global proc int zooAddConnectTo( string $trigger, string $connect, int $forceSlo
 //goes through all connects and makes sure objects are actually connected
 //------
 global proc zooValidateConnects( string $trigger ) {
-	string $slotPrefix = "zooTrig";
-	int $slots[] = `zooGetAllTriggerSlots $trigger`;
-
-	for( $slot in $slots ) {
-		string $attr = $slotPrefix + $slot;
-		string $objPath = `connectionInfo -sfd ( $trigger +"."+ $attr )`;
-		if( !`objExists $objPath` ) {
-			string $connect = `zooGetConnectObject $trigger $slot`;
-			zooAddConnectTo $trigger $connect $slot;
-			}
-		}
+	python("import triggered; triggered.Trigger('"+ $trigger +"').validateConnects();");
 	}
 
 
@@ -348,16 +338,7 @@ global proc zooCacheConnectName( string $trigger, int $slot ) {
 //removes a connected object from a trigger
 //------
 global proc zooRemoveConnect( string $trigger, string $connect ) {
-	if( !`objExists $trigger` ) return;
-	if( !`objExists $connect` ) return;
-
-	string $slotPrefix = "zooTrig";
-	int $slots[] = `zooGetConnectSlots $trigger $connect`;
-
-	for( $a in $slots ) {
-		deleteAttr -at ( $slotPrefix + $a ) $trigger;
-		if( `objExists ( $trigger +"."+ $slotPrefix + $a +"cache" )` ) deleteAttr -at ( $slotPrefix + $a +"cache" ) $trigger;
-		}
+	python("import triggered; triggered.Trigger('"+ $trigger +"').disconnect('"+ $connect +"');");
 	}
 
 
@@ -365,14 +346,8 @@ global proc zooRemoveConnect( string $trigger, string $connect ) {
 //returns the slots an object is connected to
 //------
 global proc int[] zooGetConnectSlots( string $trigger, string $connect ) {
-	if( !`objExists $trigger`) return {};
-	if( !`objExists $connect`) return {};
-
-	string $connections[] = `listConnections -s 0 -p 1 ( $connect +".msg" )`;
-	int $slots[] = {};
-
-	$trigger = `match "[^|]+$" $trigger`;
-	for( $n=0; $n<`size $connections`; $n++ ) if( `match ( "^"+ $trigger +".zooTrig[0-9]+$" ) $connections[$n]`!="" ) $slots[( `size $slots` )] = `match "[0-9]+$" $connections[$n]`;
+	int $slots[] = {};  //this needs to be declared first because maya doesn't know how to convert an empty list to an int array...
+	catchQuiet( $slots = python("import triggered; triggered.Trigger('"+ $trigger +"').getConnectSlots('"+ $connect +"');") );
 	return $slots;
 	}
 
@@ -438,13 +413,7 @@ global proc string zooGetConnectObject( string $trigger, int $connect ) {
 //deletes a slot from a trigger
 //------
 global proc zooRemoveTriggerSlots( string $trigger, int $slot ) {
-	if( !`objExists $trigger` ) return;
-	if( !`objExists ( $trigger +".zooTrig"+ $slot )` ) return;
-	string $slotPrefix = "zooTrig";
-
-	//delete the connect attribute, and also check to see if there is a name cache attribute as well - if so delete it too
-	deleteAttr ( $trigger +"."+ $slotPrefix + $slot );
-	if( `objExists ( $trigger +"."+ $slotPrefix + $slot +"cache" )` ) deleteAttr -at ( $slotPrefix + $slot +"cache" ) $trigger;
+	python("import triggered; triggered.Trigger('"+ $trigger +"').disconnect("+ $slot +");");
 	}
 
 

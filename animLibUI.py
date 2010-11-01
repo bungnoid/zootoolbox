@@ -117,17 +117,6 @@ class AnimLibClipLayout(MelForm):
 	def onPublish( self, *args ):
 		movedPreset = self.clipPreset.move()
 
-		#add to perforce
-		p4 = P4File( movedPreset )
-		p4.DEFAULT_CHANGE = 'animLib Auto Checkout'
-		p4.add( movedPreset, type=P4File.BINARY )
-		p4.add( movedPreset.icon, type=P4File.BINARY )
-
-		#ask the user whether they want to submit the clip - delayed submission is rarely useful/desired
-		ans = cmd.confirmDialog( t='submit clip now?', m='do you want to submit the clip now', b=api.ui_QUESTION, db=api.YES )
-		if ans == api.YES:
-			p4.submit()
-
 		self.delete()
 		self.sendEvent( 'populateClips' )
 	def onSelect( self, arg ):
@@ -187,16 +176,6 @@ class AnimLibClipLayout(MelForm):
 		self.UI_icon.refresh()
 	def delete( self ):
 		self.clipPreset.delete()
-
-		#if the clip is a global clip, ask the user if they want to submit the delete
-		if self.clipPreset.locale == GLOBAL:
-			ans = cmd.confirmDialog(t='submit the delete?', m='do you want to submit the delete?', b=api.ui_QUESTION, db=api.YES)
-			if ans == api.YES:
-				p4 = P4File(self.clipPreset)
-				p4.DEFAULT_CHANGE = 'auto deleting file from %s' % TOOL_NAME
-				p4.setChange( p4.DEFAULT_CHANGE )
-				p4.setChange( p4.DEFAULT_CHANGE, self.clipPreset.icon )
-				p4.submit()
 
 		MelForm.delete( self )
 	def reset( self ):
@@ -265,7 +244,7 @@ class AnimLibLocaleLayout(MelVSingleStretchLayout):
 		cmd.menuItem( l='new pose clip', c=lambda *x: self.sendEvent( 'newClip', kPOSE ) )
 		cmd.menuItem( l='new anim clip', c=lambda *x: self.sendEvent( 'newClip', kANIM ) )
 	def on_sync( self, *a ):
-		p4run( 'sync', *self._clipManager.getPresetDirs( GLOBAL ) )
+		#p4run( 'sync', *self._clipManager.getPresetDirs( GLOBAL ) )
 
 		self.populate()
 		self.sendEvent( 'populateLibraries' )

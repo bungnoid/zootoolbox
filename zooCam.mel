@@ -52,6 +52,8 @@ global proc zooCamUI() {
 	int $shotsExist = size(`zooListShots`);
 	string $panel = `getPanel -up`;
 	string $curCam = `zooGetPanelCam $panel`;
+	string $curCamShapes[] = `listRelatives -s -pa $curCam`;
+	string $curCamShape = $curCamShapes[0];
 	string $defaultC[] = { "persp", "top", "front", "side" };
 	string $defaultPos[] = { "N", "W", "S", "E" };
 	int $useForEazel = `optionVar -ex zooCamSetEazel`? `optionVar -q zooCamSetEazel`: 0;
@@ -82,6 +84,7 @@ global proc zooCamUI() {
 	if( `size $cameras` ) menuItem -d 1;
 	menuItem -l "create new camera" -c( "{string $cam[] = `camera`; lookThroughModelPanel $cam[0] "+ $panel +"; zooDoExtraLookthru $cam[0] "+ $panel +";}" );
 	menuItem -l "dupe current camera" -c( "{string $dupeCam[] = `duplicate -rc (zooGetPanelCam(\""+ $panel +"\"))`; lookThroughModelPanel $dupeCam[0] "+ $panel +"; zooDoExtraLookthru $dupeCam[0] "+ $panel +";}" );
+	menuItem -l "far clip x10" -c( "setAttr "+ $curCamShape +".farClipPlane (`getAttr "+ $curCamShape +".farClipPlane`*10);" );
 	menuItem -d 1;
 	menuItem -l "hide eazel" -c( "{zooGreaseMonkeyUtils; string $eazel = `zooGetEazel 0`; setAttr ( $eazel +\".v\" ) 0;}" );
 	menuItem -l "show eazel" -c( "{zooGreaseMonkeyUtils; string $eazel = `zooGetEazel 0`; setAttr ( $eazel +\".v\" ) 1;}" );

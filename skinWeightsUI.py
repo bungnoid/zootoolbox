@@ -503,7 +503,7 @@ class SkinWeightsWindow(BaseMelWindow):
 
 	DEFAULT_SIZE = 200, 30
 	DEFAULT_MENU = None
-	HELP_MENU = WINDOW_NAME, 'hamish@macaronikazoo.com', None
+	HELP_MENU = WINDOW_NAME, 'hamish@valvesoftware.com', None
 
 	FORCE_DEFAULT_SIZE = False
 
@@ -516,8 +516,19 @@ class SkinWeightsWindow(BaseMelWindow):
 		SkinWeightsLayout( col )
 
 		Spacer( col )
-		SectionLabel( col, 'skinning control' )
+		SectionLabel( col, 'Skinning Control' )
 		SkinButtonsLayout( col )
+
+		Spacer( col )
+		SectionLabel( col, 'Transfer Skinning' )
+		def tmp( *a ):
+			sel = cmd.ls( sl=True )
+			if len( sel ) > 1:
+				src = sel.pop( 0 )
+				for tgt in sel:
+					skinWeights.transferSkinning( src, tgt )
+
+		MelButton( col, l='Transfer From Source to Target', c=tmp )
 
 		import smoothWeights
 		frame = MelFrameLayout( col, label='smoothing tool', cll=True, cl=True )

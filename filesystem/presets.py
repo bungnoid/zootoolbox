@@ -287,27 +287,27 @@ class Preset(Path):
 		destP4 = None
 		addToP4 = False
 
-		#in this case, we want to make sure the file is open for edit, or added to p4...
-		if other == GLOBAL:
-			destP4 = P4File(dest)
-			if destP4.managed():
-				destP4.edit()
-				print 'opening %s for edit' % dest
-			else:
-				addToP4 = True
+		##in this case, we want to make sure the file is open for edit, or added to p4...
+		#if other == GLOBAL:
+			#destP4 = P4File(dest)
+			#if destP4.managed():
+				#destP4.edit()
+				#print 'opening %s for edit' % dest
+			#else:
+				#addToP4 = True
 
 		Path.copy(self, dest)
-		if addToP4:
-			#now if we're adding to p4 - we need to know if the preset is a pickled preset - if it is, we need
-			#to make sure we add it as a binary file, otherwise p4 assumes text, which screws up the file
-			try:
-				self.unpickle()
-				destP4.add(type=P4File.BINARY)
-			except Exception, e:
-				#so it seems its not a binary file, so just do a normal add
-				print 'exception when trying to unpickle - assuming a text preset', e
-				destP4.add()
-			print 'opening %s for add' % dest
+		#if addToP4:
+			##now if we're adding to p4 - we need to know if the preset is a pickled preset - if it is, we need
+			##to make sure we add it as a binary file, otherwise p4 assumes text, which screws up the file
+			#try:
+				#self.unpickle()
+				#destP4.add(type=P4File.BINARY)
+			#except Exception, e:
+				##so it seems its not a binary file, so just do a normal add
+				#print 'exception when trying to unpickle - assuming a text preset', e
+				#destP4.add()
+			#print 'opening %s for add' % dest
 
 		return Preset(self.other(), self.tool, self.name(), self.extension)
 	def move( self ):
