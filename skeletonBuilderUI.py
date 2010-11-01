@@ -596,11 +596,11 @@ class BuildingLayout(MelScrollLayout):
 			if part.AVAILABLE_IN_UI:
 				self.UI_list.append( BuildPartLayout( self.UI_col, part, self ) )
 
-		### BUILD UI FOR MANUAL PART CREATION ###
-		MelSeparator( self.UI_col )
-		MelLabel( self.UI_col, l='Manually Create Part From Existing Joints', align='left' )
-		MelLabel( self.UI_col, l='', height=2 )
-		ManualPartCreationLayout( self.UI_col )
+		#### BUILD UI FOR MANUAL PART CREATION ###
+		#MelSeparator( self.UI_col )
+		#MelLabel( self.UI_col, l='Manually Create Part From Existing Joints', align='left' )
+		#MelLabel( self.UI_col, l='', height=2 )
+		#ManualPartCreationLayout( self.UI_col )
 	def rePopulate( self ):
 		for ui in self.UI_list:
 			ui.rePopulate()
