@@ -91,25 +91,22 @@ def findPolePosition( end, mid=None, start=None, distanceMultiplier=1 ):
 	#this is the rough length of the presumably "limb" we're finding the pole vector position for
 	lengthFactor = (pos1-pos0).length() + (pos2-pos1).length()
 
-	#
-	vec01 = pos1 - pos0
-	vec02 = pos2 - pos0
-	projAB = vec02 * (vec01 * vec02)
+	#get the vectors from 0 to 1, and 0 to 2
+	vec0_1 = pos1 - pos0
+	vec0_2 = pos2 - pos0
 
-	midway = (pos0 + pos2) / 2.0
+	#project vec0_1 on to vec0_2
+	projA_B = vec0_2.normalize() * ( (vec0_1 * vec0_2) / vec0_1.length() )
 
-	sub = pos1 - (pos0 + projAB)
-	mag = sub.length()
+	#get the vector from the projected vector above, to the mid pos
+	sub = vec0_1 - projA_B
 
 	#if the magnitude is really small just return the position of the mid object
-	if mag < 1e-4:
+	if sub.length() < 1e-4:
 		return pos1
 
-	mult = (lengthFactor * distanceMultiplier) / mag
-
-	polePos = midway + (sub * mult)#Vector( [midway[0] + (sub[0] * mult),
-		#midway[1] + (sub[1] * mult),
-		#midway[2] + (sub[2] * mult)] )
+	sub = sub.normalize()
+	polePos = pos0 + projA_B + (sub * lengthFactor)
 
 	return polePos
 

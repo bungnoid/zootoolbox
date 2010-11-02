@@ -8,7 +8,7 @@ DEFAULT_XTN = 'preset'
 
 #define where the base directories are for presets
 kLOCAL_BASE_DIR = Path('%HOME%/presets/')
-kGLOBAL_BASE_DIR = Path( __file__ )
+kGLOBAL_BASE_DIR = Path( __file__ ).up( 2 )
 
 class PresetException(Exception):
 	def __init__( self, *args ):
