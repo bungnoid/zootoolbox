@@ -96,7 +96,7 @@ def findPolePosition( end, mid=None, start=None, distanceMultiplier=1 ):
 	vec0_2 = pos2 - pos0
 
 	#project vec0_1 on to vec0_2
-	projA_B = vec0_2.normalize() * ( (vec0_1 * vec0_2) / vec0_1.length() )
+	projA_B = vec0_2.normalize() * ( (vec0_1 * vec0_2) / vec0_2.length() )
 
 	#get the vector from the projected vector above, to the mid pos
 	sub = vec0_1 - projA_B
