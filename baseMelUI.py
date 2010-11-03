@@ -1658,6 +1658,112 @@ class MelIteratorUI(object):
 		cmd.progressWindow( e=True, ep=True )
 
 
+def buildLabelledWidget( parent, label, labelWidth, WidgetClass, *a, **kw ):
+	layout = MelHSingleStretchLayout( parent )
+	lblKw = { 'align': 'left' }
+	if label:
+		lblKw[ 'l' ] = label
+
+	if labelWidth:
+		lblKw[ 'w' ] = labelWidth
+
+	lbl = MelLabel( layout, **lblKw )
+	ui = WidgetClass( layout, *a, **kw )
+
+	layout.setStretchWidget( ui )
+	layout.layout()
+
+	return ui, lbl, layout
+
+
+def labelledUIClassFactory( baseCls ):
+	'''
+	this class factory creates "labelled" widget classes.  a labelled widget class acts just like the baseCls instance except
+	that it has a label
+	'''
+	clsName = 'Labelled_%s' % baseCls.__name__.replace( 'Mel', '' )
+	class _tmp(MelHSingleStretchLayout):
+		IS_SETUP = False
+
+		def __new__( cls, parent, *a, **kw ):
+
+			#extract any specific keywords from the dict before setting up the instance
+			label = kw.pop( 'label', kw.pop( 'l', '<-no label->' ) )
+			labelWidth = kw.pop( 'labelWidth', kw.pop( 'lw', None ) )
+			labelAlign = kw.pop( 'labelAlign', kw.pop( 'la', 'left' ) )
+
+			self = MelHSingleStretchLayout.__new__( cls, parent )
+
+			self.UI_lbl = lbl = MelLabel( self, l=label, align=labelAlign )
+			if labelWidth:
+				lbl.setWidth( labelWidth )
+
+			self.ui = ui = baseCls( self, parent, *a, **kw )
+
+			self.setStretchWidget( ui )
+			self.layout()
+
+			#these functions are built within the constructor scope for a few reasons
+			#first we get access to the ui object without having to go via a __getattr__ call
+			#second we can't put all the functionality into the __getattr__ and __setattr__ methods on the _tmp class because they will interfere with the super class' constructor (where most of the work is done)
+			#so basically construct these functions here and store them as _get and _set, and have the real __getattr__ and __setattr__ methods look for them once the instance has been properly constructed
+			def _get( self, attr ):
+				if attr in self.__dict__:
+					return self.__dict__[ attr ]
+
+				val = getattr( ui, attr, None )
+				if val is None:
+					raise AttributeError( "No attribute '%s' was found on the object or its '%s' widget member" % (attr, superCls) )
+
+				return val
+			def _set( self, attr, value ):
+				if attr in self.__dict__:
+					setattr( self, attr, value )
+
+				setattr( ui, attr, value )
+
+			self._get = _get
+			self._set = _set
+			self.IS_SETUP = True
+
+			return self
+		def __getattr__( self, attr ):
+			if self.IS_SETUP:
+				return self._get( self, attr )
+
+			return super( MelHSingleStretchLayout, self ).__getattr__( attr )
+		def __setattr__( self, attr, value ):
+			if self.IS_SETUP:
+				self._set( self, attr, value )
+				return
+
+			super( MelHSingleStretchLayout, self ).__setattr__( attr, value )
+
+		#add some convenience methods for querying and setting the label and label width
+		def getLabel( self ):
+			self.lbl.getValue()
+		def setLabel( self, label ):
+			self.lbl.setValue( label )
+		def getLabelWidth( self ):
+			self.lbl.setWidth()
+		def setLabelWidth( self, width ):
+			self.lbl.setWidth( width )
+
+	_tmp.__name__ = clsName
+	_tmp.__doc__ = baseCls.__doc__
+
+	return _tmp
+
+
+#now construct some Labelled classes
+LabelledTextField = labelledUIClassFactory( MelTextField )
+LabelledIntField = labelledUIClassFactory( MelIntField )
+LabelledFloatField = labelledUIClassFactory( MelFloatField )
+LabelledFloatSlider = labelledUIClassFactory( MelFloatSlider )
+LabelledIntSlider = labelledUIClassFactory( MelIntSlider )
+LabelledOptionMenu = labelledUIClassFactory( MelOptionMenu )
+
+
 class MayaNode(object): pass
 
 UI_FOR_PY_TYPES = { bool: MelCheckBox,
