@@ -15,6 +15,7 @@ import colours
 import meshUtils
 import profileDecorators
 from apiExtensions import asMObject, MObject
+from maya.OpenMaya import MGlobal
 
 
 SPACE_WORLD = rigUtils.SPACE_WORLD
@@ -22,7 +23,18 @@ SPACE_LOCAL = rigUtils.SPACE_LOCAL
 SPACE_OBJECT = rigUtils.SPACE_OBJECT
 
 Axis = rigUtils.Axis
-CONTROL_DIRECTORY = Path( '%VTOOLS%/maya/scripts/zoo' ) #Path( __file__ ).up()
+CONTROL_DIRECTORY = None
+
+if CONTROL_DIRECTORY is None:
+	#try to determine the directory that contains the control macros
+	for f in Path( __file__ ).up().files( recursive=True ):
+		if f.hasExtension( 'shape' ):
+			if f.name().startswith( 'control' ):
+				CONTROL_DIRECTORY = f.up()
+				break
+
+if CONTROL_DIRECTORY is None:
+	MGlobal.displayError( "WARNING: Cannot determine the directory that contains the .control files - please open '%s' and set the CONTROL_DIRECTORY variable appropriately" % __file__ )
 
 AX_X, AX_Y, AX_Z, AX_X_NEG, AX_Y_NEG, AX_Z_NEG = map( Axis, range( 6 ) )
 DEFAULT_AXIS = AX_X

@@ -209,8 +209,8 @@ def writeExportDict( toolName=None, toolVersion=None, **kwargs ):
 	d[ kEXPORT_DICT_MACHINE ] = os.environ[ 'COMPUTERNAME' ]
 	now = datetime.datetime.now()
 	d[ kEXPORT_DICT_DATE ], d[ kEXPORT_DICT_TIME ] = now.date(), now.time()
-	d[ kEXPORT_DICT_PROJECT ] = os.environ[ 'VPROJECT' ]
-	d[ kEXPORT_DICT_CONTENT ] = os.environ[ 'VCONTENT' ]
+	#d[ kEXPORT_DICT_PROJECT ] = os.environ[ 'VPROJECT' ]
+	#d[ kEXPORT_DICT_CONTENT ] = os.environ[ 'VCONTENT' ]
 	d[ kEXPORT_DICT_TOOL ] = toolName
 	d[ kEXPORT_DICT_TOOL_VER ] = toolVersion
 

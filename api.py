@@ -471,7 +471,8 @@ def writeExportDict( toolName=None, toolVersion=None, **kwargs ):
 
 def referenceFile( filepath, namespace, silent=False ):
 	filepath = Path( filepath )
-	cmd.file( filepath << '%VCONTENT%', r=True, prompt=silent, namespace=namespace )
+	#cmd.file( filepath << '%VCONTENT%', r=True, prompt=silent, namespace=namespace )
+	cmd.file( filepath, r=True, prompt=silent, namespace=namespace )
 
 
 def openFile( filepath, silent=False ):
@@ -680,7 +681,7 @@ def lengthyPerforceOpWarning( *a, **kw ):
 filesystem.P4_LENGTHY_CALLBACK = lengthyPerforceOpWarning
 def addPerforceMenuItems( filepath, **kwargs ):
 	pass
-	
+
 
 def addExploreToMenuItems( filepath ):
 	if filepath is None:
