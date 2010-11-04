@@ -1680,17 +1680,24 @@ def labelledUIClassFactory( baseCls ):
 	'''
 	this class factory creates "labelled" widget classes.  a labelled widget class acts just like the baseCls instance except
 	that it has a label
+
+	NOTE: the following constructor keywords can be used:
+		llabel, ll			sets the text label for the widget
+		llabelWidth, llw	sets the label width
+		llabelAlign, lla	sets the label alignment
+
+		the keyword "label" isn't used because the class might be wrapping a widget that validly has a label such as MelButton or MelCheckbox
 	'''
-	clsName = 'Labelled_%s' % baseCls.__name__.replace( 'Mel', '' )
+	clsName = 'Labelled%s' % baseCls.__name__.replace( 'Mel', '' )
 	class _tmp(MelHSingleStretchLayout):
 		IS_SETUP = False
 
 		def __new__( cls, parent, *a, **kw ):
 
 			#extract any specific keywords from the dict before setting up the instance
-			label = kw.pop( 'label', kw.pop( 'l', '<-no label->' ) )
-			labelWidth = kw.pop( 'labelWidth', kw.pop( 'lw', None ) )
-			labelAlign = kw.pop( 'labelAlign', kw.pop( 'la', 'left' ) )
+			label = kw.pop( 'llabel', kw.pop( 'll', '<-no label->' ) )
+			labelWidth = kw.pop( 'llabelWidth', kw.pop( 'llw', None ) )
+			labelAlign = kw.pop( 'llabelAlign', kw.pop( 'lla', 'left' ) )
 
 			self = MelHSingleStretchLayout.__new__( cls, parent )
 
@@ -1713,7 +1720,7 @@ def labelledUIClassFactory( baseCls ):
 
 				val = getattr( ui, attr, None )
 				if val is None:
-					raise AttributeError( "No attribute '%s' was found on the object or its '%s' widget member" % (attr, superCls) )
+					raise AttributeError( "No attribute '%s' was found on the object or its '%s' widget member" % (attr, baseCls) )
 
 				return val
 			def _set( self, attr, value ):
@@ -1739,15 +1746,15 @@ def labelledUIClassFactory( baseCls ):
 
 			super( MelHSingleStretchLayout, self ).__setattr__( attr, value )
 
-		#add some convenience methods for querying and setting the label and label width
-		def getLabel( self ):
-			self.lbl.getValue()
-		def setLabel( self, label ):
-			self.lbl.setValue( label )
-		def getLabelWidth( self ):
-			self.lbl.setWidth()
-		def setLabelWidth( self, width ):
-			self.lbl.setWidth( width )
+		#add some convenience methods for querying and setting the label and label width - they're named deliberately named awkwardly, see the class doc above for more information
+		def getLlabel( self ):
+			self.UI_lbl.getValue()
+		def setLlabel( self, label ):
+			self.UI_lbl.setValue( label )
+		def getLlabelWidth( self ):
+			self.UI_lbl.setWidth()
+		def setLlabelWidth( self, width ):
+			self.UI_lbl.setWidth( width )
 
 	_tmp.__name__ = clsName
 	_tmp.__doc__ = baseCls.__doc__
@@ -1772,7 +1779,7 @@ UI_FOR_PY_TYPES = { bool: MelCheckBox,
                     basestring: MelTextField,
                     list: MelTextScrollList,
                     tuple: MelTextScrollList,
-                    MayaNode: MelObjectSelector }
+                    MayaNode: MelObjectSelector }  #TODO: add a file browse widget and map filesystem.Path to it
 
 def getBuildUIMethodForObject( obj, typeMapping=None ):
 	if typeMapping is None:
