@@ -14,7 +14,7 @@ EXT = 'mapping'
 ui = None
 
 
-class MappingForm(BaseMelWidget):
+class MappingForm(MelHLayout):
 	'''
 	Acts as a generic UI for editing "mappings".  A mapping is basically just a dictionaries in maya,
 	but they're used for things like animation transfer and weight transfer between one or more
@@ -22,8 +22,6 @@ class MappingForm(BaseMelWidget):
 
 	Mappings can be stored out to presets.
 	'''
-
-	WIDGET_CMD = cmd.formLayout
 
 	#args for controlling the name mapping algorithm - see the names.matchNames method for documentation on what these variables actually control
 	STRIP_NAMESPACES = True
@@ -39,69 +37,69 @@ class MappingForm(BaseMelWidget):
 	ALLOW_MULTI_SELECTION = True
 
 	def __new__( cls, parent, *a, **kw ):
-		return BaseMelWidget.__new__( cls, parent )
+		return MelHLayout.__new__( cls, parent )
 	def __init__( self, parent, srcItems=None, tgtItems=None ):
+		MelHLayout.__init__( self, parent )
+		self.expand = True
+
 		self._srcToTgtDict = {}
 		self._previousMappingFile = None
 
-		self.UI_srcButton = MelButton( self, l='Source Items (click for menu)' )
-		self.UI_tgtButton = MelButton( self, l='Target Items (click for menu)' )
+		szLeft = MelVLayout( self )
+		szRight = MelVLayout( self )
 
-		cmd.popupMenu( p=self.UI_srcButton, pmc=self.build_srcMenu )
-		cmd.popupMenu( p=self.UI_tgtButton, pmc=self.build_tgtMenu )
+		szLeft.expand = True
+		szRight.expand = True
 
-		cmd.popupMenu( p=self.UI_srcButton, b=1, pmc=self.build_srcMenu )
-		cmd.popupMenu( p=self.UI_tgtButton, b=1, pmc=self.build_tgtMenu )
+		self.UI_srcButton = srcBut = MelButton( szLeft, l='Source Items (click for menu)' )
+		self.UI_tgtButton = tgtBut = MelButton( szRight, l='Target Items (click for menu)' )
 
-		cmd.setParent( self )
+		szLeft.setWeight( srcBut, 0 )
+		szRight.setWeight( tgtBut, 0 )
 
-		self.UI_but_srcUp = MelButton( self, label='up', vis=True, width=22, c=self.on_src_up )
-		self.UI_but_srcDn = MelButton( self, label='dn', vis=True, width=22, c=self.on_src_dn )
-		self.UI_srcs = MelObjectScrollList( self, deleteKeyCommand=self.on_delete, doubleClickCommand=self.on_selectSrc )
+		szHLeft = MelHLayout( szLeft )
+		szHLeft.expand = True
+		szHRight = MelHLayout( szRight )
+		szHRight.expand = True
+
+		vLayout = MelVLayout( szHLeft )
+		self.UI_but_srcUp = MelButton( vLayout, label='up', vis=True, width=22, c=self.on_src_up )
+		self.UI_but_srcDn = MelButton( vLayout, label='dn', vis=True, width=22, c=self.on_src_dn )
+		vLayout.layout()
+		szHLeft.setWeight( vLayout, 0 )
+
+		self.UI_srcs = srcs = MelObjectScrollList( szHLeft, deleteKeyCommand=self.on_delete, doubleClickCommand=self.on_selectSrc )
 		self.UI_srcs.setChangeCB( self.on_selectItemSrc )
 
-		self.UI_but_tgtUp = MelButton( self, label='up', vis=False, width=1, c=self.on_tgt_up )
-		self.UI_but_tgtDn = MelButton( self, label='dn', vis=False, width=1, c=self.on_tgt_dn )
-		self.UI_tgts = MelObjectScrollList( self, deleteKeyCommand=self.on_delete, doubleClickCommand=self.on_selectTgt, ams=True )
+		self.UI_tgts = MelObjectScrollList( szHRight, deleteKeyCommand=self.on_delete, doubleClickCommand=self.on_selectTgt, ams=True )
 		self.UI_tgts.setChangeCB( self.on_selectItemTgt )
+
+		#vLayout = MelVLayout( szHRight )
+		#self.UI_but_tgtUp = MelButton( vLayout, label='up', vis=False, width=1, c=self.on_tgt_up )
+		#self.UI_but_tgtDn = MelButton( vLayout, label='dn', vis=False, width=1, c=self.on_tgt_dn )
+		#vLayout.layout()
+
+		szLeft.layout()
+		szRight.layout()
+		szHLeft.layout()
+		szHRight.layout()
+		self.layout()
 
 		MelPopupMenu( self.UI_srcs, pmc=self.build_srcMenu )
 		MelPopupMenu( self.UI_tgts, pmc=self.build_tgtMenu )
 
-		cmd.formLayout( self, e=True,
-						af=((self.UI_srcButton, "top", 0),
-							(self.UI_srcButton, "left", 0),
-							(self.UI_tgtButton, "top", 0),
-							(self.UI_tgtButton, "right", 0),
-		                    (self.UI_but_srcUp, "left", 0),
-		                    (self.UI_but_srcDn, "left", 0),
-		                    (self.UI_but_srcDn, "bottom", 0),
-							(self.UI_srcs, "bottom", 2),
-							(self.UI_tgts, "top", 3),
-							(self.UI_tgts, "bottom", 2),
-		                    (self.UI_but_tgtUp, "right", 0),
-		                    (self.UI_but_tgtDn, "right", 0),
-		                    (self.UI_but_tgtDn, "bottom", 0)),
-						ap=((self.UI_srcs, "right", 1, 50),
-							(self.UI_srcButton, "right", 1, 50),
-		                    (self.UI_but_srcUp, "bottom", 0, 50),
-		                    (self.UI_but_srcDn, "top", 0, 50),
-							(self.UI_tgts, "left", 1, 50),
-							(self.UI_tgtButton, "left", 1, 50),
-		                    (self.UI_but_tgtUp, "bottom", 0, 50),
-		                    (self.UI_but_tgtDn, "top", 0, 50)),
-						ac=((self.UI_srcs, "top", 3, self.UI_srcButton),
-		                    (self.UI_but_srcUp, "top", 0, self.UI_srcButton),
-		                    (self.UI_but_tgtUp, "top", 0, self.UI_tgtButton),
-		                    (self.UI_srcs, "left", 3, self.UI_but_srcUp),
-							(self.UI_tgts, "top", 3, self.UI_tgtButton),
-		                    (self.UI_tgts, "right", 3, self.UI_but_tgtUp)) )
+		MelPopupMenu( self.UI_srcButton, pmc=self.build_srcMenu )
+		MelPopupMenu( self.UI_tgtButton, pmc=self.build_tgtMenu )
+
+		MelPopupMenu( self.UI_srcButton, b=1, pmc=self.build_srcMenu )
+		MelPopupMenu( self.UI_tgtButton, b=1, pmc=self.build_tgtMenu )
 
 		if srcItems is not None:
 			self.addSrcItems( srcItems )
 
 		if tgtItems is not None:
 			self.addTgtItems( tgtItems )
+
 	@property
 	def srcs( self ):
 		return self.UI_srcs.getItems()
@@ -163,6 +161,16 @@ class MappingForm(BaseMelWidget):
 			performMapping = bool( self.UI_tgts.getItems() )
 			if performMapping:
 				self.mapAllSrcItems()
+	def clear( self ):
+		self._srcToTgtDict = {}
+		self.UI_srcs.clear()
+		self.UI_tgts.clear()
+	def clearSrcs( self ):
+		self._srcToTgtDict = {}
+		self.UI_srcs.clear()
+	def clearTgts( self ):
+		self._srcToTgtDict = {}
+		self.UI_tgts.clear()
 	def refresh( self ):
 		theSrcs = []
 		theTgts = []

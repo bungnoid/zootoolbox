@@ -103,10 +103,15 @@ class BaseBlender(object):
 	a blender object is simply a callable object that when called with a percentage arg (0-1) will
 	apply said percentage of the given clips to the given mapping
 	'''
-	def __init__( self, clipA, clipB, mapping=None ):
+	def __init__( self, clipA, clipB, mapping=None, attributes=None ):
 		self.clipA = clipA
 		self.clipB = clipB
 		self.__mapping = mapping
+
+		if attributes:
+			attributes = set( attributes )
+
+		self.attributes = attributes
 	def setMapping( self, mapping ):
 		self.__mapping = mapping
 	def getMapping( self ):
@@ -118,12 +123,15 @@ class BaseBlender(object):
 
 
 class PoseBlender(BaseBlender):
-	def __call__( self, pct, mapping=None ):
+	def __call__( self, pct, mapping=None, attributes=None ):
 		BaseBlender.__call__(self, pct, mapping)
 		cmdQueue = api.CmdQueue()
 
 		if mapping is None:
 			mapping = self.getMapping()
+
+		if attributes is None:
+			attributes = self.attributes
 
 		mappingDict = mapping.asDict()
 		for clipAObj, attrDictA in self.clipA.iteritems():
@@ -134,6 +142,10 @@ class PoseBlender(BaseBlender):
 
 			clipBObjs = mapping[ clipAObj ]
 			for a, valueA in attrDictA.iteritems():
+				if attributes:
+					if a not in attributes:
+						continue
+
 				attrpath = '%s.%s' % (clipAObj, a)
 				if not cmd.getAttr( attrpath, settable=True ):
 					continue
@@ -242,7 +254,7 @@ class BaseClip(dict):
 			self.generate( objects )
 	def generate( self, objects ):
 		pass
-	def apply( self, mapping, **kwargs ):
+	def apply( self, mapping, attributes=None, **kwargs ):
 		'''
 		valid kwargs are
 		additive			[False]           applys the animation additively
@@ -333,7 +345,7 @@ class PoseClip(BaseClip):
 			self[ obj ] = objDict = {}
 			for attr in objAttrs:
 				objDict[ attr ] = cmd.getAttr( '%s.%s' % (obj, attr) )
-	def apply( self, mapping, **kwargs ):
+	def apply( self, mapping, attributes=None, **kwargs ):
 		'''
 		construct a mel string to pass to eval - so it can be contained in a single undo...
 		'''
@@ -343,12 +355,20 @@ class PoseClip(BaseClip):
 		additive = kwargs.get( self.kOPT_ADDITIVE,
 							   self.kOPT_DEFAULTS[ self.kOPT_ADDITIVE ] )
 
+		#convert the attribute list to a set for fast lookup
+		if attributes:
+			attributes = set( attributes )
+
 		for clipObj, tgtObj in mapping.iteritems():
 			try:
 				attrDict = self[ clipObj ]
 			except KeyError: continue
 
 			for attr, value in attrDict.iteritems():
+				if attributes:
+					if attr not in attributes:
+						continue
+
 				attrpath = '%s.%s' % (tgtObj, attr)
 				try:
 					if not cmd.getAttr( attrpath, settable=True ): continue
@@ -441,7 +461,7 @@ class AnimClip(BaseClip):
 				isWeighted = cmd.keyTangent(attrpath, q=True, t=timeTuple, weightLock=True)
 
 				objDict[ attr ] = weightedTangents, zip(times, values, itts, otts, ixs, iys, oxs, oys, isLocked, isWeighted)
-	def apply( self, mapping, **kwargs ):
+	def apply( self, mapping, attributes=None, **kwargs ):
 		'''
 		valid kwargs are:
 		mult                [1.0]   apply a mutiplier when applying curve values
@@ -469,6 +489,10 @@ class AnimClip(BaseClip):
 		clearStart = timeOffset
 		clearEnd = clearStart + self.range
 
+		#convert the attribute list to a set for fast lookup
+		if attributes:
+			attributes = set( attributes )
+
 		for obj, tgtObj in mapping.iteritems():
 			if not tgtObj:
 				continue
@@ -478,6 +502,10 @@ class AnimClip(BaseClip):
 			except KeyError: continue
 
 			for attr, (weightedTangents, keyList) in attrDict.iteritems():
+				if attributes:
+					if attr not in attributes:
+						continue
+
 				attrpath = '%s.%s' % (tgtObj, attr)
 				try:
 					if not cmd.getAttr(attrpath, settable=True):
@@ -646,7 +674,7 @@ class ClipPreset(Preset):
 		Path.delete(self)
 		self.icon.delete()
 	@api.d_noAutoKey
-	def apply( self, objects, **kwargs ):
+	def apply( self, objects, attributes=None, **kwargs ):
 		presetDict = self.unpickle()
 		srcObjs = presetDict[ kEXPORT_DICT_OBJECTS ]
 		clip = presetDict[ kEXPORT_DICT_THE_CLIP ]
@@ -671,7 +699,7 @@ class ClipPreset(Preset):
 			mapping = Mapping( srcObjs, tgts )
 
 		#run the clip's apply method
-		clip.apply( mapping, **kwargs )
+		clip.apply( mapping, attributes, **kwargs )
 	def getClipObjects( self ):
 		'''
 		returns a list of all the object names contained in the clip

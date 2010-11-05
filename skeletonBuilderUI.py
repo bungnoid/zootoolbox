@@ -884,7 +884,7 @@ class RiggingLayout(MelForm):
 
 		buildRigForm = MelForm( buttonParent )
 		self.UI_reference = MelCheckBox( buildRigForm, label='reference model' )
-		self.UI_reference.setValue( True )
+		#self.UI_reference.setValue( True )
 
 		buildRigForm( e=True,
 		              af=((self.UI_reference, 'left', 0)),

@@ -10,6 +10,7 @@ __author__ = 'mel@macaronikazoo.com'
 
 def getSelectedChannelBoxAttrNames():
 	attrNames = cmd.channelBox( 'mainChannelBox', q=True, sma=True ) or []
+	attrNames += cmd.channelBox( 'mainChannelBox', q=True, ssa=True ) or []
 	attrNames += cmd.channelBox( 'mainChannelBox', q=True, sha=True ) or []
 
 	return attrNames
@@ -32,7 +33,6 @@ class AnimLibClipLayout(MelForm):
 		self.objs = []
 		self.mapping = {}
 		self.type = self.clipPreset.getType()
-		self.clipContents = None
 
 		self.optionsLayout = self.getParentOfType( AnimLibLayout )
 
@@ -72,10 +72,7 @@ class AnimLibClipLayout(MelForm):
 		      ac=((self.UI_lbl, 'left', 10, self.UI_icon),
 		          (self.UI_slider, 'left', 0, self.UI_icon)) )
 	def unpickle( self ):
-		if self.clipContents is None:
-			self.clipContents = self.clipPreset.unpickle()
-
-		return self.clipContents
+		return self.clipPreset.unpickle()
 	@property
 	def clipObjs( self ):
 		return self.unpickle()[ 'objects' ]
@@ -86,8 +83,12 @@ class AnimLibClipLayout(MelForm):
 		opts = self.optionsLayout.getOptions()
 		opts[ 'slam' ] = slam
 
-		self.mapping = Mapping( cmd.ls(sl=True), self.clipObjs )
-		self.apply( self.mapping, **opts )
+		if opts[ 'attrSelection' ]:
+			attributes = cmd.channelBox( 'mainChannelBox', q=True, sma=True ) or cmd.channelBox( 'mainChannelBox', q=True, sha=True ) or None
+		else:
+			attributes = None
+
+		self.apply( cmd.ls(sl=True), attributes, **opts )
 	def buildMenu( self, parent, *args ):
 		cmd.setParent( parent, m=True )
 		cmd.menu( parent, e=True, dai=True )
@@ -109,6 +110,8 @@ class AnimLibClipLayout(MelForm):
 		cmd.menuItem( l='slam clip into scene', c=self.onSlam )
 		cmd.menuItem( l='select items in clip', c=self.onSelect )
 		cmd.menuItem( l='map names manually', c=self.onMapping )
+		cmd.menuItem( d=True )
+		cmd.menuItem( l='edit clip', c=self.onEdit )
 		cmd.menuItem( d=True )
 		api.addExploreToMenuItems(self.clipPreset)
 		if self.clipPreset.locale == GLOBAL:
@@ -141,12 +144,14 @@ class AnimLibClipLayout(MelForm):
 	def onMapping( self, *args ):
 		mapping = Mapping( cmd.ls(sl=True), self.clipObjs )
 
-		#gah...  convert the mapping to the type of mapping expected by the xfer anim editor - ie a single source maps to a list of targets instead of a single target...  need to turn the mapping into a class of some description methinks
+		#convert the mapping to the type of mapping expected by the xfer anim editor - ie a single source maps to a list of targets instead of a single target...
 		xferAnimMapping = {}
 		for src, tgt in mapping.iteritems():
 			xferAnimMapping[ src ] = [ tgt ]
 
 		xferAnimUI.XferAnimEditor( mapping=xferAnimMapping, clipPreset=self.clipPreset )
+	def onEdit( self, *args ):
+		AnimClipChannelEditorWindow( self.clipPreset )
 	def onRename( self, *args ):
 		ans, name = api.doPrompt(t='new name', m='enter new name', tx=self.name())
 		if ans != api.OK:
@@ -159,10 +164,16 @@ class AnimLibClipLayout(MelForm):
 		self.autoKeyBeginState = cmd.autoKeyframe( q=True, state=True )
 		cmd.autoKeyframe( e=True, state=False )
 
+		opts = self.optionsLayout.getOptions()
+		if opts[ 'attrSelection' ]:
+			attributes = cmd.channelBox( 'mainChannelBox', q=True, sma=True ) or cmd.channelBox( 'mainChannelBox', q=True, sha=True ) or None
+		else:
+			attributes = None
+
 		self.objs = objs = cmd.ls( sl=True )
-		self.mapping = Mapping( objs, self.clipObjs )
+		self.mapping = mapping = Mapping( objs, self.clipObjs )
 		self.preClip = self.clipInstance.__class__( objs, *self.clipInstance.generatePreArgs() )
-		self.blended = self.clipInstance.blender( self.preClip, self.clipInstance, self.mapping )
+		self.blended = self.clipInstance.blender( self.preClip, self.clipInstance, mapping, attributes )
 	def onDrag( self, value ):
 		value = float( value )
 		self.blended( value )
@@ -180,6 +191,162 @@ class AnimLibClipLayout(MelForm):
 		MelForm.delete( self )
 	def reset( self ):
 		self.UI_slider.reset( False )
+
+
+class AnimClipChannelEditorLayout(MelVSingleStretchLayout):
+	def __init__( self, parent, clipPreset ):
+		MelVSingleStretchLayout.__init__( self, parent )
+
+		self.clipPreset = clipPreset
+		self.presetDict = presetDict = clipPreset.unpickle()
+		self.clipDict = clipDict = presetDict[ 'clip' ]
+		self._dirty = False
+
+		#build the UI
+		hLayout = MelHLayout( self )
+		vLayout = MelVSingleStretchLayout( hLayout )
+		self.UI_objList = UI_objList = MelObjectScrollList( vLayout )
+		UI_removeObjs = MelButton( vLayout, l='Remove Selected Objects' )
+		vLayout.setStretchWidget( UI_objList )
+		vLayout.layout()
+
+		vLayout = MelVSingleStretchLayout( hLayout )
+		self.UI_attrList = UI_attrList = MelObjectScrollList( vLayout )
+		UI_removeAttrs = MelButton( vLayout, l='Remove Selected Attributes' )
+		vLayout.setStretchWidget( UI_attrList )
+		vLayout.layout()
+
+		UI_objList.allowMultiSelect( True )
+		UI_attrList.allowMultiSelect( True )
+
+
+		hLayout.expand = True
+		hLayout.layout()
+
+		self.setStretchWidget( hLayout )
+
+		#populate the object list
+		for obj in clipDict:
+			UI_objList.append( obj )
+
+
+		#build callbacks for the lists
+		def objSelected():
+			objs = UI_objList.getSelectedItems()
+			if not objs:
+				return
+
+			UI_attrList.clear()
+			attrsAlreadyAdded = set()
+			for obj in objs:
+				attrDict = clipDict[ obj ]
+				for attrName, attrValue in attrDict.iteritems():
+					if attrName in attrsAlreadyAdded:
+						continue
+
+					self.UI_attrList.append( attrName )
+					attrsAlreadyAdded.add( attrName )
+
+				if attrDict:
+					self.UI_attrList.selectByIdx( 0, True )
+
+		UI_objList.setChangeCB( objSelected )
+		def removeObjs( *a ):
+			objs = UI_objList.getSelectedItems()
+			if not objs:
+				return
+
+			performUpdate = False
+			for obj in objs:
+				if obj in clipDict:
+					self._dirty = True
+					performUpdate = True
+					clipDict.pop( obj )
+
+			if performUpdate:
+				UI_objList.clear()
+				UI_attrList.clear()
+				for obj in clipDict:
+					UI_objList.append( obj )
+
+				if clipDict:
+					UI_objList.selectByIdx( 0, True )
+
+		UI_removeObjs.setChangeCB( removeObjs )
+		def removeAttrs( *a ):
+			objs = UI_objList.getSelectedItems()
+			if not objs:
+				return
+
+			attrs = UI_attrList.getSelectedItems()
+			if not attrs:
+				return
+
+			performUpdate = False
+			for obj in objs:
+				subDict = clipDict[ obj ]
+				for attr in attrs:
+					self._dirty = True
+					performUpdate = True
+					if attr in subDict:
+						subDict.pop( attr )
+
+			if performUpdate:
+				objSelected()
+
+		UI_removeAttrs.setChangeCB( removeAttrs )
+
+
+		#set the initial state
+		if len( self.UI_objList ):
+			UI_objList.selectByIdx( 0, True )
+
+
+		#build the save/cancel UI...
+		hLayout = MelHLayout( self )
+		MelButton( hLayout, l='Save', c=self.on_save )
+		MelButton( hLayout, l='Cancel', c=lambda *a: self.sendEvent( 'delete' ) )
+		hLayout.layout()
+
+		self.setDeletionCB( self.on_cancel )
+		self.layout()
+	def askToSave( self ):
+		#check to see if changes were made, and if so, ask if the user wants to save them...
+		if self._dirty:
+			BUTTONS = YES, NO, CANCEL = 'Yes', 'No', 'Cancel'
+			ret = cmd.confirmDialog( t='Overwrite Clip?',
+			                         m='Are you sure you want to overwrite the %s clip called %s?' % (ClipPreset.TYPE_LABELS[ self.clipPreset.getType() ],
+			                                                                                          self.clipPreset.name().split( '.' )[0]),
+			                         b=BUTTONS, db=CANCEL )
+			if ret == CANCEL:
+				return False
+			elif ret == YES:
+				self.clipPreset.pickle( self.presetDict )
+				self._dirty = False
+
+		return True
+
+	### EVENT HANDLERS ###
+	def on_cancel( self, *a ):
+		self.askToSave()
+	def on_save( self, *a ):
+		if self.askToSave():
+			self.sendEvent( 'delete' )
+
+
+class AnimClipChannelEditorWindow(BaseMelWindow):
+	WINDOW_NAME = 'animClipEditor'
+	WINDOW_TITLE = 'Anim Clip Editor'
+
+	DEFAULT_MENU = None
+	DEFAULT_SIZE = 400, 250
+
+	FORCE_DEFAULT_SIZE = False
+
+	def __init__( self, clipPreset ):
+		BaseMelWindow.__init__( self )
+		AnimClipChannelEditorLayout( self, clipPreset )
+		self.show()
 
 
 class AnimLibLocaleLayout(MelVSingleStretchLayout):
@@ -254,6 +421,8 @@ class AnimLibLayout(MelHSingleStretchLayout):
 	def __init__( self, parent ):
 		MelHSingleStretchLayout.__init__( self, parent )
 
+		AnimClipChannelEditorWindow.Close()
+
 		self._clipManager = clipManager = ClipManager()
 
 		vLayout = MelVSingleStretchLayout( self )
@@ -319,6 +488,7 @@ class AnimLibLayout(MelHSingleStretchLayout):
 		self.layout()
 
 		self.populateLibraries()
+		self.setDeletionCB( self.on_close )
 	def populateLibraries( self ):
 		UI_libraries = self.UI_libraries
 		UI_libraries.clear()
@@ -374,7 +544,12 @@ class AnimLibLayout(MelHSingleStretchLayout):
 		if ans == CANCEL:
 			return
 
-		kwargs = { 'attrs': getSelectedChannelBoxAttrNames() or None }
+		kwargs = {}
+
+		opts = self.getOptions()
+		if opts.get( 'attrSelection', False ):
+			kwargs[ 'attrs' ] = getSelectedChannelBoxAttrNames() or None
+
 		if clipType == kANIM:
 			kwargs = { 'startFrame': cmd.playbackOptions( q=True, min=True ),
 			           'endFrame': cmd.playbackOptions( q=True, max=True ) }
@@ -390,6 +565,8 @@ class AnimLibLayout(MelHSingleStretchLayout):
 		print 'wrote new %s clip!' % typeLabel, newClip
 
 	### EVENT HANDLERS ###
+	def on_close( self, *a ):
+		AnimClipChannelEditorWindow.Close()
 	def on_selectLibrary( self, *a ):
 		sel = self.UI_libraries.getSelectedItems()
 		if sel:

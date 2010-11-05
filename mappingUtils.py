@@ -28,8 +28,9 @@ def resolveMappingToScene( mapping, threshold=1.0 ):
 		'''
 		srcs = []
 		for i in mapping.srcs:
+			i = i.split( ':' )[-1].split( '|' )[-1]
 			if not cmd.objExists( i ):
-				possibles = cmd.ls( '*%s' % i, r=True )
+				possibles = cmd.ls( i, r=True )
 				if possibles: i = possibles[0]
 
 			srcs.append( i )
@@ -37,7 +38,7 @@ def resolveMappingToScene( mapping, threshold=1.0 ):
 		tgts = []
 		for i in mapping.tgts:
 			if not cmd.objExists( i ):
-				possibles = cmd.ls( '*%s' % i, r=True )
+				possibles = cmd.ls( i, r=True )
 				if possibles: i = possibles[0]
 
 			tgts.append( i )

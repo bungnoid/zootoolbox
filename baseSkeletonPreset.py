@@ -197,7 +197,8 @@ def loadPresetFile( presetFilepath ):
 
 		#instantiate the part and append it to the list of parts created
 		partClass = SkeletonPart.GetNamedSubclass( partType )
-		part = partClass( [ str( i ) for i in items ] )
+		partContainer = buildSkeletonPartContainer( partClass, partBuildKwargs, items )
+		part = partClass( partContainer )
 		part.convert( partBuildKwargs )
 
 		parts.append( part )
