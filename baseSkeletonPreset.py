@@ -4,7 +4,7 @@ from filesystem import Path, PresetManager, Preset, savePreset, readPreset, LOCA
 import skeletonBuilder
 
 from maya.cmds import *
-from baseSkeletonBuilder import SkeletonPart, setupAutoMirror, TOOL_NAME
+from baseSkeletonBuilder import SkeletonPart, setupAutoMirror, TOOL_NAME, buildSkeletonPartContainer
 from names import camelCaseToNice
 
 import maya.cmds as cmd
@@ -17,7 +17,11 @@ PRESET_MANAGER = PresetManager( TOOL_NAME, XTN )
 
 VERSION = 0
 
-eval = __builtins__[ 'eval' ]
+buildSkeletonPartContainer = skeletonBuilder.buildSkeletonPartContainer
+SkeletonPart = skeletonBuilder.SkeletonPart
+setupAutoMirror = skeletonBuilder.setupAutoMirror
+
+eval = __builtins__[ 'eval' ]  #restore python's eval...
 
 class NoPartsError(Exception): pass
 
@@ -63,7 +67,7 @@ def writePreset( presetName ):
 		print "No parts found in the scene!"
 		return None
 
-	return savePreset( LOCAL, TOOL_NAME, presetName, XTN, contents )
+	return savePreset( LOCAL, skeletonBuilder.TOOL_NAME, presetName, XTN, contents )
 
 
 def writePresetToFile( presetFilepath ):
@@ -77,9 +81,9 @@ def writePresetToFile( presetFilepath ):
 
 
 def loadPreset( presetName ):
-	p = Preset( LOCAL, TOOL_NAME, presetName, XTN )
+	p = Preset( LOCAL, skeletonBuilder.TOOL_NAME, presetName, XTN )
 	if not p.exists:
-		p = Preset( GLOBAL, TOOL_NAME, presetName, XTN )
+		p = Preset( GLOBAL, skeletonBuilder.TOOL_NAME, presetName, XTN )
 
 	assert p.exists, "Cannot find a %s preset called %s" % (XTN, presetName)
 

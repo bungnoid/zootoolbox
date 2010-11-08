@@ -557,23 +557,12 @@ class BuildingLayout(MelScrollLayout):
 	def __init__( self, parent ):
 		MelScrollLayout.__init__( self, parent, childResizable=True )
 
-		self.UI_col = MelColumnLayout( self, rowSpacing=4, adj=True )
+		self.UI_col = col = MelColumnLayout( self, rowSpacing=4, adj=True )
 
-		scaleForm = MelForm( self.UI_col )
-		lbl = cmd.text( l='Skeleton Scale' )
-		self.UI_scale = MelFloatField( scaleForm, v=rigPrimitives.SkeletonPart.PART_SCALE, w=75 )
-		self.UI_guessScale = MelButton( scaleForm, l='Guess Scale', c=self.on_guess, w=120 )
+		scaleForm = MelForm( col )
 
-		scaleForm( e=True,
-		           af=((lbl, 'left', 10),
-		               (lbl, 'top', 3)),
-		           ac=((self.UI_scale, 'left', 4, lbl),
-		               (self.UI_guessScale, 'left', 0, self.UI_scale)) )
-
-		setParent( self.UI_col )
-		cmd.separator( horizontal=True )
-		cmd.text( l='Create Skeleton from Preset', align='left' )
-		cmd.text( l='', height=5 )
+		MelLabel( col, l='Create Skeleton from Preset', align='left' )
+		MelLabel( col, l='', height=5 )
 
 		### BUILD THE PRESET CREATION BUTTONS ###
 		self.UI_presetsCol = MelColumnLayout( self.UI_col )
@@ -584,10 +573,9 @@ class BuildingLayout(MelScrollLayout):
 		MelButton( hLayout, l='Manage Presets', c=self.on_managePresets )
 		hLayout.layout()
 
-		setParent( self.UI_col )
-		cmd.separator( horizontal=True )
-		cmd.text( l='Build Individual Parts', align='left' )
-		cmd.text( l='', height=5 )
+		MelSeparator( col, horizontal=True )
+		MelLabel( col, l='Build Individual Parts', align='left' )
+		MelLabel( col, l='', height=5 )
 
 		### BUILD THE PART CREATION BUTTONS ###
 		self.UI_list = []

@@ -12,11 +12,6 @@ import meshUtils
 import maya.cmds as cmd
 import profileDecorators
 
-TOOL_NAME = 'skeletonBuilder'
-CHANNELS = ('x', 'y', 'z')
-TYPICAL_HEIGHT = 70  #maya units
-
-
 #now do maya imports and maya specific assignments
 import api
 import maya.cmds as cmd
@@ -30,7 +25,13 @@ mel = api.mel
 
 AXES = Axis.BASE_AXES
 
-eval = __builtins__[ 'eval' ]  #pymel is evil - it takes over a bunch of crap in maya.cmds.  anyway, this restores the eval function to point to python's eval
+eval = __builtins__[ 'eval' ]  #restore the eval function to point to python's eval
+
+
+TOOL_NAME = 'skeletonBuilder'
+
+CHANNELS = ('x', 'y', 'z')
+TYPICAL_HEIGHT = 70  #maya units
 
 
 #these are the symbols to use as standard rotation axes on bones...
@@ -309,6 +310,117 @@ class NotFinalizedError(SkeletonError): pass
 class SceneNotSavedError(SkeletonError): pass
 
 
+def getSkeletonSet():
+	'''
+	returns the "master" set used for storing skeleton parts in the scene - this isn't actually used for
+	anything but organizational purposes - ie the skeleton part sets are members of _this_ set, but at
+	no point does the existence or non-existence of this make any functional difference
+	'''
+	existing = [ node for node in ls( type='objectSet', r=True ) or [] if sets( node, q=True, text=True ) == TOOL_NAME ]
+
+	if existing:
+		return existing[ 0 ]
+	else:
+		skeletonParts = createNode( 'objectSet', n='skeletonParts' )
+		sets( skeletonParts, e=True, text=TOOL_NAME )
+
+		return skeletonParts
+
+
+def createSkeletonPartContainer( name ):
+	'''
+	'''
+	theSet = sets( em=True, n=name, text='skeletonPrimitive' )
+	sets( theSet, e=True, add=getSkeletonSet() )
+
+	return theSet
+
+
+def isSkeletonPartContainer( node ):
+	'''
+	tests whether the given node is a skeleton part container or not
+	'''
+	if objectType( node, isType='objectSet' ):
+		return sets( node, q=True, text=True ) == 'skeletonPrimitive'
+
+	return False
+
+
+def getSkeletonPartContainers():
+	'''
+	returns a list of all skeleton part containers in the scene
+	'''
+	return [ node for node in ls( type='objectSet', r=True ) or [] if sets( node, q=True, text=True ) == 'skeletonPrimitive' ]
+
+
+def buildSkeletonPartContainer( typeClass, kwDict, items ):
+	'''
+	builds a container for the given skeleton part items, and tags it with the various attributes needed
+	to track the state for a skeleton part.
+	'''
+
+	#if typeClass is an instance, then set its container attribute, otherwise instantiate an instance and return it
+	if isinstance( typeClass, SkeletonPart ):
+		theInstance = typeClass
+		typeClass = type( typeClass )
+
+	#build the container, and add the special attribute to it to
+	if 'idx' in kwDict:
+		idx = kwDict[ 'idx' ]
+	else:
+		kwDict[ 'idx' ] = idx = typeClass.GetUniqueIdx()
+
+	theContainer = createSkeletonPartContainer( 'a%sPart_%s' % (typeClass.__name__, idx) )
+
+	addAttr( theContainer, ln='_skeletonPrimitive', attributeType='compound', numberOfChildren=7 )
+	addAttr( theContainer, ln='typeName', dt='string', parent='_skeletonPrimitive' )
+	addAttr( theContainer, ln='version', at='long', parent='_skeletonPrimitive' )
+	addAttr( theContainer, ln='script', dt='string', parent='_skeletonPrimitive' )
+	addAttr( theContainer, ln='buildKwargs', dt='string', parent='_skeletonPrimitive' )  #stores the kwarg dict used to build this part
+	addAttr( theContainer, ln='rigKwargs', dt='string', parent='_skeletonPrimitive' )  #stores the kwarg dict to pass to the rig method
+	addAttr( theContainer, ln='items',
+	         multi=True,
+	         indexMatters=False,
+	         attributeType='message',
+	         parent='_skeletonPrimitive' )
+	addAttr( theContainer, ln='placers',
+	         multi=True,
+	         indexMatters=False,
+	         attributeType='message',
+	         parent='_skeletonPrimitive' )
+
+
+	#now set the attribute values...
+	setAttr( '%s._skeletonPrimitive.typeName' % theContainer, typeClass.__name__, type='string' )
+	setAttr( '%s._skeletonPrimitive.version' % theContainer, typeClass.__version__ )
+	setAttr( '%s._skeletonPrimitive.script' % theContainer, inspect.getfile( typeClass ), type='string' )
+	setAttr( '%s._skeletonPrimitive.buildKwargs' % theContainer, str( kwDict ), type='string' )
+
+
+	#now add all the items
+	items = map( str, items )
+	for item in set( items ):
+
+		if nodeType( item ) == 'joint':
+			sets( item, e=True, add=theContainer )
+
+		#if the node is a rig part container add it to this container otherwise skip it
+		elif objectType( item, isAType='objectSet' ):
+			if isSkeletonPartContainer( item ):
+				sets( item, e=True, add=theContainer )
+
+
+	#and now hook up all the controls
+	for idx, item in enumerate( items ):
+		if item is None:
+			continue
+
+		connectAttr( '%s.message' % item, '%s._skeletonPrimitive.items[%d]' % (theContainer, idx), f=True )
+
+
+	return theContainer
+
+
 def d_wrapAlign( f ):
 	def new( self, *a, **kw ):
 		#for all skin clusters iterate through all their joints and detach them
@@ -374,7 +486,8 @@ def d_wrapAlign( f ):
 	return new
 
 
-class SkeletonPart(filesystem.trackableClassFactory( list )):
+class SkeletonPart(filesystem.trackableClassFactory()):
+	__version__ = 0
 
 	#parity is "sided-ness" of the part.  Ie if the part can exist on the left OR right side of the skeleton, the part has parity.  the spine
 	#is an example of a part that has no parity, as is the head
@@ -393,23 +506,123 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 
 	RigTypes = ()
 
-	def __init__( self, *a ):
-		list.__init__( self, *a )
-		self.verifyPart()
+	def __init__( self, partContainer ):
+		if partContainer is not None:
+			assert isSkeletonPartContainer( partContainer ), "Must pass a valid skeleton part container! (received %s - a %s)" % (partContainer, nodeType( partContainer ))
+
+		self.container = partContainer
+	def __unicode__( self ):
+		return u"%s( %r )" % (self.__class__.__name__, self.container)
+	__str__ = __unicode__
 	def __repr__( self ):
-		return '%s_%d( %s )' % (self.__class__.__name__, self.getIdx(), list.__repr__( self ))
+		return repr( unicode( self ) )
 	def __hash__( self ):
 		return hash( self.base )
 	def __eq__( self, other ):
 		return self.base == other.base
 	def __neq__( self, other ):
 		return not self == other
+	def __getitem__( self, idx ):
+		return self.getItems().__getitem__( idx )
+	def __getattr__( self, attr ):
+		if attr in self.__dict__:
+			return self.__dict__[ attr ]
+
+		if attr not in self.PLACER_NAMES:
+			raise AttributeError( "No such attribute %s" % attr )
+
+		idx = list( self.PLACER_NAMES  ).index( attr )
+		cons = listConnections( '%s._skeletonPrimitive.placers[%d]' % (self.base, n), d=False )
+		if cons:
+			return cons[ 0 ]
+
+		return None
+	def __len__( self ):
+		return len( self.getItems() )
+	def __iter__( self ):
+		return iter( self.getItems() )
+	def getItems( self ):
+		try:
+			return self._items[:]
+		except AttributeError: pass
+
+		self._items = items = []
+		for idx in getAttr( '%s._skeletonPrimitive.items' % self.container, multiIndices=True ):
+			cons = listConnections( '%s._skeletonPrimitive.items[%d]' % (self.container, idx), d=False )
+			if cons:
+				assert len( cons ) == 1, "More than one joint was found!!!"
+				items.append( cons[ 0 ] )
+
+		#items = castToMObjects( items )
+
+		return items[:]  #return a copy...
+	items = property( getItems )
 	@property
-	def base( self ):
-		return self[ 0 ]
-	@property
-	def end( self ):
-		return self[ -1 ]
+	def version( self ):
+		try:
+			return getAttr( '%s._skeletonPrimitive.version' % self.container )
+		except: return None
+	def getPlacers( self ):
+		placerAttrpath = '%s._skeletonPrimitive.placers' % self.container
+		if not objExists( placerAttrpath ):
+			return []
+
+		numPlacers = getAttr( placerAttrpath, size=True )
+
+		placers = []
+		for idx in range( numPlacers ):
+			cons = listConnections( '%s._skeletonPrimitive.placers[%d]' % (self.container, idx), d=False )
+			if cons:
+				placers.append( cons[ 0 ] )
+
+		return placers
+	def verifyPart( self ):
+		'''
+		this is merely a "hook" that can be used to fix anything up should the way
+		skeleton parts are defined change
+		'''
+
+		#make sure all items have the appropriate attributes on them
+		baseItem = self[ 0 ]
+		for n, item in enumerate( self ):
+			delete( '%s.inverseScale' % item, icn=True )  #remove the inverse scale relationship...
+
+			setAttr( '%s.segmentScaleCompensate' % item, False )
+			if not objExists( '%s._skeletonPartName' % item ):
+				addAttr( item, ln='_skeletonPartName', dt='string' )
+
+			if not objExists( '%s._skeletonPartArgs' % item ):
+				addAttr( item, ln='_skeletonPartArgs', dt='string' )
+
+			if n:
+				if not isConnected( '%s._skeletonPartName' % baseItem, '%s._skeletonPartName' % item ):
+					connectAttr( '%s._skeletonPartName' % baseItem, '%s._skeletonPartName' % item, f=True )
+
+				if not isConnected( '%s._skeletonPartArgs' % baseItem, '%s._skeletonPartArgs' % item ):
+					connectAttr( '%s._skeletonPartArgs' % baseItem, '%s._skeletonPartArgs' % item, f=True )
+	def convert( self, buildKwargs ):
+		'''
+		called when joints built outside of skeleton builder are converted to a skeleton builder part
+		'''
+
+		if not buildKwargs:
+			for argName, value in self.GetDefaultBuildKwargList():
+				buildKwargs[ argName ] = value
+
+		if 'idx' not in buildKwargs:
+			idx = self.GetUniqueIdx()
+			buildKwargs[ 'idx' ] = idx
+
+		if 'parent' in buildKwargs:
+			buildKwargs.pop( 'parent' )
+
+		self.setBuildKwargs( buildKwargs )
+
+		#lock scale
+		attrState( self.items, ['s'], lock=True, keyable=False, show=True )
+
+		#build placers...
+		self.buildPlacers()
 	def hasParity( self ):
 		return self.HAS_PARITY
 	@classmethod
@@ -444,98 +657,9 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 
 		return Colour( 'black' )
 	getParityColor = getParityColour
-
-	def __getattr__( self, attr ):
-		if attr in self.__dict__:
-			return self.__dict__[ attr ]
-
-		if attr not in self.PLACER_NAMES:
-			raise AttributeError( "No such attribute %s" % attr )
-
-		idx = list( self.PLACER_NAMES  ).index( attr )
-		cons = listConnections( '%s._skeletonPartPlacers[%d]' % (self.base, n), d=False )
-		if cons:
-			return cons[ 0 ]
-
-		return None
-	def getPlacers( self ):
-		numPlacers = getAttr( '%s._skeletonPartPlacers' % self.base, size=True )
-
-		placers = []
-		for idx in range( numPlacers ):
-			cons = listConnections( '%s._skeletonPartPlacers[%d]' % (self.base, idx), d=False )
-			if cons:
-				placers.append( cons[ 0 ] )
-
-		return placers
-	def verifyPart( self ):
-		'''
-		this is merely a "hook" that can be used to fix anything up should the way
-		skeleton parts are defined change
-		'''
-
-		#make sure all items have the appropriate attributes on them
-		baseItem = self[ 0 ]
-		for n, item in enumerate( self ):
-			setAttr( '%s.segmentScaleCompensate' % item, False )
-			if not objExists( '%s._skeletonPartName' % item ):
-				addAttr( item, ln='_skeletonPartName', dt='string' )
-
-			if not objExists( '%s._skeletonPartArgs' % item ):
-				addAttr( item, ln='_skeletonPartArgs', dt='string' )
-
-			if n:
-				if not isConnected( '%s._skeletonPartName' % baseItem, '%s._skeletonPartName' % item ):
-					connectAttr( '%s._skeletonPartName' % baseItem, '%s._skeletonPartName' % item, f=True )
-
-				if not isConnected( '%s._skeletonPartArgs' % baseItem, '%s._skeletonPartArgs' % item ):
-					connectAttr( '%s._skeletonPartArgs' % baseItem, '%s._skeletonPartArgs' % item, f=True )
-	def convert( self, buildKwargs ):
-		'''
-		called when joints built outside of skeleton builder are converted to a skeleton builder part
-		'''
-		baseItem = self[ 0 ]
-
-		#ensure it has a type name - if the attribute exists assume its value is valid...
-		typeNameAttrPath = '%s._skeletonPartName' % baseItem
-		if not objExists( typeNameAttrPath ):
-			addAttr( baseItem, ln='_skeletonPartName', dt='string' )
-
-		setAttr( typeNameAttrPath, type( self ).__name__, type='string' )
-
-		partArgsAttrPath = '%s._skeletonPartArgs' % baseItem
-		if not objExists( partArgsAttrPath ):
-			addAttr( baseItem, ln='_skeletonPartArgs', dt='string' )
-
-		if not buildKwargs:
-			for argName, value in self.GetDefaultBuildKwargList():
-				buildKwargs[ argName ] = value
-
-		if 'idx' not in buildKwargs:
-			idx = self.GetUniqueIdx()
-			buildKwargs[ 'idx' ] = idx
-
-		if 'parent' in buildKwargs:
-			buildKwargs.pop( 'parent' )
-
-		setAttr( partArgsAttrPath, str( buildKwargs ), type='string' )
-
-		#lock scale
-		attrState( self, ['s'], lock=True, keyable=False, show=True )
-
-		#build placers...
-		self.buildPlacers()
-	def sort( self ):
-		'''
-		sorts the part by hierarchy
-		'''
-		thisSorted = sortByHierarchy( self )
-		try:
-			while True: self.pop()
-		except IndexError: pass
-
-		for item in thisSorted:
-			self.append( item )
+	@property
+	def base( self ):
+		return self[ 0 ]
 	@property
 	def bases( self ):
 		'''
@@ -550,6 +674,9 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 				bases.append( item )
 
 		return bases
+	@property
+	def end( self ):
+		return self[ -1 ]
 	@property
 	def ends( self ):
 		'''
@@ -634,28 +761,21 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 			kw[ argName ] = default
 
 		#now update the default kwargs with the actual kwargs
-		for base in self.bases:
-			if objExists( '%s._skeletonPartArgs' % base ):
-				argStr = getAttr( '%s._skeletonPartArgs' % base )
-				kw.update( eval( argStr ) )
-
-				return kw
+		argStr = getAttr( '%s._skeletonPrimitive.buildKwargs' % self.container )
+		kw.update( eval( argStr ) )
 
 		return kw
 	def setBuildKwargs( self, kwargs ):
 		'''
 		returns the kwarg dict that was used to create this particular part
 		'''
-		if not objExists( '%s._skeletonPartArgs' % self.base ):
-			argStr = addAttr( self.base, ln='_skeletonPartArgs', dt='string' )
-
-		setAttr( '%s._skeletonPartArgs' % self.base, str( kwargs ), type='string' )
+		setAttr( '%s._skeletonPrimitive.buildKwargs' % self.container, str( kwargs ), type='string' )
 	def getRigKwargs( self ):
 		'''
 		returns the kwarg dict that should be used to create the rig for this part
 		'''
 		try:
-			argStr = getAttr( '%s._skeletonRigArgs' % self[ 0 ] )
+			argStr = getAttr( '%s._skeletonPrimitive.rigKwargs' % self.container )
 		except:
 			return {}
 
@@ -666,10 +786,7 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 
 		return kw
 	def setRigKwargs( self, kwargs ):
-		if not objExists( '%s._skeletonRigArgs' % self.base ):
-			argStr = addAttr( self.base, ln='_skeletonRigArgs', dt='string' )
-
-		setAttr( '%s._skeletonRigArgs' % self.base, str( kwargs ), type='string' )
+		setAttr( '%s._skeletonPrimitive.rigKwargs' % self.container, str( kwargs ), type='string' )
 	def updateRigKwargs( self, **kw ):
 		currentKwargs = self.getRigKwargs()
 		currentKwargs.update( kw )
@@ -756,47 +873,24 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		if an item is given that isn't involved in a part None is returned
 		'''
 
-		items = cls.GetItems( item )
-		partClassName = getAttr( '%s._skeletonPartName' % items[ 0 ] )
-		partClass = SkeletonPart.GetNamedSubclass( partClassName )
+		if isSkeletonPartContainer( item ):
+			typeClassStr = getAttr( '%s._skeletonPrimitive.typeName' % item )
+			typeClass = SkeletonPart.GetNamedSubclass( typeClassStr )
 
-		if partClass is None:
-			raise SkeletonError( "Cannot find a skeleton part class called %s" % partClassName )
+			return typeClass( item )
 
-		return partClass( items )
-	@classmethod
-	def GetItems( cls, item ):
-		'''
-		given the item of a part, this will return a list of all the other
-		joints of that part
-		'''
+		cons = listConnections( '%s.message' % item, s=False, type='objectSet' )
+		if not cons:
+			raise SkeletonError( "Cannot find a skeleton part container for %s" % item )
 
-		if objExists( '%s._skeletonPartName' % item ):
-			outputs = listConnections( '%s._skeletonPartName' % item, t='joint', source=False ) or []
-			if outputs:
-				return [ item ] + sortByHierarchy( outputs )
+		for con in cons:
+			if isSkeletonPartContainer( con ):
+				typeClassStr = getAttr( '%s._skeletonPrimitive.typeName' % con )
+				typeClass = SkeletonPart.GetNamedSubclass( typeClassStr )
 
-			inputs = listConnections( '%s._skeletonPartName' % item, t='joint', destination=False ) or []
-			if inputs:
-				assert len( inputs ) == 1
-				outputs = listConnections( '%s._skeletonPartName' % inputs[ 0 ], t='joint', source=False ) or []
+				return typeClass( con )
 
-				return [ inputs[ 0 ] ] + sortByHierarchy( outputs )
-
-			#if it has a _skeletonPartName arg and no inputs OR outputs, then its a single joint part like the root
-			return [ item ]
-
-		else:
-			#if neither of the above are the case, then walk up the chain until one of the above criteria are met
-			baseItem = None
-			for p in iterParents( item ):
-				if objExists( '%s._skeletonPartName' % p ):
-					return cls.GetItems( p )
-
-			if baseItem is None:
-				raise SkeletonError( "Cannot find a SkeletonPart anywhere in the hierarchy for %s" % item )
-
-		raise SkeletonError( "Cannot find a SkeletonPart anywhere in the hierarchy for %s" % item )
+		raise SkeletonError( "Cannot find a skeleton container for %s" % item )
 
 	### CREATION ###
 	def buildPlacers( self ):
@@ -812,18 +906,13 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		if not placers:
 			return
 
-		baseItem = self.base
-		if not objExists( '%s._skeletonPartPlacers' % baseItem ):
-			addAttr( baseItem, ln='_skeletonPartPlacers',
-			         multi=True,
-			         indexMatters=True,
-			         attributeType='message' )
+		container = self.container
 
 		idx = self.getIdx()
 		idxStr = self.GetIdxStr( idx )
 		parityStr = Parity( idx % 2 ).asName() if self.hasParity() else ''
 		for n, placer in enumerate( placers ):
-			connectAttr( '%s.message' % placer, '%s._skeletonPartPlacers[%d]' % (baseItem, n), f=True )
+			connectAttr( '%s.message' % placer, '%s._skeletonPrimitive.placers[%d]' % (container, n), f=True )
 
 			#name the placer appropriately
 			try:
@@ -894,8 +983,10 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		kw[ 'idx' ] = idx
 
 
-		#run the build function
+		#run the build function and remove the parent from the kw dict - we don't need to serialize this...
 		items = buildFunc( **kw )
+		kw.pop( 'parent', None )
+		partContainer = buildSkeletonPartContainer( cls, kw, items )
 
 
 		#now rename all the joints appropriately if we're supposed to...
@@ -917,12 +1008,8 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 			items = renamedItems
 
 
-		#remove the parent from the kw dict - we don't need to serialize this as its valid for the parenting to change after building
-		kw.pop( 'parent', None )
-
-
 		#instantiate the part and align
-		newPart = cls( items )
+		newPart = cls( partContainer )
 		newPart.convert( kw )
 		newPart._align( _initialAlign=True )
 
@@ -1008,12 +1095,8 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		'''
 		iterates over all SkeletonParts in the current scene
 		'''
-
-		yieldedItems = set()
-
-		skeletonBuilderAttrpaths = ls( '*._skeletonPartName', r=True )
-		for attrPath in skeletonBuilderAttrpaths:
-			thisPartCls = SkeletonPart.GetNamedSubclass( getAttr( attrPath ) )
+		for partContainer in getSkeletonPartContainers():
+			thisPartCls = SkeletonPart.GetNamedSubclass( getAttr( '%s._skeletonPrimitive.typeName' % partContainer ) )
 
 			#if the user only wants the exact type then compare the classes - if they're not the same keep loopin
 			if exactType:
@@ -1025,67 +1108,13 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 				if not issubclass( thisPartCls, cls ):
 					continue
 
-			j = attrPath.split( '.' )[ 0 ]
-			if j in yieldedItems:
-				continue
-
-			try:
-				aPart = cls.InitFromItem( j )
-			except SkeletonError: continue
-
-			yield aPart
-
-			for item in aPart:
-				yieldedItems.add( item )
+			yield thisPartCls( partContainer )
 	@classmethod
 	def IterAllPartsInOrder( cls ):
 		allParts = [ part for part in cls.IterAllParts() ]
 		allParts = sortPartsByHierarchy( allParts )
 
 		return iter( allParts )
-	@classmethod
-	def IterAllParts2( cls ):
-		'''
-		for some completely unknown reason, this causes maya to hang - strangely enough, on the selection of joints.  i have no idea why.
-
-		anyhoo - this versoin of the method doesn't use connection tracing, but instead walks teh scene and builds a dictionary of instantiated
-		parts.  so its not really an iterator as it has to build up the entire dictionary before it can be sure the list is comprehensive...
-		but its presented as an iterator so it can replace the existing connection tracer iterator.
-
-		this method has the advantage that it will work even when connections have been deleted - which can happen when part roots no longer
-		exist
-		'''
-		partsDict = {}
-
-		for joint in ls( typ='joint' ):
-			if not objExists( '%s._skeletonPartName' % joint ):
-				continue
-
-			partClassName = getAttr( '%s._skeletonPartName' % joint )
-
-			buildArgDict = eval( getAttr( '%s._skeletonPartArgs' % joint ) )
-			idx = buildArgDict.get( 'idx', None )
-			if idx is None:
-				print 'NO IDX FOUND FOR PART %s (%s) - SKIPPING' % (joint, partClassName)
-				continue
-
-			partClass = SkeletonPart.GetNamedSubclass( partClassName )
-			if partClass is None:
-				print 'NO SUCH PART TYPE: %s' % partClassName
-				continue
-
-			if not issubclass( partClass, cls ):
-				continue
-
-			partKey = partClass, idx
-			partsDict.setdefault( partKey, ([], buildArgDict) )
-			partsDict[ partKey ][ 0 ].append( joint )
-
-		for (partClass, partIdx), (items, buildArgDict) in partsDict.iteritems():
-			part = partClass( items )
-			part.buildKwargs = buildArgDict
-
-			yield part
 	@classmethod
 	def FindParts( cls, partClass, withKwargs=None ):
 		'''
@@ -1117,18 +1146,17 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		returns a unique index (unique against the universe of existing indices
 		in the scene) for the current part class
 		'''
-		allPartAttrPaths = ls( '*._skeletonPartName', r=True ) or []
+		allPartContainers = getSkeletonPartContainers()
 
 		thisTypeName = cls.__name__
 
 		existingIdxs = set()
-		for attrPath in allPartAttrPaths:
-			typeStr = getAttr( attrPath )
+		for container in allPartContainers:
+			typeStr = getAttr( '%s._skeletonPrimitive.typeName' % container )
 			typeCls = SkeletonPart.GetNamedSubclass( typeStr )
 
-			if issubclass( typeCls, cls ):
-				node = attrPath.split( '.' )[0]
-				attrPath = '%s._skeletonPartArgs' % node
+			if typeCls is cls:
+				attrPath = '%s._skeletonPrimitive.buildKwargs' % container
 				attrStr = getAttr( attrPath )
 				if attrStr:
 					buildArgs = eval( getAttr( attrPath ) )
@@ -1158,7 +1186,7 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		'''
 
 		#first get a list of all the joints directly parented to a memeber of this part
-		allChildren = listRelatives( self, typ='transform', pa=True )
+		allChildren = listRelatives( list( self ), typ='transform', pa=True )
 		if not allChildren:
 			return
 
@@ -1182,7 +1210,7 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		for part in self.getChildParts():
 			childPartItems += list( part )
 
-		jointsInSomePart = set( childPartItems + self )
+		jointsInSomePart = set( childPartItems + self.items )
 		orphanChildren = set( allChildren ).difference( jointsInSomePart )
 		orphanChildren = list( orphanChildren )
 
@@ -1196,7 +1224,7 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 
 		return orphanChildren + childrenOfChildren
 	def selfAndOrphans( self ):
-		return self + self.getOrphanJoints()
+		return list( self ) + self.getOrphanJoints()
 
 	### ALIGNMENT ###
 	@d_wrapAlign
@@ -1239,17 +1267,24 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 		connections, but some attributes are driven via an expression
 		'''
 		assert isinstance( otherPart, SkeletonPart )  #this is just for WING...
-		assert type( self ) is type( otherPart ), "Sorry, you cannot connect different types together"
-		assert len( self ) == len( otherPart ), "Sorry, seems the two parts are different sizes (%d, %d) - not sure what to do" % (len( self ), len( otherPart ))
+
+		if type( self ) is not type( otherPart ):
+			raise SkeletonError( "Sorry, you cannot connect different types together" )
+
+		if len( self ) != len( otherPart ):
+			raise SkeletonError( "Sorry, seems the two parts are different sizes (%d, %d) - not sure what to do" % (len( self ), len( otherPart )) )
 
 		attrs = 't', 'r'
 
 		#first unlock trans and rot channels
-		attrState( otherPart, attrs, False )
+		attrState( otherPart.items, attrs, False )
 
 		#if the parts have parity AND differing parities, we may have to deal with mirroring differently
 		if self.hasParity() and self.getParity() != otherPart.getParity():
-			for thisItem, otherItem in zip( self, otherPart ):
+			selfItems = self.items + self.getPlacers()
+			otherItems = otherPart.items + otherPart.getPlacers()
+
+			for thisItem, otherItem in zip( selfItems, otherItems ):
 				rotNode = cmd.rotationMirror( thisItem, otherItem, ax=BONE_AIM_AXIS.asName() )  #access via cmd namespace as the plugin may or may not have been loaded when all was imported from maya.cmds
 
 				#if the joints have the same parent, reverse position
@@ -1260,7 +1295,7 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 
 		#otherwise setting up the driven relationship is straight up attribute connections...
 		else:
-			for thisItem, otherItem in zip( self, otherPart ):
+			for thisItem, otherItem in zip( self.items, otherPart.items ):
 				for attr in attrs:
 					for c in CHANNELS:
 						connectAttr( '%s.%s%s' % (thisItem, attr, c), '%s.%s%s' % (otherItem, attr, c), f=True )
@@ -1382,7 +1417,6 @@ class SkeletonPart(filesystem.trackableClassFactory( list )):
 				continue
 
 			if not objExists( '%s._skeletonFinalizeHash' % i ):
-				print 'no finalization hash found on %s' % i
 				return False
 
 			iParent, xformHash, xxa, yya = self.generateItemHash( i )
@@ -1610,7 +1644,11 @@ def buildEndPlacer( name=None ):
 	builds a placer for the end of a chain.  This is generally useful for aligning the last joint in a chain
 	but can also be useful for marking up interesting pivots on parts such as feet with foot edges etc...
 	'''
-	return spaceLocator()[ 0 ]
+	placer = spaceLocator()[0]
+	if name:
+		placer = rename( placer, name )
+
+	return placer
 
 
 def jointSize( jointName, size ):
@@ -1638,6 +1676,7 @@ class Root(SkeletonPart):
 		partScale = kw[ 'partScale' ]
 
 		root = createJoint()
+		root = rename( root, 'root' )
 		move( 0, partScale / 1.8, 0, root, ws=True )
 		jointSize( root, 3 )
 
@@ -1679,6 +1718,8 @@ def getParent( parent=None ):
 			obj = sel[0]
 			while nodeType( obj ) != 'joint':
 				obj = getNodeParent( obj )
+				if obj is None:
+					break
 
 			return obj
 
@@ -1711,7 +1752,7 @@ def getPartsFromObjects( objs ):
 	for o in objs:
 		try:
 			parts.append( SkeletonPart.InitFromItem( o ) )
-		except AssertionError: continue
+		except SkeletonError: continue
 
 	selectedParts = filesystem.removeDupes( parts )
 
@@ -1793,7 +1834,12 @@ def setupAutoMirror():
 
 				#if an appropriate part was found, setup the driven relationship
 				if partToDrive:
-					part.driveOtherPart( partToDrive )
+					try:
+						part.driveOtherPart( partToDrive )
+
+					#if a skeleton error is thrown, ignore it (it means the parts are incompatible) but add the part to the partsInMirrorRelationship set
+					except SkeletonError: pass
+
 					partsInMirrorRelationship.add( part )
 					partsInMirrorRelationship.add( partToDrive )
 
@@ -1859,7 +1905,8 @@ def buildRigForModel( scene=None, autoFinalize=True, referenceModel=True ):
 		api.referenceFile( scene, 'model' )
 
 		#rename the scene to the rig
-		rigSceneName = '%s_rig.ma' % scene.name()
+		rigSceneName = namingHelpers.stripKnownAssetSuffixes( scene.name() )
+		rigSceneName = '%s_rig.ma' % rigSceneName
 		rigScene = scene.up() / rigSceneName
 		cmd.file( rename=rigScene )
 		rigScene.editoradd()
@@ -2077,7 +2124,7 @@ def volumesToSkinning():
 
 	#now transfer weights to the character meshes
 	for charMesh in charMeshes:
-		targetSkinCluster = transferSkinning( combinedVolumes, charMesh )
+		targetSkinCluster = skinWeights.transferSkinning( combinedVolumes, charMesh )
 
 		#now lets do a little smoothing
 		skinCluster( targetSkinCluster, e=True, smoothWeights=0.7, smoothWeightsMaxIterations=3 )
