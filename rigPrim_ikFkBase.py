@@ -12,6 +12,7 @@ class IkFkBase(RigSubPart):
 	'''
 	__version__ = 0
 	CONTROL_NAMES = 'control', 'fkUpper', 'fkMid', 'fkLower', 'poleControl', 'ikSpace', 'fkSpace', 'ikHandle', 'endOrient', 'poleTrigger'
+	ADD_CONTROLS_TO_QSS = False
 
 	def _build( self, skeletonPart, **kw ):
 		return self.doBuild( *skeletonPart.getIkFkItems(), **kw )

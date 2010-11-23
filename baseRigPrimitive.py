@@ -315,7 +315,11 @@ class RigPart(filesystem.trackableClassFactory()):
 	@classmethod
 	def Create( cls, skeletonPart, *a, **kw ):
 		'''
+		you can pass in the following kwargs to control the build process
+		addControlsToQss		defaults to cls.ADD_CONTROLS_TO_QSS
 		'''
+
+		addControlsToQss = kw.get( 'addControlsToQss', cls.ADD_CONTROLS_TO_QSS )
 
 		if not cls.CanRigThisPart( skeletonPart ):
 			return
@@ -377,7 +381,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		#run the build function
 		newNodes, controls = getNodesCreatedBy( self._build, skeletonPart, **kw )
 		realControls = [ c for c in controls if c is not None ]  #its possible for a build function to return None in the control list because it wants to preserve the length of the control list returned - so construct a list of controls that actually exist
-		if cls.ADD_CONTROLS_TO_QSS:
+		if addControlsToQss:
 			for c in realControls:
 				sets( c, add=qss )
 

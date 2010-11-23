@@ -291,14 +291,7 @@ def buildControlsForMPath( spineBase, spineEnd, squish=True, **kw ):
 	joints = [ spineEnd ] + list( iterParents( spineEnd, spineBase ) )
 	joints.reverse()
 
-
-	#build the sub primitive
-	splineIKNodes, splineIKControls = getNodesCreatedBy( buildMPath, joints, squish, **kw )
-	ikFkPart = buildContainer( BaseSplineIK, kw, splineIKNodes, splineIKControls )
-
-	baseJoint = ikFkPart.base
-	midJoint = ikFkPart.mid
-	endJoint = ikFkPart.end
+	baseJoint, midJoint, endJoint = buildMPath( joints, squish, **kw )
 
 
 	#build the controls

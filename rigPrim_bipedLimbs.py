@@ -269,7 +269,7 @@ class IkFkLeg(PrimaryRigPart):
 
 
 		### BUILD THE IKFK BASE
-		ikFkPart = IkFkBase.Create( self.getSkeletonPart(), nameScheme=LEG_NAMING_SCHEME, alignEnd=False, **kw )
+		ikFkPart = IkFkBase.Create( self.getSkeletonPart(), nameScheme=LEG_NAMING_SCHEME, alignEnd=False, addControlsToQss=False, **kw )
 
 
 		partParent, rootControl = getParentAndRootControl( thigh )

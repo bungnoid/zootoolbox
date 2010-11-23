@@ -599,10 +599,10 @@ class BuildingLayout(MelScrollLayout):
 			for preset in presets:
 				SkeletonPresetLayout( self.UI_presetsCol, preset )
 	def getScale( self ):
-		return self.UI_scale.getValue()
+		return baseRigPrimitive.baseSkeletonBuilder.TYPICAL_HEIGHT
 	def on_guess( self, e=None ):
 		scale = rigPrimitives.getDefaultScale()
-		self.UI_scale.setValue( scale )
+		#self.UI_scale.setValue( scale )
 	def on_createPreset( self, *a ):
 		BUTTONS = OK, CANCEL = 'Ok', 'Cancel'
 		ret = promptDialog( t='Preset Name', m='Enter the name for the preset', b=BUTTONS, db=OK )
@@ -870,13 +870,14 @@ class RiggingLayout(MelForm):
 		setParent( buttonParent )
 		optsLbl = MelLabel( buttonParent, label='Rig Build Options', align='left' )
 
-		buildRigForm = MelForm( buttonParent )
-		self.UI_reference = MelCheckBox( buildRigForm, label='reference model' )
-		#self.UI_reference.setValue( True )
+		buildRigLayout = MelHLayout( buttonParent )
+		self.UI_reference = MelCheckBox( buildRigLayout, label='reference model' )
+		self.UI_reference.setValue( True )
 
-		buildRigForm( e=True,
-		              af=((self.UI_reference, 'left', 0)),
-		              ap=((self.UI_reference, 'right', 0, 50)) )
+		self.UI_deletePlacers = MelCheckBox( buildRigLayout, label='delete placer nodes' )
+		self.UI_deletePlacers.setValue( True )
+
+		buildRigLayout.layout()
 
 		setParent( buttonParent )
 		sep = cmd.separator( horizontal=True )
@@ -910,7 +911,9 @@ class RiggingLayout(MelForm):
 				api.doConfirm( t='Scene not saved!', m="Looks like your current scene isn't saved\n\nPlease save it first so I know where to save the rig.  thanks!", b=('OK',), db='OK' )
 				return
 
-		rigPrimitives.buildRigForModel( None, autoFinalize, referenceModel )
+		deletePlacers = self.UI_deletePlacers.getValue()
+
+		rigPrimitives.buildRigForModel( None, autoFinalize, referenceModel, deletePlacers )
 
 
 class CreateEditRigTabLayout(MelTabLayout):

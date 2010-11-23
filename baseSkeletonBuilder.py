@@ -1860,7 +1860,7 @@ def getNamespaceFromReferencing( node ):
 
 
 @api.d_showWaitCursor
-def buildRigForModel( scene=None, autoFinalize=True, referenceModel=True ):
+def buildRigForModel( scene=None, autoFinalize=True, referenceModel=True, deletePlacers=False ):
 	'''
 	given a model scene whose skeleton is assumed to have been built by the
 	skeletonBuilder tool, this function will create a rig scene by referencing
@@ -1895,6 +1895,13 @@ def buildRigForModel( scene=None, autoFinalize=True, referenceModel=True ):
 	#finalize if desired
 	if autoFinalize:
 		finalizeAllParts()
+
+	#delete placers if desired
+	if deletePlacers:
+		for part in SkeletonPart.IterAllParts():
+			placers = part.getPlacers()
+			if placers:
+				delete( placers )
 
 	#if desired, create a new scene and reference in the model
 	if referenceModel:

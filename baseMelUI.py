@@ -55,6 +55,7 @@ class MelUIError(Exception): pass
 #this maps ui type strings to actual command objects - they're not always called the same
 TYPE_NAMES_TO_CMDS = { u'staticText': cmd.text,
                        u'field': cmd.textField,
+                       u'cmdScrollField': cmd.scrollField,
                        u'commandMenuItem': cmd.menuItem,
                        u'dividorMenuItem': cmd.menuItem }
 
@@ -163,18 +164,18 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 
 		new = unicode.__new__( cls, uniqueName )
 		new.parent = parent
-		new._changeCB = changeCB
+		new._cbDict = cbDict = {}
 		cls._INSTANCE_LIST.append( new )
 
 		#add the instance variables to the instance
 		for attrName, attrValue in instanceVariables.iteritems():
 			new.__dict__[ attrName ] = attrValue
 
-		return new
-	def __init__( self, parent, *a, **kw ):
-		changeCB = self._changeCB
+		#if the changeCB is valid, add it to the cd dict
 		if changeCB:
-			self.setChangeCB( changeCB )
+			new.setCB( cls.KWARG_CHANGE_CB_NAME, changeCB )
+
+		return new
 	def __call__( self, *a, **kw ):
 		return self.WIDGET_CMD( self, *a, **kw )
 	"""def __eq__( self, other ):
@@ -888,14 +889,14 @@ class BaseMelWidget(BaseMelUI):
 		kw = { 'q': True, self.KWARG_VALUE_NAME: True }
 		return self.WIDGET_CMD( self, **kw )
 	def setChangeCB( self, cb ):
-		kw = { 'e': True, self.KWARG_CHANGE_CB_NAME: cb }
-		self.WIDGET_CMD( self, **kw )
-		self._changeCB = cb
+		self.setCB( self.KWARG_CHANGE_CB_NAME, cb )
 	def getChangeCB( self ):
-		try:
-			return self._changeCB
-		except:
-			return None
+		return self.getCB( self.KWARG_CHANGE_CB_NAME )
+	def setCB( self, cbFlagName, cb ):
+		self.WIDGET_CMD( self, **{ 'e': True, cbFlagName: cb } )
+		self._cbDict[ cbFlagName ] = cb
+	def getCB( self, cbFlagName ):
+		return self._cbDict.get( cbFlagName, None )
 	def enable( self, state=True ):
 		try: self( e=True, enable=state )
 		except: pass
@@ -1000,6 +1001,10 @@ class MelTextField(BaseMelWidget):
 		BaseMelWidget.setValue( self, value, executeChangeCB )
 	def clear( self, executeChangeCB=True ):
 		self.setValue( '', executeChangeCB )
+
+
+class MelTextScrollField(MelTextField):
+	WIDGET_CMD = cmd.scrollField
 
 
 class MelScrollField(MelTextField):
