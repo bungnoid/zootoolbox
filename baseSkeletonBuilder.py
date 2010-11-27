@@ -48,7 +48,11 @@ _thisPath = filesystem.Path( __file__ ).up()
 loadPlugin( _thisPath / 'zooMirror.py', quiet=True )
 
 
-def getDefaultScale():
+def getScaleFromMeshes():
+	'''
+	determines a scale based on the visible meshes in the scene.  If no visible
+	meshes are found, the TYPICAL_HEIGHT value is returend
+	'''
 	def isVisible( node ):
 		if not getAttr( '%s.v' % node ):
 			return False
@@ -62,31 +66,74 @@ def getDefaultScale():
 	if not visibleMeshes:
 		return TYPICAL_HEIGHT
 
-	visibleSkinnedMeshes = [ m for m in visibleMeshes if mel.findRelatedSkinCluster( m ) ]
-	if not visibleSkinnedMeshes:
-		return TYPICAL_HEIGHT
+	return rigUtils.getObjsScale( visibleMeshes )
 
-	return rigUtils.getObjsScale( visibleSkinnedMeshes )
+
+def getScaleFromSkeleton():
+
+	#lets see if there is a Root part already
+	scale = 0
+	for root in Root.IterAllParts():
+		t = Vector( getAttr( '%s.t' % root[0] )[0] )
+		scale = t.y
+
+	scale *= 1.75  #the root is roughly 4 head heights from the ground and the whole body is about 7 head heights - hence 1.75 (7/4)
+
+	#lets see if there is a spine part - between the root and the spine, we can get a
+	#pretty good idea of the scale for most anatomy types
+	scaleFromSpine = 0
+	spineCls = SkeletonPart.GetNamedSubclass( 'Spine' )
+	if spineCls is not None:
+		numSpines = 0
+		for spine in spineCls.IterAllParts():
+			items = spine.items
+			items.append( spine.getParent() )
+			mnx, mny, mnz, mxx, mxy, mxz = rigUtils.getTranslationExtents( items )
+			XYZ = mxx-mnx, mxy-mny, mxz-mnz
+			maxLen = max( XYZ ) * 1.5
+			scaleFromSpine += maxLen
+			numSpines += 1
+
+		#if there were spine parts found, average their scales, add them to the root scale and average them again
+		if numSpines:
+			scaleFromSpine /= float( numSpines )
+			scaleFromSpine *= 2.3  #ths spine is roughly 3 head heights, while the whole body is roughly 7 head heights - hence 2.3 (7/3)
+			scale += scaleFromSpine
+			scale /= 2.0
+
+	if not scale:
+		return getScaleFromMeshes()
+
+	return scale
 
 
 def getItemScale( item ):
+	'''
+	returns the non-skinned "scale" of a joint (or skeleton part "item")
+	This scale uses a few metrics to determine the scale - first, the
+	bounds of any children are calculated and the max side of the bounding
+	box is found, and if non-zero returned.  If the item has no children
+	then the radius of the joint is used (if it exists) otherwise the
+	magnitude of the joint translation is used.
+
+	If all the above tests fail, 1 is returned.
+	'''
 	scale = 0
 
 	children = listRelatives( item, type='transform' )
 	if children:
 		scales = []
-		for c in children:
-			scales += getAttr( '%s.t' % c )[0]
-
-		scale = max( scales )
-
-	if not scale:
-		pos = getAttr( '%s.t' % item )[0]
-		scale = max( pos )
+		bb = rigUtils.getTranslationExtents( children )
+		XYZ = bb[3]-bb[0], bb[4]-bb[1], bb[5]-bb[2]
+		scale = max( XYZ )
 
 	if not scale:
 		if objExists( '%s.radius' % item ):
 			scale = getAttr( '%s.radius' % item )
+
+	if not scale:
+		pos = Vector( getAttr( '%s.t' % item )[0] )
+		scale = pos.get_magnitude()
 
 	return scale or 1
 
@@ -1677,7 +1724,7 @@ class Root(SkeletonPart):
 
 		root = createJoint()
 		root = rename( root, 'root' )
-		move( 0, partScale / 1.8, 0, root, ws=True )
+		move( 0, partScale / 1.75, 0, root, ws=True )
 		jointSize( root, 3 )
 
 		#tag the root joint with the tool name only if its the first root created - having multiple roots in a scene/skeleton is entirely valid

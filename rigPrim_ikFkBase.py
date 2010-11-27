@@ -161,8 +161,9 @@ class IkFkBase(RigSubPart):
 		limbTrigger = Trigger( limbControl )
 		handleNum = limbTrigger.connect( ikHandle )
 		poleNum = limbTrigger.connect( poleControl )
+		lowerNum = limbTrigger.connect( driverLower )
 		fkIdx = limbTrigger.createMenu( "switch to FK",
-			                            "zooAlign \"\";\nzooAlignFK \"-ikHandle %%%d -offCmd setAttr #.ikBlend 0;\";" % handleNum )
+			                            "zooAlign \"\";\nzooAlignFK \"-ikHandle %%%d -offCmd setAttr #.ikBlend 0\";\nselect %%%d;" % (handleNum, lowerNum) )
 		limbTrigger.createMenu( "switch to FK for all keys",
 			                    'source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd "eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\",%%%d)),{}))";' % fkIdx )
 		ikIdx = limbTrigger.createMenu( "switch to IK",

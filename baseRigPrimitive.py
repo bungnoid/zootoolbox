@@ -362,7 +362,7 @@ class RigPart(filesystem.trackableClassFactory()):
 
 
 		#generate a default scale for the rig part
-		kw.setdefault( 'scale', getDefaultScale() / 10.0 )
+		kw.setdefault( 'scale', getScaleFromSkeleton() / 10.0 )
 
 
 		#make sure the world part is created first - if its created by the part, then its nodes will be included in its container...

@@ -478,13 +478,12 @@ class BuildPartLayout(MelForm):
 
 	BUTTON_LBL_TEMPLATE = 'Create %s'
 
-	def __new__( cls, parent, partClass, getScaleMethod ):
+	def __new__( cls, parent, partClass ):
 		return MelForm.__new__( cls, parent )
-	def __init__( self, parent, partClass, builderUI ):
+	def __init__( self, parent, partClass ):
 		MelForm.__init__( self, parent )
 
 		self.partClass = partClass
-		self.builderUI = builderUI
 		self.UI_create = cmd.button( l=self.BUTTON_LBL_TEMPLATE % names.camelCaseToNice( partClass.GetPartName() ), c=self.on_create, w=160 )
 
 		#now populate the ui for the part's args
@@ -537,7 +536,7 @@ class BuildPartLayout(MelForm):
 			if not kwargs[ 'parent' ]:
 				kwargs[ 'parent' ] = None
 
-		kwargs[ 'partScale' ] = self.builderUI.getScale()
+		kwargs[ 'partScale' ] = rigPrimitives.getScaleFromSkeleton()
 
 		return kwargs
 	def rePopulate( self ):
@@ -547,7 +546,7 @@ class BuildPartLayout(MelForm):
 	def on_create( self, e ):
 		kwargs = self.getKwargDict()
 		self.partClass.Create( **kwargs )
-		self.builderUI.rePopulate()
+		self.sendEvent( 'rePopulate' )
 
 
 class BuildingLayout(MelScrollLayout):
@@ -559,16 +558,14 @@ class BuildingLayout(MelScrollLayout):
 
 		self.UI_col = col = MelColumnLayout( self, rowSpacing=4, adj=True )
 
-		scaleForm = MelForm( col )
-
 		MelLabel( col, l='Create Skeleton from Preset', align='left' )
 		MelLabel( col, l='', height=5 )
 
 		### BUILD THE PRESET CREATION BUTTONS ###
-		self.UI_presetsCol = MelColumnLayout( self.UI_col )
+		self.UI_presetsCol = MelColumnLayout( col )
 		self.rePopulatePresets()
 
-		hLayout = MelHLayout( self.UI_col )
+		hLayout = MelHLayout( col )
 		MelButton( hLayout, l='Create Preset', c=self.on_createPreset )
 		MelButton( hLayout, l='Manage Presets', c=self.on_managePresets )
 		hLayout.layout()
@@ -582,7 +579,7 @@ class BuildingLayout(MelScrollLayout):
 		parts = SkeletonPart.GetSubclasses()
 		for part in parts:
 			if part.AVAILABLE_IN_UI:
-				self.UI_list.append( BuildPartLayout( self.UI_col, part, self ) )
+				self.UI_list.append( BuildPartLayout( col, part ) )
 
 		#### BUILD UI FOR MANUAL PART CREATION ###
 		#MelSeparator( self.UI_col )
@@ -598,11 +595,6 @@ class BuildingLayout(MelScrollLayout):
 		for locale, presets in skeletonBuilderPresets.listPresets().iteritems():
 			for preset in presets:
 				SkeletonPresetLayout( self.UI_presetsCol, preset )
-	def getScale( self ):
-		return baseRigPrimitive.baseSkeletonBuilder.TYPICAL_HEIGHT
-	def on_guess( self, e=None ):
-		scale = rigPrimitives.getDefaultScale()
-		#self.UI_scale.setValue( scale )
 	def on_createPreset( self, *a ):
 		BUTTONS = OK, CANCEL = 'Ok', 'Cancel'
 		ret = promptDialog( t='Preset Name', m='Enter the name for the preset', b=BUTTONS, db=OK )

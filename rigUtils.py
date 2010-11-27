@@ -312,6 +312,16 @@ def getBounds( objs ):
 	return minX[ 0 ], minY[ 0 ], minZ[ 0 ], maxX[ -1 ], maxY[ -1 ], maxZ[ -1 ]
 
 
+def getTranslationExtents( objs ):
+	ts = [ xform( i, q=True, ws=True, rp=True ) for i in objs ]
+	xs, ys, zs = [ t[0] for t in ts ], [ t[1] for t in ts ], [ t[2] for t in ts ]
+	mnx, mxx = min( xs ), max( xs )
+	mny, mxy = min( ys ), max( ys )
+	mnz, mxz = min( zs ), max( zs )
+
+	return mnx, mny, mnz, mxx, mxy, mxz
+
+
 def getObjsScale( objs ):
 	mnX, mnY, mnZ, mxX, mxY, mxZ = getBounds( objs )
 	x = abs( mxX - mnX )

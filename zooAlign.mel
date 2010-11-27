@@ -150,21 +150,36 @@ global proc zooAlignFK( string $optionStr ) {
 	while( `match "\\^+" $onCmd` != "" ) $onCmd = `substitute "\\^+" $onCmd $ikHandle`;
 	while( `match "\\^+" $offCmd` != "" ) $offCmd = `substitute "\\^+" $offCmd $ikHandle`;
 
-	if( !`ikHandle -ex $ikHandle` ) return;
+	if( !`ikHandle -ex $ikHandle` ) {
+		print( "WARNING: alignFK - no ikHandle specified\n" );
+		return;
+		}
+
 	if( `size $onCmd` ) eval $onCmd;
 	string $joints[] = `ikHandle -q -jl $ikHandle`;
 	string $effector = `ikHandle -q -ee $ikHandle`;
 	string $effectorCtrl[] = `listConnections -d 0 ( $effector +".tx" )`;
 
+	float $rx[] = {};
+	float $ry[] = {};
+	float $rz[] = {};
 	for( $n=0; $n<`size $joints`; $n++ ) {
 		float $rotation[] = `getAttr ( $joints[$n] +".r" )`;
-		if( `getAttr -se ( $joints[$n] +".rx" )` ) setKeyframe -at rx -v $rotation[0] $joints[$n];
-		if( `getAttr -se ( $joints[$n] +".ry" )` ) setKeyframe -at ry -v $rotation[1] $joints[$n];
-		if( `getAttr -se ( $joints[$n] +".rz" )` ) setKeyframe -at rz -v $rotation[2] $joints[$n];
+		$rx[ $n ] = $rotation[ 0 ];
+		$ry[ $n ] = $rotation[ 1 ];
+		$rz[ $n ] = $rotation[ 2 ];
 		}
 
 	if( $alignEnd ) zooAlign ( "-key 1 -src "+ $ikHandle +" -tgt "+ $effectorCtrl[0] );
 	if( `size $offCmd` ) eval $offCmd;
+
+	for( $n=0; $n<`size $joints`; $n++ ) {
+		if( `getAttr -se ( $joints[ $n ] +".rx" )` ) setAttr ( $joints[ $n ] +".rx" ) $rx[ $n ];
+		if( `getAttr -se ( $joints[ $n ] +".ry" )` ) setAttr ( $joints[ $n ] +".ry" ) $ry[ $n ];
+		if( `getAttr -se ( $joints[ $n ] +".rz" )` ) setAttr ( $joints[ $n ] +".rz" ) $rz[ $n ];
+		}
+
+	if ( `objExists $control` ) select $control;
 	}
 
 
@@ -209,7 +224,11 @@ global proc zooAlignIK( string $optionStr ) {
 	while( `match "\\^+" $onCmd` != "" ) $onCmd = `substitute "\\^+" $onCmd $ikHandle`;
 	while( `match "\\^+" $offCmd` != "" ) $offCmd = `substitute "\\^+" $offCmd $ikHandle`;
 
-	if( !`ikHandle -ex $ikHandle` ) return;
+	if( !`ikHandle -ex $ikHandle` ) {
+		print( "WARNING: alignIK - no ikHandle specified\n" );
+		return;
+		}
+
 	if( `size $onCmd` ) eval $onCmd;
 	string $joints[] = `ikHandle -q -jl $ikHandle`;
 	string $effector = `ikHandle -q -ee $ikHandle`;
@@ -222,6 +241,7 @@ global proc zooAlignIK( string $optionStr ) {
 		}
 
 	if( `size $offCmd` ) eval $offCmd;
+	if( `objExists $control` ) select $control;
 	}
 
 
