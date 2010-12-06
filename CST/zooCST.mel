@@ -3,7 +3,24 @@
 //
 // Created by Hamish McKenzie zootoolbox@googlegroups.com
 // Created : 08 March 2003
-// Distributed GPL v2 license
+//
+// Usage:
+//  simply run the command:
+//	zooCST;
+//
+
+zooArrays_str;
+zooBrandTools;
+zooCSTPrimitives;
+zooCSTUtils;
+zooFlags;
+zooObjMenuUtils;
+zooShelveIt;
+zooRenamerUtils;
+zooTriggeredUtils;
+zooStrUtils;
+zooTips;
+zooUtils;
 
 
 global proc zooCST() {

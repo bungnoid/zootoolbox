@@ -83,6 +83,19 @@ global proc string zooGetNamespace( string $name ) {
 	}
 
 
+global proc string zooStripAllNamespaces( string $name ) {
+	string $temp[] = {};
+	string $namespace = "";
+
+	tokenize $name ":" $temp;
+	for( $n=0; $n<`size $temp`-1; $n++ ) $namespace = $namespace + $temp[$n] +":";
+
+	catch( $name = $temp[ `size $temp`-1 ] );
+
+	return $name;
+	}
+
+
 //------
 //wraps (ie adds a carriage return) a string at the given number of letters
 //------
