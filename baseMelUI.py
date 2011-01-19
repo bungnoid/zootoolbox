@@ -27,6 +27,9 @@ displayError = MGlobal.displayError
 _DEBUG = False
 
 
+class MelUIError(Exception): pass
+
+
 def iterBy( iterable, count ):
 	'''
 	returns an generator which will yield "chunks" of the iterable supplied of size "count".  eg:
@@ -49,7 +52,20 @@ def iterBy( iterable, count ):
 			break
 
 
-class MelUIError(Exception): pass
+class Callback(object):
+	'''
+	stupid little callable object for when you need to "bake" temporary args into a
+	callback - useful mainly when creating callbacks for dynamicly generated UI items
+	'''
+	def __init__( self, func, *a, **kw ):
+		self.f = func
+		self.a = a
+		self.kw = kw
+	def __call__( self, *a, **kw ):
+		args = self.a + a
+		kw.update( self.kw )
+
+		return self.f( *args, **kw )
 
 
 #this maps ui type strings to actual command objects - they're not always called the same
@@ -177,7 +193,7 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 
 		return new
 	def __call__( self, *a, **kw ):
-		return self.WIDGET_CMD( self, *a, **kw )
+		return self.WIDGET_CMD( unicode( self ), *a, **kw )
 	"""def __eq__( self, other ):
 		'''
 		compares to widgets or widget names and returns whether they both refer to the same widget
@@ -255,6 +271,15 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 		h = self( q=True, h=True )
 
 		return w, h
+	def getColour( self ):
+		return self( q=True, bgc=True )
+	getColor = getColour
+	def setColour( self, colour ):
+		self( e=True, bgc=colour )
+	setColor = setColour
+	def resetColour( self ):
+		self( e=True, enableBackground=False )
+	resetColor = resetColour
 	def getParent( self ):
 		'''
 		returns the widget's parent.
@@ -382,7 +407,13 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 				theCls = candidates[ 0 ]
 
 		new = unicode.__new__( theCls, theStr )  #we don't want to run initialize on the object - just cast it appropriately
+		new._cbDict = cbDict = {}
 		cls._INSTANCE_LIST.append( new )
+
+		#try to grab the parent...
+		try:
+			new.parent = cmd.control( theStr, q=True, parent=True )
+		except RuntimeError: new.parent = None
 
 		return new
 	@classmethod
@@ -519,6 +550,10 @@ class MelHLayout(_AlignedFormLayout):
 
 	def setWeight( self, widget, weight=1 ):
 		self._weights[ widget ] = weight
+	def getHeight( self ):
+		return max( [ ui.getHeight() for ui in self.getChildren() ] )
+	def getWidth( self ):
+		return sum( [ ui.getWidth() for ui in self.getChildren() ] )
 	def layout( self ):
 		padding = self.padding
 		children = self.getChildren()
@@ -531,6 +566,8 @@ class MelHLayout(_AlignedFormLayout):
 			weightsList.append( weight )
 
 		weightSum = float( sum( weightsList ) )
+		#if not weightSum:
+			#return
 
 		weightAccum = 0
 		positions = []
@@ -561,6 +598,11 @@ class MelHLayout(_AlignedFormLayout):
 
 class MelVLayout(MelHLayout):
 	_EDGES = 'top', 'bottom'
+
+	def getHeight( self ):
+		return sum( [ ui.getHeight() for ui in self.getChildren() ] )
+	def getWidth( self ):
+		return max( [ ui.getWidth() for ui in self.getChildren() ] )
 
 
 class MelHRowLayout(_AlignedFormLayout):
@@ -794,7 +836,7 @@ class MelPaneLayout(BaseMelLayout):
 		kw[ 'configuration' ] = configuration
 		kw.pop( 'cn', None )
 
-		super( MelPaneLayout, self ).__init__( parent, *a, **kw )
+		BaseMelLayout.__init__( self, parent, *a, **kw )
 		self( e=True, **kw )
 
 		if self.PREF_OPTION_VAR:
@@ -933,8 +975,11 @@ class MelLabel(BaseMelWidget):
 
 
 class MelSpacer(MelLabel):
-	def __new__( cls, parent, w=0, h=0 ):
-		return MelLabel.__new__( cls, parent, w, h, l='' )
+	def __new__( cls, parent, w=1, h=1 ):
+		w = max( w, 1 )
+		h = max( h, 1 )
+
+		return MelLabel.__new__( cls, parent, w=w, h=h, l='' )
 
 
 class MelButton(BaseMelWidget):
@@ -960,6 +1005,11 @@ class MelIconButton(MelButton):
 		img = self.getImage()
 		self.setImage( '' )
 		self.setImage( img )
+
+
+class MelIconCheckBox(MelIconButton):
+	WIDGET_CMD = cmd.iconTextCheckBox
+	KWARG_CHANGE_CB_NAME = 'cc'
 
 
 class MelCheckBox(BaseMelWidget):
@@ -1455,7 +1505,7 @@ class MelObjectScrollList(MelTextScrollList):
 			self._items.pop( idx )
 
 			if value in self._visibleItems:
-				idx = self._visibleItems.index( item )
+				idx = self._visibleItems.index( value )
 				self._visibleItems.pop( idx )
 				self( e=True, rii=idx+1 )  #mel indices are 1-based...
 		else:
@@ -1480,7 +1530,7 @@ class MelObjectScrollList(MelTextScrollList):
 		self( e=True, ra=True )
 
 		#now re-generate their string representations
-		for item in self._items:
+		for item in self.getAllItems():
 			itemStr = self.itemAsStr( item )
 			if self.doesItemStrPassFilter( itemStr ):
 				self._visibleItems.append( item )
@@ -1518,6 +1568,8 @@ class _MelBaseMenu(BaseMelWidget):
 				self.append( item )
 	def __len__( self ):
 		return self( q=True, numberOfItems=True )
+	def __contains__( self, item ):
+		return item in self.getItems()
 	def _build( self, menu, menuParent ):
 		'''
 		converts the menu and menuParent args into proper MelXXX instance
