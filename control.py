@@ -153,6 +153,8 @@ NORMAL = False, True
 HIDE = None, False, False
 LOCK_HIDE = True, False, False
 NO_KEY = False, False, True
+LOCK_SHOW = True, True, True
+
 
 def attrState( objs, attrNames, lock=None, keyable=None, show=None ):
 	if not isinstance( objs, (list, tuple) ):
@@ -201,9 +203,16 @@ def getJointSizeAndCentre( joints, threshold=0.65, space=SPACE_OBJECT ):
 		if size.within( Vector.Zero( 3 ), 1e-2 ):
 			size = Vector( (1, 1, 1) )
 
-	children = listRelatives( joints[ 0 ], pa=True )
+	children = listRelatives( joints[ 0 ], pa=True, type='transform' )
 	if children:
-		childPos = Vector( xform( children[ 0 ], q=True, ws=True, rp=True ) ) - Vector( xform( joints[ 0 ], q=True, ws=True, rp=True ) )
+		childPos = Vector( [ 0.0, 0.0, 0.0 ] )
+		childPosMag = childPos.get_magnitude()
+		for child in children:
+			curChildPos = Vector( xform( child, q=True, ws=True, rp=True ) ) - Vector( xform( joints[ 0 ], q=True, ws=True, rp=True ) )
+			curChildPosMag = curChildPos.get_magnitude()
+			if curChildPosMag > childPosMag:
+				childPos = curChildPos
+				childPosMag = curChildPosMag
 
 		axis = rigUtils.getObjectAxisInDirection( joints[ 0 ], childPos, DEFAULT_AXIS )
 		axisValue = getAttr( '%s.t%s' % (children[ 0 ], axis.asCleanName()) )

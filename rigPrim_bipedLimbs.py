@@ -1,14 +1,15 @@
 
 from rigPrim_ikFkBase import *
+from rigPrim_stretchy import StretchRig
 
 
 class IkFkArm(PrimaryRigPart):
-	__version__ = 0
+	__version__ = 1
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'Arm' ), )
 	CONTROL_NAMES = 'control', 'fkBicep', 'fkElbow', 'fkWrist', 'poleControl', 'clavicle', 'allPurpose', 'poleTrigger'
 
-	def _build( self, skeletonPart, translateClavicle=True, **kw ):
-		return self.doBuild( skeletonPart.bicep, skeletonPart.elbow, skeletonPart.wrist, skeletonPart.clavicle, translateClavicle, **kw )
+	def _build( self, skeletonPart, translateClavicle=True, stretchy=True, **kw ):
+		return self.doBuild( skeletonPart.bicep, skeletonPart.elbow, skeletonPart.wrist, skeletonPart.clavicle, translateClavicle, stretchy, **kw )
 	def doBuild( self, bicep, elbow, wrist, clavicle=None, translateClavicle=True, stretchy=False, **kw ):
 		scale = kw[ 'scale' ]
 
@@ -57,189 +58,20 @@ class IkFkArm(PrimaryRigPart):
 		#build space switching
 		allPurposeObj = spaceLocator()[ 0 ]
 		allPurposeObj = rename( allPurposeObj, "arm_all_purpose_loc%s" % parity.asName() )
+		attrState( allPurposeObj, 's', *LOCK_HIDE )
+		attrState( allPurposeObj, 'v', *HIDE )
 		parent( allPurposeObj, worldControl )
 
 		buildDefaultSpaceSwitching( bicep, armControl, [ allPurposeObj ], [ 'All Purpose' ], True )
 		buildDefaultSpaceSwitching( bicep, driverBicep, **spaceSwitching.NO_TRANSLATION )
 
 
-		##make the limb stretchy?
-		#if stretchy:
-			#makeStretchy( armControl, ikHandle, "-axis x -parts %s" % str( partsControl ) )
+		#make the limb stretchy?
+		if stretchy:
+			StretchRig.Create( self._skeletonPart, armControl, fkControls, '%s.ikBlend' % ikHandle, parity=parity )
 
 
 		return armControl, driverBicep, driverElbow, driverWrist, elbowControl, clavControl, allPurposeObj, ikFkPart.poleTrigger
-
-
-def makeStretchy( control, ikHandle, axis=BONE_AIM_VECTOR, startObj=None, endObj=None, parity=Parity.LEFT, elbowPos=1 ):
-	'''
-	creates stretch attribs on the $control object, and makes all joints controlled by the ikHandle stretchy
-	-------
-
-	$control - the character prefix used to identify the character
-	$parity - which side is the arm on?  l (left) or r (right)
-	$ikHandle - the bicep, upper arm, or humerous
-	$optionStr - standard option string - see technical docs for info on option strings
-
-	option flags
-	-------
-	-axis [string]			the stretch axis used by the joints in the limb.  default: x
-	-scale [float]			scale factor to apply to the control (purely a visual thing - scale is frozen).  default: 1
-	-startObj [string]	the beginning of the measure node is attached to the start object.  if its not specified, then the script assumes the start object is the start of the ik chain (usally the case)
-	-endObj [string]		this is the object the end of the measure is attached to - by default its the
-	-invert [int]				use this flag if the script inverts the limb when adding stretch
-	-parts [string]		the parts node is simply an object that miscellanous dag nodes are parented under - if not specified, miscellanous objects are simply left in worldspace
-	// -dampen [float]				this flag allows control over the dampen range - lower values cause the dampening to happen over a shorter range.  setting to zero turns damping off.  its technical range is 0-100, but in practice, its probably best to keep between 0-25.  defaults to 12
-	// -dampstrength [float]		this is the strength of the dampening - ie how much the arm gets elongated as it nears maximum extension.  the technical range is 0-100, but in reality, you'd probably never go beyond 10.  default is 2
-
-	It is reccommended that this proc has a "root" control, a "chest" control and a "head" control already
-	built (and branded with these names) as it uses them as dynamic parents for the actual arm control.
-
-	For example:
-	zooCSTMakeStretchy primoBoy_arm_ctrl_L l primoBoy_arm_ctrl_L "-axis x -scale 0.5";
-	'''
-	#float $dampRange = 12.0
-	#float $dampStrength = 2.0;
-	#int $elbowpos = 1;
-	#if( $dampRange <= 0 ) $dampstrength = 0;
-	#$dampRange = abs($dampRange);
-	#$dampStrength = abs($dampStrength);
-	#$dampRange /= 200.0;  //divide by 200 because we want the input range to be 0-100, but internally it needs to range from 0-0.5
-	#$dampStrength /= 100.0;
-
-
-	#setup some current unit variables, and take parity into account
-	stretchAuto = "autoStretch"
-	stretchName = "stretch"
-	parityFactor = parity.asMultiplier()
-
-	addAttr( control, ln=stretchAuto, at='double', min=0, max=1, dv=1 )
-	addAttr( control, ln=stretchName, at='double', min=0, max=10, dv=0 )
-	attrState( control, (stretchAuto, stretchName), keyable=True )
-
-
-	#build the network for distributing stretch from the fk controls to the actual joints
-	plusNodes = []
-	initialNodes = []
-	fractionNodes = []
-	clients = []
-	allNodes = []
-
-	clients = cmd.ikHandle( ikHandle, q=True, jl=True )
-	if axis is None:
-		raise NotImplemented( 'axis support not written yet - complain loudly!' )
-		#axis = `zooCSTJointDirection $clients[1]`;  #if no axis is specified, assume the second joint in the chain has the correct axis set
-
-	#get the end joint in the chain...
-	cons = getattr( ikHandle, 't'+ axis.asCleanName() ).listConnections( s=False )
-	clients.append( cons[ 0 ] )
-
-	for c in clients:
-		md = shadingNode( 'multiplyDivide', asUtility=True, name='%s_fraction_pos' % str( c ) )
-		fractionNodes.append( md )
-
-	if startObj is None:
-		startObj = clients[ 0 ]
-
-	if endObj is None:
-		endObj = ikHandle
-
-
-	clientLengths = []
-	totalLength = 0
-	for n, c in enumerate( clients[ :-1 ] ):
-		thisPos = Vector( xform( c, q=True, ws=True, rp=True ) )
-		nextPos = Vector( xform( clients[ n+1 ], q=True, ws=True, rp=True ) )
-		l = (thisPos - nextPos).length()
-		clientLengths.append( l )
-		totalLength += l
-
-
-	#build the network to measure limb length
-	loc_a = group( empty=True )
-	loc_b = group( empty=True )
-	measure = loc_b
-
-	parent( loc_b, loc_a )
-	constraint_a = pointConstraint( startObj, loc_a )[ 0 ]
-
-	aim = aimConstraint( endObj, loc_a, aimVector=(1,0,0) )[ 0 ]
-	setAttr( '%s.tx' % loc_b, totalLength )
-	makeIdentity( loc_b, a=True, t=True )  #by doing this, the zero point for the null is the max extension for the limb
-	constraint_b = pointConstraint( endObj, loc_b )[ 0 ]
-	attrState( [ loc_a, loc_b ], ('t', 'r'), *LOCK_HIDE )
-
-
-	#create the stretch network
-	stretchEnable = shadingNode( 'multiplyDivide', asUtility=True, n='stretch_enable' )  #blends the auto length smooth back to zero when blending to fk
-	fkikBlend = shadingNode( 'multiplyDivide', asUtility=True, n='fkik_stretch_blend' )  #blends the auto length smooth back to zero when blending to fk
-	actualLength = shadingNode( 'plusMinusAverage', asUtility=True, n='actual_length' )  #adds the length mods to the normal limb length
-	lengthMods = shadingNode( 'plusMinusAverage', asUtility=True, n='length_mods' )  #adds all lengths together
-	finalLength = shadingNode( 'clamp', asUtility=True, n='final_length' )  #clamps the length the limb can be
-	manualStretchMult = shadingNode( 'multiplyDivide', asUtility=True, n='manualStretch_range_multiplier' )  #multiplys manual stretch to a sensible range
-	dampen = createNode( 'animCurveUU', n='dampen' )
-
-	#for n, cl in enumerate( clientLengths ):  #if any of the lengths are negative, the stretch will still be wrong, but will be easier to fix manually if this number is correct
-	setKeyframe( dampen, f=totalLength * -0.5, v=0 )
-	setKeyframe( dampen, f=totalLength * -dampRange, v=totalLength * dampStrength )
-	setKeyframe( dampen, f=totalLength * dampRange, v=0 )
-	keyTangent( dampen, f=":", itt='flat', ott='flat' )
-
-	#NOTE: the second term attribute of the length condition node holds the initial length for the limb, and is thus connected to the false attribute of all condition nodes
-	setAttr( '%s.input2X' % manualStretchMult, totalLength / 10 )
-	setAttr( '%s.input1D[ 0 ]' % actualLength, totalLength )
-	setAttr( '%s.minR' % finalLength, totalLength )
-	setAttr( '%s.maxR' % finalLength, totalLength * 3 )
-	connectAttr( '%s.tx' % measure, '%s.input' % dampen, f=True )
-	connectAttr( '%s.output1D' % lengthMods, '%s.input1X' % fkikBlend, f=True )
-	connectAttr( '%s.ikBlend' % ikHandle, '%s.input2X' % fkikBlend, f=True )
-	connectAttr( '%s.outputX' % fkikBlend, '%s.input1X' % stretchEnable, f=True )
-	connectAttr( '%s.%s' % (control, stretchAuto), '%s.input2X' % stretchEnable, f=True )
-	connectAttr( '%s.tx' % measure, '%s.input1D[ 0 ]' % lengthMods, f=True )
-	connectAttr( '%s.%s' % (control, stretchName), '%s.input1X' % manualStretchMult, f=True )
-	connectAttr( '%s.outputX' % manualStretchMult, '%s.input1D[ 1 ]' % lengthMods, f=True )
-	connectAttr( '%s.output' % dampen, '%s.input1D[ 2 ]' % lengthMods, f=True )
-	connectAttr( '%s.outputX' % stretchEnable, '%s.input1D[ 1 ]' % actualLength, f=True )
-	connectAttr( '%s.output1D' % actualLength, '%s.inputR' % finalLength, f=True )
-
-
-	#connect the stretch distribution network up - NOTE this loop starts at 1 because we don't need to connect the
-	#start of the limb chain (ie the bicep or the thigh) as it doesn't move
-	for n, c in enumerate( clients ):
-		if n == 0: continue
-		setAttr( '%s.input2X' % fractionNodes[ n ], clientLengths[ n ] / totalLength * parityFactor )
-
-		#now connect the inital coords to the plus node - then connect the
-		connectAttr( '%s.outputR' % finalLength, '%s.input1X' % fractionNodes[ n ], f=True )
-
-		#then connect the result of the plus node to the t(axis) pos of the limb joints
-		setAttr( '%s.tx' % clients[ n ], lock=False )
-		connectAttr( '%s.outputX' % fractionNodes[ n ], '%s.tx' % clients[ n ], f=True )
-
-
-	#now if we have only 3 clients, that means we have a simple limb structure
-	#in which case, lets build an elbow pos network
-	if len( clients ) == 3 and elbowPos:
-		default = clientLengths[ 1 ] / totalLength * parityFactor
-		isNeg = default < 0
-
-		default = abs( default )
-		addAttr( control, ln='elbowPos', at='double', min=0, max=1, dv=default )
-		setAttr( '%s.elbowPos' % control, keyable=True )
-
-		elbowPos = shadingNode( 'reverse', asUtility=True, n='%s_elbowPos' % clients[ 1 ] )
-		if isNeg:
-			mult = shadingNode( 'multiplyDivide', asUtility=True )
-			setAttr( '%s.input2' % mult, -1, -1, -1 )
-			connectAttr( '%s.elbowPos' % control, '%s.inputX' % elbowPos, f=True )
-			connectAttr( '%s.elbowPos' % control, '%s.input1X' % mult, f=True )
-			connectAttr( '%s.outputX' % elbowPos, '%s.input1Y' % mult, f=True )
-			connectAttr( '%s.outputY' % mult, '%s.input2X' % fractionNodes[2], f=True )
-			connectAttr( '%s.outputX' % mult, '%s.input2X' % fractionNodes[1], f=True )
-		else:
-			connectAttr( '%s.elbowPos' % control, '%s.inputX' % elbowPos, f=True )
-			connectAttr( '%s.outputX' % elbowPos, '%s.input2X' % fractionNodes[2], f=True )
-			connectAttr( '%s.elbowPos' % control, '%s.input2X' % fractionNodes[1], f=True )
 
 
 class IkFkLeg(PrimaryRigPart):
@@ -247,13 +79,15 @@ class IkFkLeg(PrimaryRigPart):
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'Leg' ), )
 	CONTROL_NAMES = 'control', 'fkThigh', 'fkKnee', 'fkAnkle', 'poleControl', 'allPurpose', 'poleTrigger'
 
-	def _build( self, skeletonPart, stretchy=False, **kw ):
+	def _build( self, skeletonPart, stretchy=True, **kw ):
 		return self.doBuild( skeletonPart.thigh, skeletonPart.knee, skeletonPart.ankle, stretchy=stretchy, **kw )
 	def doBuild( self, thigh, knee, ankle, stretchy=True, **kw ):
+		skeletonPart = self._skeletonPart
 		scale = kw[ 'scale' ]
 
 		idx = kw[ 'idx' ]
 		parity = Parity( idx )
+		parityMult = parity.asMultiplier()
 		suffix = parity.asName()
 
 		colour = ColourDesc( 'green' ) if parity == Parity.LEFT else ColourDesc( 'red' )
@@ -284,7 +118,6 @@ class IkFkLeg(PrimaryRigPart):
 		#if the part parent in a Root primitive, grab the hips control instead of the root gimbal - for the leg parts this is preferable
 		parentRigPart = RigPart.InitFromItem( partParent )
 		if isinstance( parentRigPart, Root ):
-			print 'FOUND ZE HIPS!'
 			partParent = parentRigPart.hips
 
 
@@ -315,9 +148,13 @@ class IkFkLeg(PrimaryRigPart):
 			parent( toe, ankle, r=True )
 			move( 0, -scale, scale, toe, r=True, ws=True )
 
-		possibleTips = listRelatives( toe, type='joint', pa=True )
-		if possibleTips:
-			toeTip = possibleTips[ 0 ]
+
+		toeTip = skeletonPart.endPlacer
+		if not toeTip:
+			possibleTips = listRelatives( toe, type='joint', pa=True )
+			if possibleTips:
+				toeTip = possibleTips[ 0 ]
+
 
 
 		#build the objects to control the foot
@@ -338,11 +175,21 @@ class IkFkLeg(PrimaryRigPart):
 
 
 		#move bank pivots to a good spot on the ground
-		toePos = Vector( xform( toe, q=True, ws=True, rp=True ) )
-		sideOffset = -scale if parity == Parity.LEFT else scale
-		move( toePos.x+sideOffset, 0, toePos.z, footBankL, a=True, ws=True, rpr=True )
-		move( toePos.x-sideOffset, 0, toePos.z, footBankR, a=True, ws=True, rpr=True )
+		placers = skeletonPart.getPlacers()
+		numPlacers = len( placers )
+		if placers:
+			toePos = Vector( xform( toe, q=True, ws=True, rp=True ) )
+			if numPlacers >= 2:
+				innerPlacer = Vector( xform( placers[1], q=True, ws=True, rp=True ) )
+				move( innerPlacer[0], innerPlacer[1], innerPlacer[2], footBankL, a=True, ws=True, rpr=True )
 
+			if numPlacers >= 3:
+				outerPlacer = Vector( xform( placers[2], q=True, ws=True, rp=True ) )
+				move( outerPlacer[0], outerPlacer[1], outerPlacer[2], footBankR, a=True, ws=True, rpr=True )
+
+			if numPlacers >= 4:
+				heelPlacer = Vector( xform( placers[3], q=True, ws=True, rp=True ) )
+				move( heelPlacer[0], heelPlacer[1], heelPlacer[2], heelRoll, a=True, ws=True, rpr=True )
 
 		#parent the leg pivots together
 		parent( kneeControlSpace, partParent )
@@ -413,6 +260,8 @@ class IkFkLeg(PrimaryRigPart):
 
 		#build all purpose
 		allPurposeObj = spaceLocator( name="leg_all_purpose_loc%s" % suffix )[ 0 ]
+		attrState( allPurposeObj, 's', *LOCK_HIDE )
+		attrState( allPurposeObj, 'v', *HIDE )
 		parent( allPurposeObj, worldControl )
 
 
@@ -424,12 +273,9 @@ class IkFkLeg(PrimaryRigPart):
 
 
 		#make the limb stretchy
-		#makeStretchy( legControl, ikHandle, parity=parity )  #( $optionStr +" -startObj "+ $thigh +" -endObj "+ $legControl +" -register 1 -primitive "+ $primitive +" -axis "+ zooCSTJointDirection($ankle) +" -prefix "+ $prefix +" -parts "+ $partsControl )
-		#renameAttr( legControl.elbowPos, 'kneePos' )
-
-
-		#hide attribs, objects and cleanup
-		#attrState( legControl, 'kneePos', *LOCK_HIDE )
+		if stretchy:
+			StretchRig.Create( self._skeletonPart, legControl, fkControls, '%s.ikBlend' % ikHandle, parity=parity )
+			renameAttr( '%s.elbowPos' % legControl, 'kneePos' )
 
 
 		return legControl, driverThigh, driverKnee, driverAnkle, kneeControl, allPurposeObj, ikFkPart.poleTrigger

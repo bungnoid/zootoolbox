@@ -109,9 +109,9 @@ class Leg(SkeletonPart):
 		alignAimAtItem( self.knee, self.ankle, parity, worldUpVector=normal )
 
 		if self.toe:
-			alignAimAtItem( self.ankle, self.toe, parity, upVector=ENGINE_UP, worldUpVector=(1,0,0), upType='scene' )
+			alignAimAtItem( self.ankle, self.toe, parity, upVector=ENGINE_UP, upType='scene' )
 		else:
-			autoAlignItem( self.ankle, parity, upVector=ENGINE_UP, worldUpVector=(1,0,0), upType='scene' )
+			autoAlignItem( self.ankle, parity, upVector=ENGINE_UP, upType='scene' )
 
 		for i in self.getOrphanJoints():
 			alignItemToLocal( i )

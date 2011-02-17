@@ -30,6 +30,17 @@ ROT_AXIS = AX_Y
 setDrivenKeyframe = lambda *a, **kw: cmd.setDrivenKeyframe( inTangentType='linear', outTangentType='linear', *a, **kw )
 
 
+def connectAttrReverse( srcAttr, destAttr, **kw ):
+	'''
+	puts a reverse node in between the two given attributes
+	'''
+	revNode = shadingNode( 'reverse', asUtility=True )
+	connectAttr( srcAttr, '%s.inputX' % revNode, **kw )
+	connectAttr( '%s.outputX' % revNode, destAttr, **kw )
+
+	return revNode
+
+
 class RigPartError(Exception): pass
 
 
@@ -177,6 +188,17 @@ class RigPart(filesystem.trackableClassFactory()):
 
 	AUTO_PICKER = True
 
+	#if you want to customize the name as it appears in the UI, set this to the desired string
+	DISPLAY_NAME = None
+
+	def __new__( cls, partContainer, skeletonPart=None ):
+		if cls is RigPart:
+			clsName = getAttr( '%s._rigPrimitive.typeName' % partContainer )
+			cls = cls.GetNamedSubclass( clsName )
+			if cls is None:
+				raise TypeError( "Cannot determine the part class for the given part container!" )
+
+		return object.__new__( cls, partContainer, skeletonPart )
 	def __init__( self, partContainer, skeletonPart=None ):
 		if partContainer is not None:
 			assert isRigPartContainer( partContainer ), "Must pass a valid rig part container! (received %s - a %s)" % (partContainer, nodeType( partContainer ))
@@ -246,7 +268,10 @@ class RigPart(filesystem.trackableClassFactory()):
 		'''
 		can be used to get a "nice" name for the part class
 		'''
-		return camelCaseToNice( cls.__name__ )
+		if cls.DISPLAY_NAME is None:
+			return camelCaseToNice( cls.__name__ )
+
+		return cls.DISPLAY_NAME
 	@classmethod
 	def InitFromItem( cls, item ):
 		'''
@@ -319,10 +344,15 @@ class RigPart(filesystem.trackableClassFactory()):
 		addControlsToQss		defaults to cls.ADD_CONTROLS_TO_QSS
 		'''
 
-		addControlsToQss = kw.get( 'addControlsToQss', cls.ADD_CONTROLS_TO_QSS )
-
+		#check to see if the given skeleton part can actually be rigged by this method
 		if not cls.CanRigThisPart( skeletonPart ):
 			return
+
+		#check to see if the skeleton part already has a rig
+		if skeletonPart.isRigged():
+			return
+
+		addControlsToQss = kw.get( 'addControlsToQss', cls.ADD_CONTROLS_TO_QSS )
 
 		buildFunc = getattr( cls, '_build', None )
 		if buildFunc is None:
@@ -420,7 +450,7 @@ class RigPart(filesystem.trackableClassFactory()):
 
 		#make sure the container "knows" the skeleton part - its not always obvious trawling through
 		#the nodes in teh container which items are the skeleton part
-		connectAttr( '%s.message' % skeletonPart.base, '%s._rigPrimitive.skeletonPart' % theContainer )
+		connectAttr( '%s.message' % skeletonPart.container, '%s._rigPrimitive.skeletonPart' % theContainer )
 
 
 		return self
@@ -518,6 +548,81 @@ class RigPart(filesystem.trackableClassFactory()):
 				return name
 
 		raise RigPartError( "The control %s isn't associated with this rig primitive %s" % (control, self) )
+	def delete( self ):
+		nodes = sets( self.container, q=True )
+		for node in nodes:
+			cleanDelete( node )
+
+		if objExists( self.container ):
+			delete( self.container )
+
+	### POSE MIRRORING/SWAPPING ###
+	def getOppositePart( self ):
+		'''
+		Finds the skeleton part opposite to the one this rig part controls, and returns its rig part.
+
+		If no rig part can be found, or if no
+		'''
+		thisSkeletonPart = self.getSkeletonPart()
+		oppositeSkeletonPart = thisSkeletonPart.getOppositePart()
+
+		if oppositeSkeletonPart is None:
+			return None
+
+		return oppositeSkeletonPart.getRigPart()
+	def mirrorControl( self, control ):
+		'''
+		mirrors the pose on the control
+		'''
+		rotNode = cmd.rotationMirror( control, control, dummy=True )
+		T = getAttr( '%s.outTranslate' % rotNode )[0]
+		R = getAttr( '%s.outRotate' % rotNode )[0]
+		delete( rotNode )
+
+		for t, r, ax in zip( T, R, CHANNELS ):
+			if getAttr( '%s.t%s' % (control, ax), se=True ):
+				setAttr( '%s.t%s' % (control, ax), t )
+
+			if getAttr( '%s.r%s' % (control, ax), se=True ):
+				setAttr( '%s.r%s' % (control, ax), r )
+	def exchangeControl( self, control ):
+		'''
+		finds the
+		'''
+		controlName = self.getControlName( control )
+
+		otherPart = self.getOppositePart()
+		if otherPart is None:
+			self.mirrorControl( control )
+		else:
+			otherControl = getattr( otherPart, controlName, None )
+			if otherControl is None:
+				return
+
+			#first gather the transform data for each control
+			rotNode = cmd.rotationMirror( control, otherControl, dummy=True )
+			otherT = getAttr( '%s.outTranslate' % rotNode )[0]
+			otherR = getAttr( '%s.outRotate' % rotNode )[0]
+			delete( rotNode )
+
+			rotNode = cmd.rotationMirror( otherControl, control, dummy=True )
+			thisT = getAttr( '%s.outTranslate' % rotNode )[0]
+			thisR = getAttr( '%s.outRotate' % rotNode )[0]
+			delete( rotNode )
+
+			#now set the transform attributes if they're settable
+			for tT, tR, oT, oR, ax in zip( thisT, thisR, otherT, otherR, CHANNELS ):
+				if getAttr( '%s.t%s' % (control, ax), se=True ):
+					setAttr( '%s.t%s' % (control, ax), tT )
+
+				if getAttr( '%s.r%s' % (control, ax), se=True ):
+					setAttr( '%s.r%s' % (control, ax), tR )
+
+				if getAttr( '%s.t%s' % (otherControl, ax), se=True ):
+					setAttr( '%s.t%s' % (otherControl, ax), oT )
+
+				if getAttr( '%s.r%s' % (otherControl, ax), se=True ):
+					setAttr( '%s.r%s' % (otherControl, ax), oR )
 
 
 def generateNiceControlName( control ):
@@ -735,56 +840,26 @@ class PrimaryRigPart(RigPart):
 
 	AVAILABLE_IN_UI = True
 
-	@classmethod
-	def DISPLAY_NAME( cls ):
-		return camelCaseToNice( cls.__name__ )
+
+### <CHEEKY!> ###
+'''
+these functions get added to the SkeletonPart class as a way of implementing functionality that relies on
+the RigPart class - which isn't available in the baseSkeletonPart script (otherwise you'd have a circular
+import dependency)
+'''
+def _getRigPart( self ):
+	return RigPart( self.getRigContainer() )
+
+SkeletonPart.getRigPart = _getRigPart
 
 
-"""
-def createPicker():
-	name = 'auto'
+def _deleteRig( self ):
+	rigPart = self.getRigPart()
+	rigPart.delete()
 
-	pickerNode = createNode( 'geometryVarGroup', name=name )
-	addAttr( pickerNode, longName='bgColor', dt='string' )
-	addAttr( pickerNode, longName='bgImage', dt='string' )
-	addAttr( pickerNode, longName='namespace', dt='string' )
-	addAttr( pickerNode, longName='data', dt='stringArray' )
-	addAttr( pickerNode, longName='controls', at='short' )
+SkeletonPart.deleteRig = _deleteRig
 
-	#setAttr( '%s.bgImage' % pickerNode, bgImage, type='string' )
-
-	#if self.namespace!=None:
-		#setAttr( '%s.namespace' % pickerNode, namespace, type='string' )
-
-	# build data strings now x,y,w,h,color,target string
-	buttonData = []
-	for rigPart in RigPart.IterAllParts():
-		if rigPart.AUTO_PICKER:
-			for n, rigControl in enumerate( rigPart ):
-				if rigPart.CONTROL_NAMES and len( rigPart.CONTROL_NAMES ) > n:
-					label = rigPart.CONTROL_NAMES[ n ]
-				else:
-					label = ''
-
-				x, y = 10, 10
-				w, h = 15, 15
-				colour = '1,0,0'
-
-				dataStr = '%0.3g;%0.3g;' % (x, y)
-				dataStr += '%0.3g;%0.3g;' % (w, h)
-				dataStr += '%s;%s;' % (colour, label)
-				dataStr += rigControl
-
-				buttonData.append( dataStr )
-				break
-		break
-
-	# break data into MEL strings for eval
-	#eStr =" ".join(data)
-	#ev = "setAttr "+self.pickerNode+".data -type stringArray "+str(len(data))+" "+eStr+""
-	setAttr( '%s.data' % pickerNode, type='stringArray', *buttonData )
-	cmds.setAttr( '%s.controls' % pickerNode, len( buttonData ) )
-"""
+### </CHEEKY!> ###
 
 
 def cleanMeshControls( doConfirm=True ):

@@ -733,14 +733,15 @@ class RigPartLayout(MelForm):
 				opts.append( method.__name__ )
 
 			rigMethodName = rigKwargs.get( 'rigMethodName', rigTypes[ 0 ].__name__ )
-			opts.selectByValue( rigMethodName, False )
-			opts.getValue()
+			if rigMethodName in opts.getItems():
+				opts.selectByValue( rigMethodName, False )
 		else:
 			opts = MelLabel( self, l='' )
 
 		self.UI_options = opts
 		argsForm = self.UI_argsForm = MelHRowLayout( self )
-		self.UI_manualRig = manRig = MelButton( self, l='Build Rig Now', w=100, c=self.on_manualRig )
+		self.UI_manualRig = manRig = MelButton( self )
+		self.updateBuildRigButton()
 
 		#perform layout...
 		self( e=True,
@@ -827,6 +828,20 @@ class RigPartLayout(MelForm):
 			child.enable( not disableState )
 
 		return kwargs
+	def updateBuildRigButton( self ):
+		if self.part.isRigged():
+			self.UI_manualRig.setLabel( 'Delete Rig' )
+			self.UI_manualRig.setChangeCB( self.on_deleteRig )
+		else:
+			self.UI_manualRig.setLabel( 'Build This Rig Only' )
+			self.UI_manualRig.setChangeCB( self.on_manualRig )
+
+		self.UI_manualRig.setWidth( 120 )
+
+		rigKwargs = self.part.getRigKwargs()
+		self.UI_manualRig.setEnabled( not rigKwargs.get( 'disable', False ) )
+
+	### EVENT HANDLERS ###
 	def on_rigMethodCB( self, e ):
 		#set the rig kwargs based on the current UI - it may be wrong however, because the new rig method may have different calling args
 		self.part.setRigKwargs( self.getRigKwargs() )
@@ -838,11 +853,16 @@ class RigPartLayout(MelForm):
 		self.part.setRigKwargs( self.getRigKwargs() )
 	def on_argCB( self, e=None ):
 		self.part.setRigKwargs( self.getRigKwargs() )
+		self.updateBuildRigButton()
 	def on_select( self, e=None ):
 		cmd.select( self.part.items )
 	def on_manualRig( self, e=None ):
 		rigPrimitives.finalizeAllParts()
 		self.part.rig()
+		self.updateBuildRigButton()
+	def on_deleteRig( self, e=None ):
+		self.part.deleteRig()
+		self.updateBuildRigButton()
 
 
 class RiggingLayout(MelForm):
@@ -894,7 +914,6 @@ class RiggingLayout(MelForm):
 			partRigForm = RigPartLayout( col, part )
 			self.UI_partForms.append( partRigForm )
 	def on_buildRig( self, e=None ):
-		autoFinalize = True
 		curScene = Path( cmd.file( q=True, sn=True ) )
 
 		referenceModel = self.UI_reference.getValue()
@@ -905,7 +924,10 @@ class RiggingLayout(MelForm):
 
 		deletePlacers = self.UI_deletePlacers.getValue()
 
-		rigPrimitives.buildRigForModel( None, autoFinalize, referenceModel, deletePlacers )
+		rigPrimitives.buildRigForModel( referenceModel=referenceModel, deletePlacers=deletePlacers )
+
+		for partUI in self.UI_partForms:
+			partUI.updateBuildRigButton()
 
 
 class CreateEditRigTabLayout(MelTabLayout):

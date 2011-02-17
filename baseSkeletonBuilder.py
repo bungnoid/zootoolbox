@@ -41,6 +41,14 @@ BONE_ROTATE_VECTOR = ENGINE_SIDE		#this is the axis of "primary rotation" for th
 BONE_AIM_AXIS = Axis.FromVector( BONE_AIM_VECTOR )
 BONE_ROTATE_AXIS = Axis.FromVector( BONE_ROTATE_VECTOR )
 
+_tmp = BONE_AIM_AXIS.otherAxes()
+_tmp.remove( BONE_ROTATE_AXIS )
+BONE_OTHER_AXIS = _tmp[0]				#this is the "other" axis - ie the one thats not either BONE_AIM_AXIS or BONE_ROTATE_AXIS
+BONE_OTHER_VECTOR = BONE_OTHER_AXIS.asVector()
+
+del( _tmp )
+
+
 getLocalAxisInDirection = rigUtils.getLocalAxisInDirection
 getPlaneNormalForObjects = rigUtils.getPlaneNormalForObjects
 
@@ -204,7 +212,7 @@ def d_restoreLocksAndNames(f):
 		if getAlignSkipState( item ):
 			return
 
-		attrs = 't', 'r'
+		attrs = 't', 'r', 'ra'
 
 		#unparent and children in place, and store the original name, and lock
 		#states of attributes - we need to unlock attributes as this item will
@@ -228,14 +236,11 @@ def d_restoreLocksAndNames(f):
 
 			childrenPreStates[ child ] = originalChildName, lockStates
 
-		f( item, children=children, *args, **kwargs )
+		#make sure the rotation axis attribute is zeroed out - NOTE: we need to do this after children have been un-parented otherwise it could affect their positions
+		for c in CHANNELS:
+			setAttr( '%s.ra%s' % (item, c), 0 )
 
-		#freeze transforms - do this individually on each transform type (t, r, s) and catch exceptions and ignore them...
-		for ax in attrs:
-			try:
-				makeIdentity( item, a=True, **{ ax: True } )
-			except:
-				print "WARNING: trying to freeze transforms on %s but can't!" % item
+		f( item, children=children, *args, **kwargs )
 
 		#now re-parent children
 		for child, (originalName, lockStates) in childrenPreStates.iteritems():
@@ -468,64 +473,85 @@ def buildSkeletonPartContainer( typeClass, kwDict, items ):
 	return theContainer
 
 
-def d_wrapAlign( f ):
-	def new( self, *a, **kw ):
+def d_disconnectJointsFromSkinning( f ):
+	'''
+	Will unhook all skinning before performing the decorated method - and re-hooks it up after the
+	fact.  Basically decorating anything with this function will allow you do perform operations
+	that would otherwise cause maya to complain about skin clusters being attached
+	'''
+	def new( *a, **kw ):
 		#for all skin clusters iterate through all their joints and detach them
 		#so we can freeze transforms - make sure to store initial state so we can
 		#restore connections afterward
 		skinClustersConnections = []
 		skinClusters = ls( typ='skinCluster' ) or []
 		for c in skinClusters:
-			cons = listConnections( '%s.matrix' % c, destination=False, plugs=True, connections=True )
+			cons = listConnections( c, destination=False, plugs=True, connections=True )
 			if cons is None:
 				print 'WARNING - no connections found on the skinCluster %s' % c
 				continue
 
 			conIter = iter( cons )
-			for dest in conIter:
-				src = conIter.next()  #cons is a list of what should be tuples, but maya just returns a flat list - basically every first item is the destination plug, and every second is the source plug
+			for tgtConnection in conIter:
+				srcConnection = conIter.next()  #cons is a list of what should be tuples, but maya just returns a flat list - basically every first item is the destination plug, and every second is the source plug
 
-				#remove the actual connection...
-				delete( dest, icn=True )
+				#if the connection is originating from a joint delete the connection - otherwise leave it alone - we only want to disconnect joints from the skin cluster
+				node = srcConnection.split( '.' )[0]
+				if nodeType( node ) == 'joint':
+					delete( tgtConnection, icn=True )
+					skinClustersConnections.append( (srcConnection, tgtConnection) )
 
-			skinClustersConnections += cons
-
-
-		isRecursed = kw.pop( 'recursed', False )
-
-		if not isRecursed:
-			#store any driving or driven part, so when we're done we can restore the relationships
-			driver = self.getDriver()
-			drivenParts = self.getDriven()
-
-			#break driving relationships
-			self.breakDriver()
-			for part in drivenParts:
-				part.breakDriver()
-
-		#makeIdentity( self, a=True, s=True )  #freeze scale!  alignment routines generally mess with the parenting and maya does funky ass things (read: bad) when joints with scale are moved around in the hierarchy
 		try:
-			f( self, *a, **kw )
+			f( *a, **kw )
 
 		#ALWAYS restore connections...
 		finally:
-			if not isRecursed:
-
-				#finally restore any up/downstream relationships if any...
-				if driver: driver.driveOtherPart( self )
-				for part in drivenParts:
-					try: self.driveOtherPart( part )
-					except AssertionError: continue  #the parts may have changed size since the initial connection, so if they differ in size just ignore the assertion...
 
 			#re-connect all joints to skinClusters, and reset them
-			skinClustersConnectionsIter = iter( skinClustersConnections )
-			for dest in skinClustersConnectionsIter:
-				src = skinClustersConnectionsIter.next()
-				connectAttr( src, dest, f=True )
+			for srcConnection, tgtConnection in skinClustersConnections:
+				connectAttr( srcConnection, tgtConnection, f=True )
 
 			if skinClustersConnections:
 				for skinCluster in skinClusters:
 					resetSkinCluster( skinCluster )
+
+	new.__name__ = f.__name__
+	new.__doc__ = f.__doc__
+
+	return new
+
+
+def d_disableDrivingRelationships( f ):
+	'''
+	tries to unhook all driver/driven relationships first, and re-hook them up afterwards
+
+	NOTE: needs to wrap a SkeletonPart method
+	'''
+	def new( self, *a, **kw ):
+
+		#store any driving or driven part, so when we're done we can restore the relationships
+		driver = self.getDriver()
+		drivenParts = self.getDriven()
+
+		#break driving relationships
+		self.breakDriver()
+		for part in drivenParts:
+			part.breakDriver()
+
+		try:
+			f( self, *a, **kw )
+
+		#restore driver/driven relationships...
+		finally:
+
+			#restore any up/downstream relationships if any...
+			if driver:
+				driver.driveOtherPart( self )
+
+			for part in drivenParts:
+				try:
+					self.driveOtherPart( part )
+				except AssertionError: continue  #the parts may have changed size since the initial connection, so if they differ in size just ignore the assertion...
 
 	new.__name__ = f.__name__
 	new.__doc__ = f.__doc__
@@ -609,18 +635,25 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		try:
 			return getAttr( '%s._skeletonPrimitive.version' % self.container )
 		except: return None
+	def isDisabled( self ):
+		'''
+		returns whether the part has been disabled for rigging or not
+		'''
+		rigKwargs = self.getRigKwargs()
+
+		return 'disable' in rigKwargs
 	def getPlacers( self ):
 		placerAttrpath = '%s._skeletonPrimitive.placers' % self.container
 		if not objExists( placerAttrpath ):
 			return []
 
-		numPlacers = getAttr( placerAttrpath, size=True )
-
 		placers = []
-		for idx in range( numPlacers ):
-			cons = listConnections( '%s._skeletonPrimitive.placers[%d]' % (self.container, idx), d=False )
-			if cons:
-				placers.append( cons[ 0 ] )
+		placerIdxs = getAttr( placerAttrpath, multiIndices=True )
+		if placerIdxs:
+			for idx in placerIdxs:
+				cons = listConnections( '%s[%d]' % (placerAttrpath, idx), d=False )
+				if cons:
+					placers.append( cons[ 0 ] )
 
 		return placers
 	def verifyPart( self ):
@@ -667,6 +700,9 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 
 		#lock scale
 		attrState( self.items, ['s'], lock=True, keyable=False, show=True )
+
+		#lock rotate axis
+		attrState( self.items, ['rotateAxis'], lock=True, keyable=False, show=False )
 
 		#build placers...
 		self.buildPlacers()
@@ -777,7 +813,10 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		return chains
 	@property
 	def endPlacer( self ):
-		return self.getPlacers()[ 0 ]
+		try:
+			return self.getPlacers()[ 0 ]
+		except IndexError:
+			return None
 	@classmethod
 	def GetIdxStr( cls, idx ):
 		'''
@@ -1076,7 +1115,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		#grab the build kwargs used to create this part, and update it with the new kwargs passed in
 		buildKwargs = self.getBuildKwargs()
 		buildKwargs.update( newBuildKwargs )
-		buildKwargs[ 'parent' ] = getNode( self )
+		buildKwargs[ 'parent' ] = getNodeParent( self )
 
 		self.unvisualize()
 
@@ -1102,19 +1141,11 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 			orphanParents.append( getNodeParent( orphan ) )
 			cmd.parent( orphan, w=True )
 
-		delete( self )
+		delete( self.items )
 		newPart = self.Create( **buildKwargs )
 
-		#clear the list for this item and re-populate it with the items of the new part
-		try:
-			while True: self.pop()
-		except IndexError: pass
-
-		for item in newPart:
-			self.append( item )
-
 		oldToNewNameMapping = {}
-		for (oldItemName, pos, rot), item in zip( posRots, self ):
+		for (oldItemName, pos, rot), item in zip( posRots, newPart.items ):
 			move( pos[ 0 ], pos[ 1 ], pos[ 2 ], item, ws=True, a=True, rpr=True )
 			rotate( rot[ 0 ], rot[ 1 ], rot[ 2 ], item, ws=True, a=True )
 			oldToNewNameMapping[ oldItemName ] = item
@@ -1134,7 +1165,9 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 			orphanParent = oldToNewNameMapping.get( orphanParent, orphanParent )
 			cmd.parent( orphan, orphanParent )
 
-		self.visualize()
+		newPart.visualize()
+
+		return newPart
 
 	### REDISCOVERY ###
 	@classmethod
@@ -1233,12 +1266,13 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		'''
 
 		#first get a list of all the joints directly parented to a memeber of this part
-		allChildren = listRelatives( list( self ), typ='transform', pa=True )
+		selfItems = self.getItems() + self.getPlacers()
+		allChildren = listRelatives( selfItems, typ='transform', pa=True )
 		if not allChildren:
 			return
 
 		#subtract all the items of this part from the children - to give us all the children of this part that don't belong to this part
-		allChildren = set( allChildren ).difference( set( self ) )
+		allChildren = set( allChildren ).difference( set( selfItems ) )
 
 		return getPartsFromObjects( allChildren )
 	def getOrphanJoints( self ):
@@ -1272,14 +1306,32 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		return orphanChildren + childrenOfChildren
 	def selfAndOrphans( self ):
 		return list( self ) + self.getOrphanJoints()
+	def delete( self ):
+		if self.isRigged():
+			self.deleteRig()
+
+		for node in self.items:
+			rigUtils.cleanDelete( node )
+
+		if objExists( self.container ):
+			delete( self.container )
 
 	### ALIGNMENT ###
-	@d_wrapAlign
+	@d_disableDrivingRelationships
+	@d_disconnectJointsFromSkinning
 	def align( self, _initialAlign=False ):
 		self._align( _initialAlign )
+		makeIdentity( self.items, a=True, r=True )
 	def _align( self, _initialAlign=False ):
 		for item in self.selfAndOrphans():
 			autoAlignItem( item )
+	@d_disableDrivingRelationships
+	@d_disconnectJointsFromSkinning
+	def freeze( self ):
+		'''
+		freezes the transforms for all joints in this part
+		'''
+		makeIdentity( self.items, a=True, t=True, r=True )
 	def getParityMultiplier( self ):
 		return self.getParity().asMultiplier()
 
@@ -1349,7 +1401,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 	def breakDriver( self ):
 		attrs = 't', 'r'
 
-		for item in self:
+		for item in (self.items + self.getPlacers()):
 			for a in attrs:
 				attrPaths = [ a ] + [ '%s%s' % (a, c) for c in CHANNELS ]
 
@@ -1418,7 +1470,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		iParent = getNodeParent( item )
 
 		return iParent, tHashAccum, tChanValues, joChanValues
-	def _finalize( self ):
+	def finalize( self ):
 		'''
 		performs some finalization on the skeleton - ensures everything is aligned,
 		and then stores a has of the orientations into the skeleton so that we can
@@ -1428,6 +1480,9 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		#early out if finalization is valid
 		if self.compareAgainstHash():
 			return
+
+		#make sure any driver relationship is broken
+		self.breakDriver()
 
 		#make sure the part has been aligned
 		self.align()
@@ -1456,6 +1511,10 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		state is returned
 		'''
 
+		#if the part is rigged, then return True - if its been rigged then it should have been properly finalized so we should be good
+		if self.isRigged():
+			return True
+
 		#create a hash for the position and orientation of the joint so we can ensure the state is still the same at a later date
 		for i in self.selfAndOrphans():
 
@@ -1463,9 +1522,11 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 			if getAlignSkipState( i ):
 				continue
 
+			#if it doesn't have the finalization hash attribute it can't possibly be finalized
 			if not objExists( '%s._skeletonFinalizeHash' % i ):
 				return False
 
+			#figure out what the hash should be and compare it to the one that is stored
 			iParent, xformHash, xxa, yya = self.generateItemHash( i )
 			try: storedParent, stored_xHash, xxb, yyb = eval( getAttr( '%s._skeletonFinalizeHash' % i ) )
 			except:
@@ -1478,10 +1539,13 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 					print 'parenting mismatch on %s since finalization (%s vs %s)' % (i, iParent, storedParent)
 					return False
 
+			TOLERANCE = 1e-6  #tolerance used to compare floats
 			def doubleCheckValues( valuesA, valuesB ):
 				for va, vb in zip( valuesA, valuesB ):
 					va, vb = float( va ), float( vb )
-					if va - vb > 1e-6: return False
+					if va - vb > TOLERANCE:
+						return False
+
 				return True
 
 			if xformHash != stored_xHash:
@@ -1495,7 +1559,25 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 					return False
 
 		return True
+
+	### RIGGING ###
 	def rig( self, **kw ):
+		'''
+		constructs the rig for this part
+		'''
+
+		#check the skeleton part to see if it already has a rig
+		rigContainerAttrname = 'rigContainer'
+		rigContainerAttrpath = '%s.%s' % (self.container, rigContainerAttrname)
+		if not objExists( rigContainerAttrpath ):
+			addAttr( self.container, ln=rigContainerAttrname, at='message' )
+
+		#check to see if there is already a rig built
+		if listConnections( rigContainerAttrpath, d=False ):
+			print 'Rig already built for %s - skipping' % self
+			return
+
+		#update the kw dict for the part
 		rigKw = self.getBuildKwargs()
 		rigKw.update( self.getRigKwargs() )
 		rigKw.update( kw )
@@ -1520,7 +1602,29 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 			print 'ERROR :: there is no such rig method with the name %s' % rigMethodName
 			return
 
-		rigType.Create( self, **kw )
+		#bulid the rig and connect it to the part
+		theRig = rigType.Create( self, **kw )
+		connectAttr( '%s.message' % theRig.container, '%s.rigContainer' % self.container, f=True )
+	def isRigged( self ):
+		'''
+		returns whether this skeleton part is rigged or not
+		'''
+		return self.getRigContainer() is not None
+	def getRigContainer( self ):
+		'''
+		returns the container for the rig part - if this part is rigged.  None is returned otherwise
+
+		NOTE: the container is returned instead of the rig instance because this script can't import
+		the RigPart base class without causing circular import statements - there is a getRigPart
+		method that is implemented in the baseRigPrimitive script that gets added to this class
+		'''
+		rigContainerAttrpath = '%s.rigContainer' % self.container
+		if objExists( rigContainerAttrpath ):
+			cons = listConnections( rigContainerAttrpath, d=False )
+			if cons:
+				return cons[0]
+
+		return None
 
 	### VOLUME CREATION ###
 	def buildVolumes( self ):
@@ -1686,16 +1790,15 @@ def createJoint( name=None ):
 	return createNode( 'joint' )
 
 
-def buildEndPlacer( name=None ):
+def buildEndPlacer():
 	'''
 	builds a placer for the end of a chain.  This is generally useful for aligning the last joint in a chain
 	but can also be useful for marking up interesting pivots on parts such as feet with foot edges etc...
 	'''
-	placer = spaceLocator()[0]
-	if name:
-		placer = rename( placer, name )
+	transform = createNode( 'transform' )
+	shape = createNode( 'vstAttachment', n='%sShape' % transform, p=transform )
 
-	return placer
+	return transform
 
 
 def jointSize( jointName, size ):
@@ -1741,10 +1844,10 @@ class Root(SkeletonPart):
 	def _align( self, _initialAlign=False ):
 		for i in self.selfAndOrphans():
 			alignItemToWorld( self[ 0 ] )
-	def _finalize( self ):
+	def finalize( self ):
 		#make sure the scale is unlocked on the base joint of the root part...
 		attrState( self.base, 's', False, False, True )
-		super( self.__class__, Root )._finalize( self )
+		super( self.__class__, Root ).finalize( self )
 	def buildItemVolume( self, item, size, centre ):
 		height = size[2] / 3
 		width = max( size[0], size[1] ) / 3
@@ -1818,7 +1921,6 @@ def realignSelectedParts():
 		part.align()
 
 
-@api.d_showWaitCursor
 @api.d_maintainSceneSelection
 def realignAllParts():
 	'''
@@ -1833,7 +1935,33 @@ def realignAllParts():
 			continue
 
 
-@api.d_showWaitCursor
+def finalizeAllParts():
+
+	#do a pre-pass on the skin clusters to remove un-used influences - this can speed up the speed of the alignment code
+	#is directly impacted by the number of joints involved in the skin cluster
+	skinClusters = ls( typ='skinCluster' )
+	for s in skinClusters:
+		skinCluster( s, e=True, removeUnusedInfluence=True )
+
+	failedParts = []
+	for part in sortPartsByHierarchy( part for part in SkeletonPart.IterAllParts() ):
+
+		#don't bother finalizing parts that are disabled for rigging...
+		if part.isDisabled():
+			continue
+
+		if not part.compareAgainstHash():
+			try:
+				part.finalize()
+			except:
+				failedParts.append( part )
+				if filesystem.IS_WING_DEBUG: raise
+				print 'ERROR: %s failed to finalize properly!' % part
+				continue
+
+	return failedParts
+
+
 @api.d_maintainSceneSelection
 def finalizeAllParts():
 
@@ -1843,13 +1971,24 @@ def finalizeAllParts():
 	for s in skinClusters:
 		skinCluster( s, e=True, removeUnusedInfluence=True )
 
+	failedParts = []
 	for part in sortPartsByHierarchy( part for part in SkeletonPart.IterAllParts() ):
+		part.breakDriver()
 		if not part.compareAgainstHash():
 			try:
-				part._finalize()
+				part.finalize()
 			except:
+				failedParts.append( part )
+				if filesystem.IS_WING_DEBUG: raise
 				print 'ERROR: %s failed to finalize properly!' % part
 				continue
+
+	return failedParts
+
+
+def freezeAllParts():
+	for part in SkeletonPart.IterAllParts():
+		part.freeze()
 
 
 def setupAutoMirror():
@@ -1907,7 +2046,7 @@ def getNamespaceFromReferencing( node ):
 
 
 @api.d_showWaitCursor
-def buildRigForModel( scene=None, autoFinalize=True, referenceModel=True, deletePlacers=False ):
+def buildRigForModel( scene=None, referenceModel=True, deletePlacers=False ):
 	'''
 	given a model scene whose skeleton is assumed to have been built by the
 	skeletonBuilder tool, this function will create a rig scene by referencing
@@ -1939,11 +2078,13 @@ def buildRigForModel( scene=None, autoFinalize=True, referenceModel=True, delete
 		cmd.file( save=True, force=True )
 		cmd.file( rename=scene )
 
-	#finalize if desired
-	if autoFinalize:
-		finalizeAllParts()
+	#finalize
+	failedParts = finalizeAllParts()
+	if failedParts:
+		confirmDialog( t='Finalization Failure', m='The following parts failed to finalize properly:\n\n%s' % '\n'.join( map( str, failedParts ) ), b='OK', db='OK' )
+		return
 
-	#delete placers if desired
+	#delete placers if desired - NOTE: this should be done after after finalization because placers are often used to define alignment for end joints
 	if deletePlacers:
 		for part in SkeletonPart.IterAllParts():
 			placers = part.getPlacers()
@@ -1974,11 +2115,7 @@ def buildRigForModel( scene=None, autoFinalize=True, referenceModel=True, delete
 
 
 def buildRigForAllParts():
-	#sort all parts in the scene by hierarchy and build a rig for each part
-	allParts = [ part for part in SkeletonPart.IterAllParts() ]
-	allParts = sortPartsByHierarchy( allParts )
-
-	for part in allParts:
+	for part in SkeletonPart.IterAllPartsInOrder():
 		part.rig()
 
 

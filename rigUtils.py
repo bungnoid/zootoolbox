@@ -36,6 +36,28 @@ kObject = MSpace.kObject
 Axis = vectors.Axis
 
 
+def cleanDelete( node ):
+	'''
+	will disconnect all connections made to and from the given node before deleting it
+	'''
+	if not objExists( node ):
+		return
+
+	connections = listConnections( node, connections=True, plugs=True )
+	connectionsIter = iter( connections )
+	for srcConnection in connectionsIter:
+		tgtConnection = connectionsIter.next()
+
+		#we need to test if the connection is valid because a previous disconnection may have affected this one
+		if isConnected( srcConnection, tgtConnection ):
+			try:
+				#this may fail if the dest attr is locked - in which case just skip and hope deleting the node doesn't screw up the attribute value...
+				disconnectAttr( srcConnection, tgtConnection )
+			except RuntimeError: pass
+
+	cmd.delete( node )
+
+
 def getObjectBasisVectors( obj ):
 	'''
 	returns 3 world space orthonormal basis vectors that represent the orientation of the given object
@@ -59,14 +81,14 @@ def getPlaneNormalForObjects( objA, objB, objC, defaultVector=MAYA_UP ):
 	posB = Vector( xform( objB, q=True, ws=True, rp=True ) )
 	posC = Vector( xform( objC, q=True, ws=True, rp=True ) )
 
-	vecA, vecB = posB - posA, posC - posB
+	vecA, vecB = posA - posB, posA - posC
 	normal = vecA.cross( vecB )
 
-	#if the normal is too small, just return world axes
+	#if the normal is too small, just return the given default axis
 	if normal.magnitude() < 1e-2:
 		normal = defaultVector
 
-	return normal
+	return normal.normalize()
 
 
 def findPolePosition( end, mid=None, start=None, distanceMultiplier=1 ):
@@ -166,6 +188,10 @@ def getObjectAxisInDirection( obj, compareVector, defaultAxis=Axis(0) ):
 	the defaultAxis is returned if the compareVector is zero or too small to provide
 	meaningful directionality
 	'''
+
+	if not isinstance( compareVector, Vector ):
+		compareVector = Vector( compareVector )
+
 	xPrime, yPrime, zPrime = getObjectBasisVectors( obj )
 	try:
 		dots = compareVector.dot( xPrime, True ), compareVector.dot( yPrime, True ), compareVector.dot( zPrime, True )
@@ -188,33 +214,30 @@ def getLocalAxisInDirection( obj, compareVector ):
 	return Axis( idx )
 
 
-def getAnkleToWorldRotation( ankle, fwdAxisName='z', performRotate=False ):
+def getAnkleToWorldRotation( obj, fwdAxisName='z', performRotate=False ):
 	'''
 	ankles are often not world aligned and cannot be world aligned on all axes, as the ankle needs to aim toward
 	toe joint.  for the purposes of rigging however, we usually want the foot facing foward (or along one of the primary axes
 	'''
 	fwd = Vector.Axis( fwdAxisName )
-
-	#flatten aim vector into the x-z plane
-	aimVector = getAimVector( ankle )
-	aimVector[ 1 ] = 0
-	aimVector = aimVector.normalize()
-
-	#now determine the rotation between the flattened aim vector, and the fwd axis
-	angle = aimVector.dot( fwd )
-	angle = Angle( math.acos( angle ), radian=True ).degrees
+	fwdAxis = getObjectAxisInDirection( obj, fwd )
+	basisVectors = getObjectBasisVectors( obj )
+	fwdVector = basisVectors[ abs( fwdAxis ) ]
 
 	#determine the directionality of the rotation
-	direction = 1
-	sideAxisName = 'x' if fwdAxisName[-1] == 'z' else 'z'
-	if aimVector.dot( Vector.Axis( sideAxisName ) ) > 0:
-		direction = -1
+	direction = -1 if fwdAxis.isNegative() else 1
 
-	angle *= direction
+	#flatten aim vector into the x-z plane
+	fwdVector[ AX_Y ] = 0
+	fwdVector = fwdVector.normalize() * direction
+
+	#now determine the rotation between the flattened aim vector, and the fwd axis
+	angle = fwdVector.dot( fwd )
+	angle = Angle( math.acos( angle ), radian=True ).degrees * -direction
 
 	#do the rotation...
 	if performRotate:
-		cmd.rotate(0, angle, 0, ankle, r=True, ws=True)
+		cmd.rotate(0, angle, 0, obj, r=True, ws=True)
 
 	return (0, angle, 0)
 

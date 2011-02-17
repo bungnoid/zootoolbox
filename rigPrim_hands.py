@@ -88,12 +88,31 @@ class Hand(RigPart):
 
 			#build the controls
 			ctrls = []
+
+
+			startColour = ColourDesc( (1, 0.3, 0, 0.65) )
+			endColour = ColourDesc( (0.8, 1, 0, 0.65) )
+			colour = startColour
+			colourInc = (endColour - startColour) / float( len( joints ) - 1 )
+			iColor = 1
+
+
 			for i, j in enumerate( joints ):
-				ctrlScale = scale * (taper ** i)
+				ctrlScale = ( scale / 3.5 ) * (taper ** i)
 
 				c = buildControl( "%sControl_%d%s" % (name, i, suffix), j, shapeDesc=ShapeDesc( 'sphere', 'ring', axis=AIM_AXIS ), colour=colour, parent=handGrp, scale=ctrlScale, qss=handQss )
-				setAttr( '%s.v' % c, False )  #hidden by default
+				#setAttr( '%s.v' % c, False )  #hidden by default
 				cParent = getNodeParent( c )
+
+
+				colours.setDrawOverrideColor( c, (23 + iColor) )
+				cmd.color( c, ud=iColor )
+				iColor += 1
+				if iColor > 8:
+					iColor = 1
+				colour += colourInc
+
+
 				if i:
 					parent( cParent, ctrls[ -1 ] )
 

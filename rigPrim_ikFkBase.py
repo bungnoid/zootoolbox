@@ -10,7 +10,7 @@ class IkFkBase(RigSubPart):
 	'''
 	this is a subpart, not generally exposed directly to the user
 	'''
-	__version__ = 0
+	__version__ = 1
 	CONTROL_NAMES = 'control', 'fkUpper', 'fkMid', 'fkLower', 'poleControl', 'ikSpace', 'fkSpace', 'ikHandle', 'endOrient', 'poleTrigger'
 	ADD_CONTROLS_TO_QSS = False
 
@@ -47,18 +47,15 @@ class IkFkBase(RigSubPart):
 			elbowJoints += listRelatives( child, type='joint', pa=True, ad=True ) or []
 
 
-		#print 'THE BIPS', bicepJoints
-		#print 'THE BOWS', elbowJoints
-
-
 		### BUILD THE FK CONTROLS
 		ikArmSpace = buildAlignedNull( wrist, "ik_%sSpace%s" % (nameScheme[ 0 ], suffix), parent=worldControl )
 		fkArmSpace = buildAlignedNull( bicep, "fk_%sSpace%s" % (nameScheme[ 0 ], suffix) )
 
 		BONE_AXIS = AIM_AXIS + 3 if parity else AIM_AXIS
-		driverUpper = buildControl( "fk_%sControl%s" % (nameScheme[ 1 ], suffix), bicep, PivotModeDesc.MID, Shape_Skin( bicepJoints, axis=BONE_AXIS ), colour=colour, asJoint=True, oriented=False, scale=scale, parent=fkArmSpace )
-		driverMid = buildControl( "fk_%sControl%s" % (nameScheme[ 2 ], suffix), elbow, PivotModeDesc.MID, Shape_Skin( elbowJoints, axis=BONE_AXIS ), colour=colour, asJoint=True, oriented=False, scale=scale, parent=driverUpper )
-		driverLower = buildControl( "fk_%sControl%s" % (nameScheme[ 3 ], suffix), PlaceDesc( wrist, wrist if alignEnd else None ), shapeDesc=Shape_Skin( wrist, axis=BONE_AXIS ), colour=colour, asJoint=True, oriented=False, constrain=False, scale=scale )
+		driverUpper = buildControl( "fk_%sControl%s" % (nameScheme[ 1 ], suffix), bicep, PivotModeDesc.MID, shapeDesc=ShapeDesc( 'cube' ), colour=colour, asJoint=True, oriented=False, scale=scale, parent=fkArmSpace )
+		driverMid = buildControl( "fk_%sControl%s" % (nameScheme[ 2 ], suffix), elbow, PivotModeDesc.MID, shapeDesc=ShapeDesc( 'cube' ), colour=colour, asJoint=True, oriented=False, scale=scale, parent=driverUpper )
+		driverLower = buildControl( "fk_%sControl%s" % (nameScheme[ 3 ], suffix), PlaceDesc( wrist, wrist if alignEnd else None ), shapeDesc=ShapeDesc( 'cube' ), colour=colour, asJoint=True, oriented=False, constrain=False, scale=scale )
+
 
 		#don't parent the driverLower in the buildControl command otherwise the control won't be in worldspace
 		parent( driverLower, driverMid )
@@ -74,7 +71,7 @@ class IkFkBase(RigSubPart):
 		move( polePos[0], polePos[1], polePos[2], poleControlSpace, a=True, ws=True, rpr=True )
 		move( polePos[0], polePos[1], polePos[2], poleControl, a=True, ws=True, rpr=True )
 		makeIdentity( poleControlSpace, a=True, t=True )
-		setAttr( '%s.v' % poleControl, False )
+		setAttr( '%s.v' % poleControl, True )
 
 
 		### BUILD THE POLE SELECTION TRIGGER
@@ -90,8 +87,8 @@ class IkFkBase(RigSubPart):
 
 
 		#build the IK handle
-		ikHandle = cmd.ikHandle( fs=1, sj=driverUpper, ee=driverLower, solver='ikRPsolver' )[ 0 ]
-		limbControl = buildControl( '%sControl%s' % (nameScheme[ 0 ], suffix), PlaceDesc( wrist, wrist if alignEnd else None ), shapeDesc=Shape_Skin( wrist, axis=BONE_AXIS ), colour=colour, scale=scale, constrain=False, parent=ikArmSpace )
+		ikHandle = cmd.ikHandle( fs=1, sj=driverUpper, ee=driverLower, solver='ikRPsolver', n=( '%sIkHandle%s' % ( nameScheme[0], parity.asName() ) ) )[ 0 ]
+		limbControl = buildControl( '%sControl%s' % (nameScheme[ 0 ], suffix), PlaceDesc( wrist, wrist if alignEnd else None ), shapeDesc=ShapeDesc( 'cube' ), colour=colour, scale=scale, constrain=False, parent=ikArmSpace )
 
 		xform( limbControl, p=True, rotateOrder='yzx' )
 		setAttr( '%s.snapEnable' % ikHandle, False )
@@ -104,7 +101,6 @@ class IkFkBase(RigSubPart):
 		attrState( ikHandle, 'v', *LOCK_HIDE )
 		parent( ikHandle, partsControl )
 		parentConstraint( limbControl, ikHandle )
-		#parent( ikHandle, limbControl )  #
 
 		poleVectorConstraint( poleControl, ikHandle )
 
@@ -152,11 +148,6 @@ class IkFkBase(RigSubPart):
 			                     'source zooKeyCommandsWin;\nzooSetKeyCommandsWindowCmd "eval(zooPopulateCmdStr(\\\"#\\\",(zooGetObjMenuCmdStr(\\\"#\\\",%%%d)),{}))";' % idx_toFK )
 
 
-		##build the post trace commands for the pole vectors - once they've been placed after a trace, its safe and almost always
-		##desireable to place the pole vectors a little more sensibly
-		#zooSetPostTraceCmd $poleControl ( "zooVectors; zooPlacePole \"-obj # -start %"+ $poleConnectNums[0] +" -mid %"+ $poleConnectNums[1] +" -end %"+ $poleConnectNums[2] +" -key 1 -removeKey 1 -invalidMode 1\";" );
-
-
 		#add IK/FK switching commands
 		limbTrigger = Trigger( limbControl )
 		handleNum = limbTrigger.connect( ikHandle )
@@ -178,7 +169,6 @@ class IkFkBase(RigSubPart):
 			c1 = fkTrigger.connect( ikHandle )
 			c2 = fkTrigger.connect( poleControl )
 
-			#"zooFlags;\nzooAlign \"\";\nzooAlignIK \"-ikHandle %%%d -pole %%%d\";\nselect %%%d;" % (c1, c2, c1) )
 			fkTrigger.createMenu( 'switch to IK',
 				                  'zooAlign "";\nstring $cs[] = `listConnections %%%d.ikBlend`;\nzooAlignIK ("-ikHandle %%%d -pole %%%d -control "+ $cs[0] +" -offCmd setAttr "+ $cs[0] +".ikBlend 1;" );' % (c1, c1, c2) )
 
