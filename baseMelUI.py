@@ -192,6 +192,8 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 			new.setCB( cls.KWARG_CHANGE_CB_NAME, changeCB )
 
 		return new
+	def __init__( self, parent, *a, **kw ):
+		super( BaseMelUI, self ).__init__( parent, *a, **kw )
 	def __call__( self, *a, **kw ):
 		return self.WIDGET_CMD( unicode( self ), *a, **kw )
 	"""def __eq__( self, other ):
@@ -1645,6 +1647,27 @@ class MelOptionMenu(_MelBaseMenu):
 		return self( q=True, select=True ) - 1  #indices are 1-based in mel land - fuuuuuuu alias!!!
 
 
+class MelObjectMenu(MelOptionMenu):
+	def __new__( cls, parent, *a, **kw ):
+		new = MelOptionMenu.__new__( cls, parent, *a, **kw )
+		new._objs = []
+
+		return new
+	def _itemAsStr( self, item ):
+		return str( item )
+	def __setitem__( self, idx, value ):
+		menuItems = self.getMenuItems()
+		menuItems[ idx ].setValue( self._itemAsStr( value ) )
+	def append( self, obj ):
+		MelOptionMenu.append( self, obj )
+		self._objs.append( obj )
+	def getItems( self ):
+		return self._objs
+	def clear( self ):
+		MelOptionMenu.clear( self )
+		self._objs = []
+
+
 class MelPopupMenu(_MelBaseMenu):
 	WIDGET_CMD = cmd.popupMenu
 	DYNAMIC = True
@@ -1713,6 +1736,15 @@ class MelIteratorUI(object):
 		return cmd.progressWindow( q=True, ic=True )
 	def close( self ):
 		cmd.progressWindow( e=True, ep=True )
+
+
+def makePathSceneRelative( filepath ):
+		#make sure it is actually an absolute path...
+		if filepath.isAbs():
+			curSceneDir = filesystem.Path( cmd.file( q=True, sn=True ) ).up()
+			filepath = filepath - curSceneDir
+
+		return filepath
 
 
 def buildLabelledWidget( parent, label, labelWidth, WidgetClass, *a, **kw ):
@@ -1836,7 +1868,7 @@ UI_FOR_PY_TYPES = { bool: MelCheckBox,
                     basestring: MelTextField,
                     list: MelTextScrollList,
                     tuple: MelTextScrollList,
-                    MayaNode: MelObjectSelector }  #TODO: add a file browse widget and map filesystem.Path to it
+                    MayaNode: MelObjectSelector }
 
 def getBuildUIMethodForObject( obj, typeMapping=None ):
 	if typeMapping is None:
