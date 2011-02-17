@@ -379,6 +379,9 @@ class Axis(int):
 		return int.__new__( cls, idx % 6 )
 	def __neg__( self ):
 		return Axis( (self + 3) )
+	def __abs__( self ):
+		return type( self )( self % 3 )
+	positive = __abs__
 	@classmethod
 	def FromName( cls, name ):
 		idx = list( cls.AXES ).index( name.lower().replace( '_', '-' ) )
@@ -440,11 +443,11 @@ class EulerRotation(Vector):
 
 """
 class Quaternion(Vector):
-	def __init__( self, x=0, y=0, z=0, w=1 ):
+	def __init__( self, xyzw=(0,0,0,1) ):
 		'''
 		initialises a vector from either x,y,z,w args or a Matrix instance
 		'''
-		if isinstance(x, Matrix):
+		if isinstance(xyzw, Matrix):
 			#the matrix is assumed to be a valid rotation matrix
 			matrix = x
 			d1, d2, d3 = matrix.getDiag()
@@ -475,7 +478,9 @@ class Quaternion(Vector):
 					z = 0.5 / s
 					w = ( matrix[0][1] + matrix[1][0] )/s
 
-		Vector.__init__(self, [x, y, z, w])
+			xyzw = x, y, z, w
+
+		Vector.__init__( self, xyzw )
 	def __mul__( self, other ):
 		if isinstance( other, Quaternion ):
 			x1, y1, z1, w1 = self
@@ -486,13 +491,13 @@ class Quaternion(Vector):
 			newY = w1*y2 - x1*z2 + y1*w2 + z1*x2
 			newZ = w1*z2 + x1*y2 - y1*x2 + z1*w2
 
-			return self.__class__(newX, newY, newZ, newW)
+			return self.__class__( [newX, newY, newZ, newW] )
 		elif isinstance( other, (float, int, long) ):
-			return self.__class__(self.x*other, self.y*other, self.z*other, self.w*other)
+			return self.__class__( [i * other for i in self] )
 	__rmul__ = __mul__
 	def __div__( self, other ):
 		assert isinstance( other, (float, int, long) )
-		return self.__class__(self.x / other, self.y / other, self.z / other, self.w / other)
+		return self.__class__( [i / other for i in self] )
 	def copy( self ):
 		return self.__class__(self)
 	@classmethod
@@ -521,7 +526,7 @@ class Quaternion(Vector):
 		newX = x * s
 		newY = y * s
 		newZ = z * s
-		new = cls(newX, newY, newZ, newW)
+		new = cls( [newX, newY, newZ, newW] )
 		new = new.normalize()
 
 		return new
@@ -534,37 +539,38 @@ class Quaternion(Vector):
 		# Clamp nself.w (since the quat has to be normalized it should
 		# be between -1 and 1 anyway, but it might be slightly off due
 		# to numerical inaccuracies)
-		w = max( min(nself.w, 1.0), -1.0 )
+		w = max( min(nself[3], 1.0), -1.0 )
 
 		w = acos( w )
 		s = sin( w )
 		if s < 1e-12:
 			return (0.0, Vector(0, 0, 0))
 
-		return ( 2.0 * w, Vector(nself.x / s, nself.y / s, nself.z / s) )
+		return ( 2.0 * w, Vector(nself[0] / s, nself[1] / s, nself[2] / s) )
 	def as_tuple( self ):
 		return tuple( self )
 	def log( self ):
 		global zeroThreshold
 
-		b = sqrt(self.x**2 + self.y**2 + self.z**2)
+		x, y, z, w = self
+		b = sqrt(x**2 + y**2 + z**2)
 		res = self.__class__()
 		if abs( b ) <= zeroThreshold:
 			if self.w <= zeroThreshold:
 				raise ValueError, "math domain error"
 
-			res.w = math.log( self.w )
+			res.w = math.log( w )
 		else:
-			t = atan2(b, self.w)
+			t = atan2(b, w)
 			f = t / b
-			res.x = f * self.x
-			res.y = f * self.y
-			res.z = f * self.z
+			res.x = f * x
+			res.y = f * y
+			res.z = f * z
 			ct = cos( t )
 			if abs( ct ) <= zeroThreshold:
 				raise ValueError, "math domain error"
 
-			r = self.w / ct
+			r = w / ct
 			if r <= zeroThreshold:
 				raise ValueError, "math domain error"
 
@@ -766,8 +772,7 @@ class Matrix(list):
 			return cls( row0+row1+row2 )
 	@classmethod
 	def FromEulerXYZ( cls, x, y, z, degrees=False ):
-		if degrees:
-			x,y,z = map(math.radians,(x,y,z))
+		if degrees: x,y,z = map(math.radians,(x,y,z))
 
 		cx = cos(x)
 		sx = sin(x)
@@ -777,13 +782,12 @@ class Matrix(list):
 		sz = sin(z)
 
 		row0 = cy*cz, cy*sz, -sy
-		row1 = sx*sy*cz-cx*sz, sx*sy*sz+cx*cz, sx*cy
-		row2 = cx*sy*cz+sx*sz, cx*sy*sz-sx*cz, cx*cy
+		row1 = sx*sy*cz - cx*sz, sx*sy*sz + cx*cz, sx*cy
+		row2 = cx*sy*cz + sx*sz, cx*sy*sz - sx*cz, cx*cy
 
 		return cls( row0+row1+row2, 3 )
 	@classmethod
 	def FromEulerXZY( cls, x, y, z, degrees=False ):
-		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
 		if degrees: x,y,z = map(math.radians,(x,y,z))
 		cx = cos(x)
 		sx = sin(x)
@@ -792,14 +796,13 @@ class Matrix(list):
 		cz = cos(z)
 		sz = sin(z)
 
-		row0 = cy*cz, sy*sx - cy*sz*cx, cy*sz*sx + sy*cx
-		row1 = sz, cz*cx, -cz*sx
-		row2 = -sy*cz, sy*sz*cx + cy*sx, cy*cx - sy*sz*sx
+		row0 = cy*cz, sz, -cz*sy
+		row1 = sx*sy - cx*cy*sz, cz*cx, cx*sy*sz + cy*sx
+		row2 = cy*sx*sz + cx*sy, -cz*sx, cx*cy - sx*sy*sz
 
 		return cls( row0+row1+row2, 3 )
 	@classmethod
 	def FromEulerYXZ( cls, x, y, z, degrees=False ):
-		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
 		if degrees: x,y,z = map(math.radians,(x,y,z))
 		cx = cos(x)
 		sx = sin(x)
@@ -808,14 +811,13 @@ class Matrix(list):
 		cz = cos(z)
 		sz = sin(z)
 
-		row0 = cz*cy -sz*sx*sy, -sz*cx, cz*sy + sz*sx*cy
-		row1 = sz*cy + cz*sx*sy, cz*cx, sz*sy - cz*sx*cy
-		row2 = -cx*sy, sx, cx*cy
+		row0 = cy*cz - sx*sy*sz, cy*sz + cz*sx*sy, -cx*sy
+		row1 = -cx*sz, cx*cz, sx
+		row2 = cy*sx*sz + cz*sy, sy*sz - cy*cz*sx, cx*cy
 
 		return cls( row0+row1+row2, 3 )
 	@classmethod
 	def FromEulerYZX( cls, x, y, z, degrees=False ):
-		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
 		if degrees: x,y,z = map(math.radians,(x,y,z))
 		cx = cos(x)
 		sx = sin(x)
@@ -824,14 +826,13 @@ class Matrix(list):
 		cz = cos(z)
 		sz = sin(z)
 
-		row0 = cz*cy, -sz, cz*sy
-		row1 = cx*sz*cy + sx*sy, cx*cz, cx*sz*sy - sx*cy
-		row2 = -sy, sx*cy, cx*cy
+		row0 = cy*cz, cx*cy*sz + sx*sy, cy*sx*sz - cx*sy
+		row1 = -sz, cx*cz, cz*sx
+		row2 = cz*sy, cx*sy*sz - cy*sx, sx*sy*sz + cx*cy
 
 		return cls( row0+row1+row2, 3 )
 	@classmethod
 	def FromEulerZXY( cls, x, y, z, degrees=False ):
-		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
 		if degrees: x,y,z = map(math.radians,(x,y,z))
 		cx = cos(x)
 		sx = sin(x)
@@ -840,14 +841,13 @@ class Matrix(list):
 		cz = cos(z)
 		sz = sin(z)
 
-		row0 = cy*cz + sy*sx*sz, sy*sx*cz - cy*sz, sy*cx
-		row1 = cx*sz, cx*cz, -sx
-		row2 = cy*sx*sz - sy*cz, sy*sz + cy*sx*cz, cy*cx
+		row0 = sx*sy*sz + cy*cz, cx*sz, cy*sx*sz - cz*sy
+		row1 = cz*sx*sy - cy*sz, cx*cz, sy*sz + cy*cz*sx
+		row2 = cx*sy, -sx, cx*cy
 
 		return cls( row0+row1+row2, 3 )
 	@classmethod
 	def FromEulerZYX( cls, x, y, z, degrees=False ):
-		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
 		if degrees: x,y,z = map(math.radians,(x,y,z))
 		cx = cos(x)
 		sx = sin(x)
@@ -856,11 +856,18 @@ class Matrix(list):
 		cz = cos(z)
 		sz = sin(z)
 
-		row0 = cy*cz, -cy*sz, sy
-		row1 = sx*sy*cz + cx*sz, cx*cz - sx*sy*sz, -sx*cy
-		row2 = sx*sz - cx*sy*cz, cx*sy*sz + sx*cz, cx*cy
+		row0 = cy*cz, cx*sz + cz*sx*sy, sx*sz - cx*cz*sy
+		row1 = -cy*sz, cx*cz - sx*sy*sz, cx*sy*sz + cz*sx
+		row2 = sy, -cy*sx, cx*cy
 
 		return cls( row0+row1+row2, 3 )
+	@classmethod
+	def FromVectors( cls, *vectors ):
+		values = []
+		for v in vectors:
+			values.extend( list( v ) )
+
+		return cls( values, len( vectors ) )
 	def getRow( self, row ):
 		return self[row]
 	def setRow( self, row, newRow ):
@@ -1051,7 +1058,7 @@ class Matrix(list):
 
 		return cardanoCubicRoots( flA, flB, flC, flD )
 	def get_position( self ):
-		return Vector( *self[3][:3] )
+		return Vector( self[3][:3] )
 	def set_position( self, pos ):
 		pos = Vector( pos )
 		self[3][:3] = pos
@@ -1059,37 +1066,24 @@ class Matrix(list):
 	#the following methods return euler angles of a rotation matrix
 	def ToEulerXYZ( self, degrees=False ):
 		easy = self[0][2]
+		y = -asin( easy )
+		cosY = cos( y )
+		x = atan2( self[1][2] * cosY, self[2][2] * cosY )
+		z = atan2( self[0][1] * cosY, self[0][0] * cosY )
 
-		try:
-			y = -asin( easy )
-		except ValueError:
-			z = 0
-			if easy == 1:
-				y = math.pi / 2.0
-				x = z + atan2( self[1][0], self[2][0] )
-			else:  #assert easy == -1
-				y = -math.pi / 2.0
-				x = -z + atan2( -self[1][0], -self[2][0] )
-		else:
-			cosY = cos( y )
-			x = atan2( self[1][2] * cosY, self[2][2] * cosY )
-			z = atan2( self[0][1] * cosY, self[0][0] * cosY )
+		angles = x, y, z
 
 		if degrees:
-			return map( math.degrees, (x, y, z) )
+			return map( math.degrees, angles )
 
-		return x, y, z
+		return angles
 	def ToEulerXZY( self, degrees=False ):
-		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
-		easy = self[1][0]
+		easy = self[0][1]
 		z = asin( easy )
 		cosZ = cos( z )
 
-		if easy != 1:
-			x = atan2( -self[1][2] * cosZ, self[1][1] * cosZ )
-			y = atan2( -self[2][0] * cosZ, self[0][0] * cosZ )
-		else:
-			pass
+		x = atan2( -self[2][1] * cosZ, self[1][1] * cosZ )
+		y = atan2( -self[0][2] * cosZ, self[0][0] * cosZ )
 
 		angles = x, y, z
 
@@ -1098,16 +1092,12 @@ class Matrix(list):
 
 		return angles
 	def ToEulerYXZ( self, degrees=False ):
-		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
-		easy = self[2][1]
+		easy = self[1][2]
 		x = asin( easy )
 		cosX = cos( x )
 
-		if easy != 1:
-			y = atan2( -self[2][0] * cosX, self[2][2] * cosX )
-			z = atan2( -self[0][1] * cosX, self[1][1] * cosX )
-		else:
-			pass
+		y = atan2( -self[0][2] * cosX, self[2][2] * cosX )
+		z = atan2( -self[1][0] * cosX, self[1][1] * cosX )
 
 		angles = x, y, z
 
@@ -1116,15 +1106,12 @@ class Matrix(list):
 
 		return angles
 	def ToEulerYZX( self, degrees=False ):
-		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
-		easy = self[0][1]
+		easy = self[1][0]
 		z = -asin( easy )
 		cosZ = cos( z )
 
-		if easy != 1:
-			y = atan2( self[0][2] * cosZ, self[0][0] * cosZ )
-			x = atan2( self[2][1] * cosZ, self[1][1] * cosZ )
-		else: pass
+		x = atan2( self[1][2] * cosZ, self[1][1] * cosZ )
+		y = atan2( self[2][0] * cosZ, self[0][0] * cosZ )
 
 		angles = x, y, z
 
@@ -1133,15 +1120,12 @@ class Matrix(list):
 
 		return angles
 	def ToEulerZXY( self, degrees=False ):
-		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
-		easy = self[1][2]
+		easy = self[2][1]
 		x = -asin( easy )
 		cosX = cos( x )
 
-		if easy != 1:
-			z = atan2( self[1][0] * cosX, self[1][1] * cosX )
-			y = atan2( self[0][2] * cosX, self[2][2] * cosX )
-		else: pass
+		z = atan2( self[0][1] * cosX, self[1][1] * cosX )
+		y = atan2( self[2][0] * cosX, self[2][2] * cosX )
 
 		angles = x, y, z
 
@@ -1150,15 +1134,12 @@ class Matrix(list):
 
 		return angles
 	def ToEulerZYX( self, degrees=False ):
-		raise NotImplemented( "these aren't correct...  use them at your own peril!" )
-		easy = self[0][2]
+		easy = self[2][0]
 		y = asin( easy )
 		cosY = cos( y )
 
-		if easy != 1:
-			x = atan2( -self[1][2] * cosY, self[2][2] * cosY )
-			z = atan2( -self[0][1] * cosY, self[0][0] * cosY )
-		else: pass
+		x = atan2( -self[2][1] * cosY, self[2][2] * cosY )
+		z = atan2( -self[1][0] * cosY, self[0][0] * cosY )
 
 		angles = x, y, z
 
@@ -1175,6 +1156,21 @@ class Matrix(list):
 		return list
 	def as_tuple( self ):
 		return tuple( self.as_list() )
+	def cullSmallValues( self, epsilon=1e-8 ):
+		'''
+		culls small values in the matrix
+		'''
+		for row in self:
+			for idx, value in enumerate( row ):
+				if abs( value ) < epsilon:
+					row[ idx ] = 0
+
+'''
+#the individual rotation matrices where cx = cos( x ), sx = sin( x ) etc...
+RX = Matrix( (1,0,0,  0,cx,sx,  0,-sx,cx) )
+RY = Matrix( (cy,0,-sy,  0,1,0,  sy,0,cy) )
+RY = Matrix( (cz,sz,0,  -sz,cz,0,  0,0,1) )
+'''
 
 
 def multMatrixVector( theMatrix, theVector ):

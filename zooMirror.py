@@ -8,13 +8,17 @@ import maya.OpenMayaMPx as OpenMayaMPx
 import apiExtensions
 
 from maya.OpenMaya import MObject, MFnMatrixAttribute, MFnCompoundAttribute, \
-     MFnEnumAttribute, MFnNumericAttribute, MFnNumericData, MFnDependencyNode, \
+     MFnEnumAttribute, MFnNumericAttribute, MFnNumericData, MFnUnitAttribute, MFnDependencyNode, \
      MPoint, MVector, MSyntax, MArgDatabase
 
 from maya.OpenMayaMPx import MPxNode
 
 MPxCommand = OpenMayaMPx.MPxCommand
 kUnknownParameter = OpenMaya.kUnknownParameter
+
+#this list simply maps the rotation orders as found on the rotateOrder enum attribute, to the matrix methods responsible for converting a rotation matrix to euler values
+mayaRotationOrders = Matrix.ToEulerXYZ, Matrix.ToEulerYZX, Matrix.ToEulerZXY, Matrix.ToEulerXZY, Matrix.ToEulerYXZ, Matrix.ToEulerZYX
+assert len( mayaRotationOrders ) == len( set( mayaRotationOrders ) )  #sanity check
 
 
 class MirrorNode(MPxNode):
@@ -34,6 +38,7 @@ class MirrorNode(MPxNode):
 	targetJointOrientZ = MObject()
 
 	targetParentMatrixInv = MObject()  #this is the parent inverse matrix for the target transform
+	targetRotationOrder = MObject()  #the rotation order on the target
 
 	outTranslate = MObject()  #the output translation
 	outTranslateX = MObject()
@@ -61,21 +66,22 @@ class MirrorNode(MPxNode):
 		attrMirrorTranslation = MFnEnumAttribute()
 
 		attrTargetParentMatrixInv = MFnMatrixAttribute()
+		targetRotationOrder = MFnNumericAttribute()
 
-		attrOutTranslate = MFnCompoundAttribute()
-		attrOutTranslateX = MFnNumericAttribute()
-		attrOutTranslateY = MFnNumericAttribute()
-		attrOutTranslateZ = MFnNumericAttribute()
+		attrOutTranslate = MFnNumericAttribute()
+		attrOutTranslateX = MFnUnitAttribute()
+		attrOutTranslateY = MFnUnitAttribute()
+		attrOutTranslateZ = MFnUnitAttribute()
 
-		attrOutRotate = MFnCompoundAttribute()
-		attrOutRotateX = MFnNumericAttribute()
-		attrOutRotateY = MFnNumericAttribute()
-		attrOutRotateZ = MFnNumericAttribute()
+		attrOutRotate = MFnNumericAttribute()
+		attrOutRotateX = MFnUnitAttribute()
+		attrOutRotateY = MFnUnitAttribute()
+		attrOutRotateZ = MFnUnitAttribute()
 
-		attrTargetJointOrient = MFnCompoundAttribute()
-		attrTargetJointOrientX = MFnNumericAttribute()
-		attrTargetJointOrientY = MFnNumericAttribute()
-		attrTargetJointOrientZ = MFnNumericAttribute()
+		attrTargetJointOrient = MFnNumericAttribute()
+		attrTargetJointOrientX = MFnUnitAttribute()
+		attrTargetJointOrientY = MFnUnitAttribute()
+		attrTargetJointOrientZ = MFnUnitAttribute()
 
 		#create the world matrix
 		cls.inWorldMatrix = attrInWorldMatrix.create( "inWorldMatrix", "iwm" )
@@ -115,43 +121,35 @@ class MirrorNode(MPxNode):
 
 		#create the out world matrix inverse
 		cls.targetParentMatrixInv = attrTargetParentMatrixInv.create( "targetParentInverseMatrix", "owm" )
-
 		cls.addAttribute( cls.targetParentMatrixInv )
 
 
-		#create the joint orient compensation attributes
-		cls.targetJointOrient = attrTargetJointOrient.create( "targetJointOrient", "tjo" )
-		cls.targetJointOrientX = attrTargetJointOrientX.create( "targetJointOrientX", "tjox", MFnNumericData.kDouble )
-		cls.targetJointOrientY = attrTargetJointOrientY.create( "targetJointOrientY", "tjoy", MFnNumericData.kDouble )
-		cls.targetJointOrientZ = attrTargetJointOrientZ.create( "targetJointOrientZ", "tjoz", MFnNumericData.kDouble )
+		#create the target rotation order attribute
+		cls.targetRotationOrder = targetRotationOrder.create( "targetRotationOrder", "troo", MFnNumericData.kInt )
+		cls.addAttribute( cls.targetRotationOrder )
 
-		attrTargetJointOrient.addChild( cls.targetJointOrientX )
-		attrTargetJointOrient.addChild( cls.targetJointOrientY )
-		attrTargetJointOrient.addChild( cls.targetJointOrientZ )
+
+		#create the joint orient compensation attributes
+		cls.targetJointOrientX = attrTargetJointOrientX.create( "targetJointOrientX", "tjox", MFnUnitAttribute.kAngle )
+		cls.targetJointOrientY = attrTargetJointOrientY.create( "targetJointOrientY", "tjoy", MFnUnitAttribute.kAngle )
+		cls.targetJointOrientZ = attrTargetJointOrientZ.create( "targetJointOrientZ", "tjoz", MFnUnitAttribute.kAngle )
+		cls.targetJointOrient = attrTargetJointOrient.create( "targetJointOrient", "tjo", cls.targetJointOrientX, cls.targetJointOrientY, cls.targetJointOrientZ )
 		cls.addAttribute( cls.targetJointOrient )
 
 
 		#create the out translate attributes
-		cls.outTranslate = attrOutTranslate.create( "outTranslate", "ot" )
-		cls.outTranslateX = attrOutTranslateX.create( "outTranslateX", "otx", MFnNumericData.kDouble )
-		cls.outTranslateY = attrOutTranslateY.create( "outTranslateY", "oty", MFnNumericData.kDouble )
-		cls.outTranslateZ = attrOutTranslateZ.create( "outTranslateZ", "otz", MFnNumericData.kDouble )
-
-		attrOutTranslate.addChild( cls.outTranslateX )
-		attrOutTranslate.addChild( cls.outTranslateY )
-		attrOutTranslate.addChild( cls.outTranslateZ )
+		cls.outTranslateX = attrOutTranslateX.create( "outTranslateX", "otx", MFnUnitAttribute.kDistance )
+		cls.outTranslateY = attrOutTranslateY.create( "outTranslateY", "oty", MFnUnitAttribute.kDistance )
+		cls.outTranslateZ = attrOutTranslateZ.create( "outTranslateZ", "otz", MFnUnitAttribute.kDistance )
+		cls.outTranslate = attrOutTranslate.create( "outTranslate", "ot", cls.outTranslateX, cls.outTranslateY, cls.outTranslateZ )
 		cls.addAttribute( cls.outTranslate )
 
 
 		#create the out rotation attributes
-		cls.outRotate = attrOutRotate.create( "outRotate", "or" )
-		cls.outRotateX = attrOutRotateX.create( "outRotateX", "orx", MFnNumericData.kDouble )
-		cls.outRotateY = attrOutRotateY.create( "outRotateY", "ory", MFnNumericData.kDouble )
-		cls.outRotateZ = attrOutRotateZ.create( "outRotateZ", "orz", MFnNumericData.kDouble )
-
-		attrOutRotate.addChild( cls.outRotateX )
-		attrOutRotate.addChild( cls.outRotateY )
-		attrOutRotate.addChild( cls.outRotateZ )
+		cls.outRotateX = attrOutRotateX.create( "outRotateX", "orx", MFnUnitAttribute.kAngle )
+		cls.outRotateY = attrOutRotateY.create( "outRotateY", "ory", MFnUnitAttribute.kAngle )
+		cls.outRotateZ = attrOutRotateZ.create( "outRotateZ", "orz", MFnUnitAttribute.kAngle )
+		cls.outRotate = attrOutRotate.create( "outRotate", "or", cls.outRotateX, cls.outRotateY, cls.outRotateZ )
 		cls.addAttribute( cls.outRotate )
 
 
@@ -170,6 +168,9 @@ class MirrorNode(MPxNode):
 
 		cls.attributeAffects( cls.targetParentMatrixInv, cls.outTranslate )
 		cls.attributeAffects( cls.targetParentMatrixInv, cls.outRotate )
+
+		cls.attributeAffects( cls.targetRotationOrder, cls.outTranslate )
+		cls.attributeAffects( cls.targetRotationOrder, cls.outRotate )
 
 		cls.attributeAffects( cls.targetJointOrient, cls.outRotate )
 
@@ -220,9 +221,12 @@ class MirrorNode(MPxNode):
 		joInv = joInv.expand( 4 )
 		mirroredMatrix = mirroredMatrix * joInv
 
+		#grab the rotation order of the target
+		rotOrderIdx = dataBlock.inputValue( self.targetRotationOrder ).asInt()
+
 		#grab euler values
 		R, S = mirroredMatrix.decompose()  #we need to decompose again to extract euler angles...
-		eulerXYZ = outX, outY, outZ = R.ToEulerXYZ()
+		eulerXYZ = outX, outY, outZ = mayaRotationOrders[ rotOrderIdx ]( R )  #R.ToEulerYZX()
 
 		dh_outRX = dataBlock.outputValue( self.outRotateX )
 		dh_outRY = dataBlock.outputValue( self.outRotateY )
@@ -269,12 +273,14 @@ class CreateMirrorNode(MPxCommand):
 	_ARG_SPEC = [ ('-h', '-help', MSyntax.kNoArg, 'prints help'),
 	              ('-ax', '-axis', MSyntax.kString, 'the axis to mirror across (defaults to x)'),
 	              ('-m', '-translationMode', MSyntax.kString, 'the mode in which translation is mirrored - %s (defaults to %s)' % (' '.join( MirrorNode.MIRROR_MODE_NAMES ), MirrorNode.MIRROR_MODE_NAMES[ MirrorNode.MIRROR_DEFAULT ])),
+	              ('-d', '-dummy', MSyntax.kNoArg, "builds the node but doesn't hook it up to the target - this can be useful if you want to query what would be mirrored transform"),
 	              #('-s', '-space', MSyntax.kString, 'which space to mirror in - world or local (defaults to world)') ]
 	              ]
 
 	kFlagHelp = _ARG_SPEC[ 0 ][ 0 ]
 	kFlagAxis = _ARG_SPEC[ 1 ][ 0 ]
 	kFlagMode = _ARG_SPEC[ 2 ][ 0 ]
+	kFlagDummy = _ARG_SPEC[ 3 ][ 0 ]
 
 	@classmethod
 	def SyntaxCreator( cls ):
@@ -356,6 +362,9 @@ class CreateMirrorNode(MPxCommand):
 		else:
 			obj, tgt = objs
 
+			#is dummy mode set?
+			isDummyMode = argData.isFlagSet( self.kFlagDummy ) or argData.isFlagSet( self.kFlagDummy )
+
 			#see if there is already a node connected
 			existing = cmd.listConnections( '%s.t' % tgt, '%s.r' % tgt, type=MirrorNode.NODE_TYPE_NAME )
 			if existing:
@@ -374,8 +383,12 @@ class CreateMirrorNode(MPxCommand):
 				if cmd.objExists( joAttrpath ):
 					cmd.connectAttr( joAttrpath, '%s.targetJointOrient' % rotNode )
 
-				cmd.connectAttr( '%s.outTranslate' % rotNode, '%s.t' % tgt )
-				cmd.connectAttr( '%s.outRotate' % rotNode, '%s.r' % tgt )
+				cmd.connectAttr( '%s.rotateOrder' % tgt, '%s.targetRotationOrder' % rotNode )
+
+				if not isDummyMode:
+					cmd.connectAttr( '%s.outTranslate' % rotNode, '%s.t' % tgt )
+					cmd.connectAttr( '%s.outRotate' % rotNode, '%s.r' % tgt )
+
 				cmd.select( obj )
 
 		#set the result to the node created...
