@@ -82,7 +82,6 @@ class IkFkLeg(PrimaryRigPart):
 	def _build( self, skeletonPart, stretchy=True, **kw ):
 		return self.doBuild( skeletonPart.thigh, skeletonPart.knee, skeletonPart.ankle, stretchy=stretchy, **kw )
 	def doBuild( self, thigh, knee, ankle, stretchy=True, **kw ):
-		skeletonPart = self._skeletonPart
 		scale = kw[ 'scale' ]
 
 		idx = kw[ 'idx' ]
@@ -149,7 +148,7 @@ class IkFkLeg(PrimaryRigPart):
 			move( 0, -scale, scale, toe, r=True, ws=True )
 
 
-		toeTip = skeletonPart.endPlacer
+		toeTip = self.getSkeletonPart().endPlacer
 		if not toeTip:
 			possibleTips = listRelatives( toe, type='joint', pa=True )
 			if possibleTips:
@@ -175,7 +174,7 @@ class IkFkLeg(PrimaryRigPart):
 
 
 		#move bank pivots to a good spot on the ground
-		placers = skeletonPart.getPlacers()
+		placers = self.getSkeletonPart().getPlacers()
 		numPlacers = len( placers )
 		if placers:
 			toePos = Vector( xform( toe, q=True, ws=True, rp=True ) )

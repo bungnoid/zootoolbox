@@ -90,4 +90,34 @@ def createShader( colour ):
 	return shader
 
 
+def setDrawOverrideColor( obj, color=17 ):
+	"""
+	edit the given object's shape node override color
+	"""
+	shapes = []
+	if not cmd.objectType( obj, i='nurbsCurve' ) or not cmd.objectType( obj, i='nurbsSurface' ) or not cmd.objectType( obj, i='mesh' ):
+		shapes.append( obj )
+	for s in listRelatives( obj, s=True, pa=True ) or []:
+		shapes.append( s )
+
+        if shapes:
+		for s in shapes:
+			conns = cmd.listConnections( '%s.drawOverride' % s, s=True )
+			if not conns:
+				if not color == 0:
+					cmd.setAttr ('%s.overrideEnabled' % s, e=True, l=False )
+					cmd.setAttr ('%s.overrideEnabled' % s, 1 )
+
+					cmd.setAttr ('%s.overrideColor' % s, e=True, l=False )
+					cmd.setAttr ('%s.overrideColor' % s, color )
+				else:
+					cmd.color( s )
+
+					cmd.setAttr ('%s.overrideColor' % s, e=True, l=False )
+					cmd.setAttr ('%s.overrideColor' % s, color )
+
+					cmd.setAttr ('%s.overrideEnabled' % s, e=True, l=False )
+					cmd.setAttr ('%s.overrideEnabled' % s, 0 )
+
+
 #end

@@ -1779,7 +1779,7 @@ def labelledUIClassFactory( baseCls ):
 	'''
 	clsName = 'Labelled%s' % baseCls.__name__.replace( 'Mel', '' )
 	class _tmp(MelHSingleStretchLayout):
-		IS_SETUP = False
+		_IS_SETUP = False
 
 		def __new__( cls, parent, *a, **kw ):
 
@@ -1798,6 +1798,7 @@ def labelledUIClassFactory( baseCls ):
 
 			self.setStretchWidget( ui )
 			self.layout()
+			self( e=True, af=((lbl, 'top', 0), (lbl, 'bottom', 0)) )
 
 			#these functions are built within the constructor scope for a few reasons
 			#first we get access to the ui object without having to go via a __getattr__ call
@@ -1820,16 +1821,16 @@ def labelledUIClassFactory( baseCls ):
 
 			self._get = _get
 			self._set = _set
-			self.IS_SETUP = True
+			self._IS_SETUP = True
 
 			return self
 		def __getattr__( self, attr ):
-			if self.IS_SETUP:
+			if self._IS_SETUP:
 				return self._get( self, attr )
 
 			return super( MelHSingleStretchLayout, self ).__getattr__( attr )
 		def __setattr__( self, attr, value ):
-			if self.IS_SETUP:
+			if self._IS_SETUP:
 				self._set( self, attr, value )
 				return
 

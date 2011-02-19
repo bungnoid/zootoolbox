@@ -7,7 +7,7 @@ import maya.OpenMayaMPx as OpenMayaMPx
 
 import apiExtensions
 
-from maya.OpenMaya import MObject, MFnMatrixAttribute, MFnCompoundAttribute, \
+from maya.OpenMaya import MObject, MFnMatrixAttribute, MFnCompoundAttribute, MFnMessageAttribute, MGlobal, \
      MFnEnumAttribute, MFnNumericAttribute, MFnNumericData, MFnUnitAttribute, MFnDependencyNode, \
      MPoint, MVector, MSyntax, MArgDatabase
 
@@ -268,6 +268,59 @@ class MirrorNode(MPxNode):
 		dh_outTZ.setDouble( pos[2] )
 
 
+class ControlPairNode(MPxNode):
+	'''
+	is used by the poseSym tool for storing control pair relationships
+	'''
+
+	NODE_ID = OpenMaya.MTypeId( 0x00115941 )
+	NODE_TYPE_NAME = "controlPair"
+
+	controlA = MObject()
+	controlB = MObject()
+	offsetMatrix = MObject()
+
+	axis = MObject()  #this is the axis which things get mirrored across
+	orientAxis = MObject()  #this is the object axis that gets flipped when mirroring orientation
+
+	@classmethod
+	def Creator( cls ):
+		return OpenMayaMPx.asMPxPtr( cls() )
+	@classmethod
+	def Init( cls ):
+		attrMsg = MFnMessageAttribute()
+
+		cls.controlA = attrMsg.create( "controlA", "ca" )
+		cls.controlB = attrMsg.create( "controlB", "cb" )
+		cls.addAttribute( cls.controlA )
+		cls.addAttribute( cls.controlB )
+
+		attrMat = MFnMatrixAttribute()
+		cls.offsetMatrix = attrMat.create( "offsetMatrix", "offm" )
+		cls.addAttribute( cls.offsetMatrix )
+
+		attrEnum = MFnEnumAttribute()
+		cls.axis = attrEnum.create( "axis", "ax" )
+		attrEnum.addField( 'x', 0 )
+		attrEnum.addField( 'y', 1 )
+		attrEnum.addField( 'z', 2 )
+		attrEnum.setDefault( 'x' )
+		attrEnum.setKeyable( False )
+		attrEnum.setChannelBox( True )
+
+		cls.addAttribute( cls.axis )
+
+		cls.orientAxis = attrEnum.create( "orientationAxis", "oax" )
+		attrEnum.addField( 'x', 0 )
+		attrEnum.addField( 'y', 1 )
+		attrEnum.addField( 'z', 2 )
+		attrEnum.setDefault( 'x' )
+		attrEnum.setKeyable( False )
+		attrEnum.setChannelBox( True )
+
+		cls.addAttribute( cls.orientAxis )
+
+
 class CreateMirrorNode(MPxCommand):
 	CMD_NAME = 'rotationMirror'
 	_ARG_SPEC = [ ('-h', '-help', MSyntax.kNoArg, 'prints help'),
@@ -409,36 +462,32 @@ class CreateMirrorNode(MPxCommand):
 		return True
 
 
-classesToRegister = [ CreateMirrorNode ]
-
 def initializePlugin( mobject ):
 	mplugin = OpenMayaMPx.MFnPlugin( mobject, 'macaronikazoo', '1' )
-	mplugin.registerNode( MirrorNode.NODE_TYPE_NAME, MirrorNode.NODE_ID, MirrorNode.Creator, MirrorNode.Init )
 
-	for cls in classesToRegister:
-		cmdName = cls.CMD_NAME
+	try:
+		mplugin.registerNode( MirrorNode.NODE_TYPE_NAME, MirrorNode.NODE_ID, MirrorNode.Creator, MirrorNode.Init )
+		mplugin.registerNode( ControlPairNode.NODE_TYPE_NAME, ControlPairNode.NODE_ID, ControlPairNode.Creator, ControlPairNode.Init )
 
-		try:
-			mplugin.registerCommand( cmdName, cls.Creator, cls.SyntaxCreator )
-			mplugin.registerCommand( cmdName.lower(), cls.Creator, cls.SyntaxCreator )
-		except:
-			self.displayError( "Failed to register command: %s\n" % cmdName )
-			raise
+		mplugin.registerCommand( CreateMirrorNode.CMD_NAME, CreateMirrorNode.Creator, CreateMirrorNode.SyntaxCreator )
+		mplugin.registerCommand( CreateMirrorNode.CMD_NAME.lower(), CreateMirrorNode.Creator, CreateMirrorNode.SyntaxCreator )
+	except:
+		MGlobal.displayError( "Failed to load zooMirror plugin:" )
+		raise
 
 
 def uninitializePlugin( mobject ):
 	mplugin = OpenMayaMPx.MFnPlugin( mobject )
-	mplugin.deregisterNode( MirrorNode.NODE_ID )
 
-	for cls in classesToRegister:
-		cmdName = cls.CMD_NAME
+	try:
+		mplugin.deregisterNode( MirrorNode.NODE_ID )
+		mplugin.deregisterNode( ControlPairNode.NODE_ID )
 
-		try:
-			mplugin.deregisterCommand( cmdName )
-			mplugin.deregisterCommand( cmdName.lower() )
-		except:
-			self.displayError( "Failed to unregister command: %s\n" % cmdName )
-			raise
+		mplugin.deregisterCommand( CreateMirrorNode.CMD_NAME )
+		mplugin.deregisterCommand( CreateMirrorNode.CMD_NAME.lower() )
+	except:
+		MGlobal.displayError( "Failed to unload zooMirror plugin:" )
+		raise
 
 
 #end

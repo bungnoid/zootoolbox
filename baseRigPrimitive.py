@@ -205,6 +205,10 @@ class RigPart(filesystem.trackableClassFactory()):
 
 		self.container = partContainer
 		self._skeletonPart = skeletonPart
+
+		if partContainer:
+			if skeletonPart is None:
+				self.getSkeletonPart()
 	def __unicode__( self ):
 		return u"%s_%d( %r )" % (self.__class__.__name__, self.getIdx(), self.container)
 	__str__ = __unicode__
@@ -518,20 +522,19 @@ class RigPart(filesystem.trackableClassFactory()):
 		if self._skeletonPart:
 			return self._skeletonPart
 
-		connected = listConnections( '%s.skeletonPart' % self.container )[ 0 ]
+		if self.container is None:
+			return None
+
+		connected = listConnections( '%s.skeletonPart' % self.container )[0]
 		self._skeletonPart = skeletonPart = SkeletonPart.InitFromItem( connected )
 
 		return skeletonPart
 	def getSkeletonPartParity( self ):
 		return self.getSkeletonPart().getParity()
-	def getControlName( self, control ):
+	def getControlIdx( self, control ):
 		'''
-		returns the name of the control as defined in the CONTROL_NAMES attribute
-		for the part class
+		returns the index of the given control - each control is plugged into a given "slot"
 		'''
-		if self.CONTROL_NAMES is None:
-			return str( control )
-
 		cons = cmd.listConnections( '%s.message' % control, s=False, p=True ) or []
 		for c in cons:
 			node = c.split( '.' )[0]
@@ -542,10 +545,25 @@ class RigPart(filesystem.trackableClassFactory()):
 				if node != self.container:
 					continue
 
-				index = int( c[ c.rfind( '[' )+1:-1 ] )
-				name = self.CONTROL_NAMES[ index ]
+				idx = int( c[ c.rfind( '[' )+1:-1 ] )
 
-				return name
+				return idx
+
+		raise RigPartError( "The control %s isn't associated with this rig primitive %s" % (control, self) )
+	def getControlName( self, control ):
+		'''
+		returns the name of the control as defined in the CONTROL_NAMES attribute
+		for the part class
+		'''
+		if self.CONTROL_NAMES is None:
+			return str( control )
+
+		controlIdx = self.getControlIdx( control )
+
+		try:
+			return self.CONTROL_NAMES[ index ]
+		except IndexError:
+			return None
 
 		raise RigPartError( "The control %s isn't associated with this rig primitive %s" % (control, self) )
 	def delete( self ):
@@ -570,59 +588,24 @@ class RigPart(filesystem.trackableClassFactory()):
 			return None
 
 		return oppositeSkeletonPart.getRigPart()
-	def mirrorControl( self, control ):
+	def getOppositeControl( self, control ):
 		'''
-		mirrors the pose on the control
+		Finds the control that is most likely to be opposite the one given.  It first gets the name of
+		the given control.  It then finds the opposite rig part, and then queries it for the control
+		with the determined name
 		'''
-		rotNode = cmd.rotationMirror( control, control, dummy=True )
-		T = getAttr( '%s.outTranslate' % rotNode )[0]
-		R = getAttr( '%s.outRotate' % rotNode )[0]
-		delete( rotNode )
+		controlIdx = self.getControlIdx( control )
+		oppositePart = self.getOppositePart()
+		if oppositePart:
+			return oppositePart[ controlIdx ]
 
-		for t, r, ax in zip( T, R, CHANNELS ):
-			if getAttr( '%s.t%s' % (control, ax), se=True ):
-				setAttr( '%s.t%s' % (control, ax), t )
-
-			if getAttr( '%s.r%s' % (control, ax), se=True ):
-				setAttr( '%s.r%s' % (control, ax), r )
-	def exchangeControl( self, control ):
-		'''
-		finds the
-		'''
-		controlName = self.getControlName( control )
-
-		otherPart = self.getOppositePart()
-		if otherPart is None:
-			self.mirrorControl( control )
-		else:
-			otherControl = getattr( otherPart, controlName, None )
-			if otherControl is None:
-				return
-
-			#first gather the transform data for each control
-			rotNode = cmd.rotationMirror( control, otherControl, dummy=True )
-			otherT = getAttr( '%s.outTranslate' % rotNode )[0]
-			otherR = getAttr( '%s.outRotate' % rotNode )[0]
-			delete( rotNode )
-
-			rotNode = cmd.rotationMirror( otherControl, control, dummy=True )
-			thisT = getAttr( '%s.outTranslate' % rotNode )[0]
-			thisR = getAttr( '%s.outRotate' % rotNode )[0]
-			delete( rotNode )
-
-			#now set the transform attributes if they're settable
-			for tT, tR, oT, oR, ax in zip( thisT, thisR, otherT, otherR, CHANNELS ):
-				if getAttr( '%s.t%s' % (control, ax), se=True ):
-					setAttr( '%s.t%s' % (control, ax), tT )
-
-				if getAttr( '%s.r%s' % (control, ax), se=True ):
-					setAttr( '%s.r%s' % (control, ax), tR )
-
-				if getAttr( '%s.t%s' % (otherControl, ax), se=True ):
-					setAttr( '%s.t%s' % (otherControl, ax), oT )
-
-				if getAttr( '%s.r%s' % (otherControl, ax), se=True ):
-					setAttr( '%s.r%s' % (otherControl, ax), oR )
+		return None
+	def setupMirroring( self ):
+		import poseSym
+		for control in self:
+			oppositeControl = self.getOppositeControl( control )
+			pair = poseSym.ControlPair.Create( control, oppositeControl )
+			print 'setting up mirroring on %s %s' % (control, oppositeControl)
 
 
 def generateNiceControlName( control ):
@@ -822,6 +805,11 @@ class WorldPart(RigPart):
 
 
 		return world, parts, masterQss, qss, exportRelative
+	def getSkeletonPart( self ):
+		#the world part has no skeleton part...
+		return None
+	def setupMirroring( self ):
+		return
 
 
 class RigSubPart(RigPart):
@@ -860,6 +848,89 @@ def _deleteRig( self ):
 SkeletonPart.deleteRig = _deleteRig
 
 ### </CHEEKY!> ###
+
+
+def setupMirroring():
+	'''
+	sets up all controls in the scene for mirroring
+	'''
+	for rigPart in RigPart.IterAllParts():
+		rigPart.setupMirroring()
+
+
+@api.d_showWaitCursor
+def buildRigForModel( scene=None, referenceModel=True, deletePlacers=False ):
+	'''
+	given a model scene whose skeleton is assumed to have been built by the
+	skeletonBuilder tool, this function will create a rig scene by referencing
+	in said model, creating the rig as best it knows how, saving the scene in
+	the appropriate spot etc...
+	'''
+
+	#if no scene was passed, assume we're acting on the current scene
+	if scene is None:
+		scene = filesystem.Path( cmd.file( q=True, sn=True ) )
+	#if the scene WAS passed in, open the desired scene if it isn't already open
+	else:
+		scene = filesystem.Path( scene )
+		curScene = filesystem.Path( cmd.file( q=True, sn=True ) )
+		if curScene:
+			if scene != curScene:
+				mel.saveChanges( 'file -f -open "%s"' % scene )
+		else: cmd.file( scene, f=True, open=True )
+
+	#if the scene is still none bail...
+	if not scene and referenceModel:
+		raise SceneNotSavedError( "Uh oh, your scene hasn't been saved - Please save it somewhere on disk so I know where to put the rig.  Thanks!" )
+
+	#backup the current state of the scene, just in case something goes south...
+	if scene.exists:
+		backupFilename = scene.up() / ('%s_backup.%s' % (scene.name(), scene.getExtension()))
+		if backupFilename.exists: backupFilename.delete()
+		cmd.file( rename=backupFilename )
+		cmd.file( save=True, force=True )
+		cmd.file( rename=scene )
+
+	#finalize
+	failedParts = finalizeAllParts()
+	if failedParts:
+		confirmDialog( t='Finalization Failure', m='The following parts failed to finalize properly:\n\n%s' % '\n'.join( map( str, failedParts ) ), b='OK', db='OK' )
+		return
+
+	#delete placers if desired - NOTE: this should be done after after finalization because placers are often used to define alignment for end joints
+	if deletePlacers:
+		for part in SkeletonPart.IterAllParts():
+			placers = part.getPlacers()
+			if placers:
+				delete( placers )
+
+	#if desired, create a new scene and reference in the model
+	if referenceModel:
+		scene.editoradd()
+		cmd.file( f=True, save=True )
+		cmd.file( f=True, new=True )
+
+		api.referenceFile( scene, 'model' )
+
+		#rename the scene to the rig
+		rigSceneName = namingHelpers.stripKnownAssetSuffixes( scene.name() )
+		rigSceneName = '%s_rig.ma' % rigSceneName
+		rigScene = scene.up() / rigSceneName
+		cmd.file( rename=rigScene )
+		rigScene.editoradd()
+		cmd.file( f=True, save=True, typ='mayaAscii' )
+	else:
+		rigScene = scene
+
+	buildRigForAllParts()
+	setupMirroring()
+
+	return rigScene
+
+
+def buildRigForAllParts():
+	for part in SkeletonPart.IterAllPartsInOrder():
+		part.rig()
 
 
 def cleanMeshControls( doConfirm=True ):

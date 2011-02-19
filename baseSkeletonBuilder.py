@@ -579,6 +579,14 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 
 	RigTypes = ()
 
+	def __new__( cls, partContainer ):
+		if cls is SkeletonPart:
+			clsName = getAttr( '%s._skeletonPrimitive.typeName' % partContainer )
+			cls = cls.GetNamedSubclass( clsName )
+			if cls is None:
+				raise TypeError( "Cannot determine the part class for the given part container!" )
+
+		return object.__new__( cls, partContainer )
 	def __init__( self, partContainer ):
 		if partContainer is not None:
 			assert isSkeletonPartContainer( partContainer ), "Must pass a valid skeleton part container! (received %s - a %s)" % (partContainer, nodeType( partContainer ))
@@ -590,9 +598,9 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 	def __repr__( self ):
 		return repr( unicode( self ) )
 	def __hash__( self ):
-		return hash( self.base )
+		return hash( self.container )
 	def __eq__( self, other ):
-		return self.base == other.base
+		return self.container == other.container
 	def __neq__( self, other ):
 		return not self == other
 	def __getitem__( self, idx ):
@@ -604,7 +612,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		if attr not in self.PLACER_NAMES:
 			raise AttributeError( "No such attribute %s" % attr )
 
-		idx = list( self.PLACER_NAMES  ).index( attr )
+		idx = list( self.PLACER_NAMES ).index( attr )
 		cons = listConnections( '%s._skeletonPrimitive.placers[%d]' % (self.base, n), d=False )
 		if cons:
 			return cons[ 0 ]
@@ -740,6 +748,54 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 
 		return Colour( 'black' )
 	getParityColor = getParityColour
+	def getParityMultiplier( self ):
+		return self.getParity().asMultiplier()
+	def getOppositePart( self ):
+		'''
+		Finds the opposite part - if any - in the scene to this part. If no opposite part is found None is returned.
+
+		The opposite part is defined as the part that has opposite parity - the part with the closest index is
+		returned if there are multiple parts with opposite parity in the scene.
+
+		If this part has no parity None is returned.
+		'''
+
+		#is this a parity part?  if not then there is no such thing as an opposite part...
+		if not self.hasParity():
+			return None
+
+		#get some data about this part
+		thisIdx = self.getIdx()
+		thisParity = self.getParity()
+
+		#is this a left or right parity part?
+		isLeft = thisIdx == Parity.LEFT
+
+		possibleMatches = []
+		for part in self.IterAllParts( True ):
+			parity = part.getParity()
+			if parity.isOpposite( thisParity ):
+				idx = part.getIdx()
+
+				#if "self" is a left part then its exact opposite will be self.getIdx() + 1, otherwise if "self" is a right
+				#sided part then its exact opposite will be self.getIdx() - 1.  So figure out the "index delta" and use it
+				#as a sort metric to find the most appropriate match for the cases where there are multiple, non-ideal matches
+				idxDelta = 0
+				if isLeft:
+					idxDelta = thisIdx - idx
+				else:
+					idxDelta = idx - thisIdx
+
+				if idxDelta == 1:
+					return part
+
+				possibleMatches.append( (idxDelta, part) )
+
+		possibleMatches.sort()
+		if possibleMatches:
+			return possibleMatches[0][1]
+
+		return None
 	@property
 	def base( self ):
 		return self[ 0 ]
@@ -2046,80 +2102,6 @@ def getNamespaceFromReferencing( node ):
 
 
 @api.d_showWaitCursor
-def buildRigForModel( scene=None, referenceModel=True, deletePlacers=False ):
-	'''
-	given a model scene whose skeleton is assumed to have been built by the
-	skeletonBuilder tool, this function will create a rig scene by referencing
-	in said model, creating the rig as best it knows how, saving the scene in
-	the appropriate spot etc...
-	'''
-
-	#if no scene was passed, assume we're acting on the current scene
-	if scene is None:
-		scene = filesystem.Path( cmd.file( q=True, sn=True ) )
-	#if the scene WAS passed in, open the desired scene if it isn't already open
-	else:
-		scene = filesystem.Path( scene )
-		curScene = filesystem.Path( cmd.file( q=True, sn=True ) )
-		if curScene:
-			if scene != curScene:
-				mel.saveChanges( 'file -f -open "%s"' % scene )
-		else: cmd.file( scene, f=True, open=True )
-
-	#if the scene is still none bail...
-	if not scene and referenceModel:
-		raise SceneNotSavedError( "Uh oh, your scene hasn't been saved - Please save it somewhere on disk so I know where to put the rig.  Thanks!" )
-
-	#backup the current state of the scene, just in case something goes south...
-	if scene.exists:
-		backupFilename = scene.up() / ('%s_backup.%s' % (scene.name(), scene.getExtension()))
-		if backupFilename.exists: backupFilename.delete()
-		cmd.file( rename=backupFilename )
-		cmd.file( save=True, force=True )
-		cmd.file( rename=scene )
-
-	#finalize
-	failedParts = finalizeAllParts()
-	if failedParts:
-		confirmDialog( t='Finalization Failure', m='The following parts failed to finalize properly:\n\n%s' % '\n'.join( map( str, failedParts ) ), b='OK', db='OK' )
-		return
-
-	#delete placers if desired - NOTE: this should be done after after finalization because placers are often used to define alignment for end joints
-	if deletePlacers:
-		for part in SkeletonPart.IterAllParts():
-			placers = part.getPlacers()
-			if placers:
-				delete( placers )
-
-	#if desired, create a new scene and reference in the model
-	if referenceModel:
-		scene.editoradd()
-		cmd.file( f=True, save=True )
-		cmd.file( f=True, new=True )
-
-		api.referenceFile( scene, 'model' )
-
-		#rename the scene to the rig
-		rigSceneName = namingHelpers.stripKnownAssetSuffixes( scene.name() )
-		rigSceneName = '%s_rig.ma' % rigSceneName
-		rigScene = scene.up() / rigSceneName
-		cmd.file( rename=rigScene )
-		rigScene.editoradd()
-		cmd.file( f=True, save=True, typ='mayaAscii' )
-	else:
-		rigScene = scene
-
-	buildRigForAllParts()
-
-	return rigScene
-
-
-def buildRigForAllParts():
-	for part in SkeletonPart.IterAllPartsInOrder():
-		part.rig()
-
-
-@api.d_showWaitCursor
 @api.d_maintainSceneSelection
 def buildAllVolumes():
 
@@ -2337,23 +2319,6 @@ def volumesToSkinning():
 
 	#delete the combined meshes - we're done with them
 	delete( combinedVolumes )
-
-
-def transferSkinning( sourceMesh, targetMesh ):
-	sourceSkinCluster = mel.findRelatedSkinCluster( sourceMesh )
-	if not sourceSkinCluster:
-		raise SkeletonError( "Cannot find a skin cluster on %s" % sourceMesh )
-
-	influences = skinCluster( sourceSkinCluster, q=True, inf=True )
-
-	#if there isn't a skin cluster already, create one
-	targetSkinCluster = mel.findRelatedSkinCluster( targetMesh )
-	if not targetSkinCluster:
-		targetSkinCluster = skinCluster( targetMesh, influences, toSelectedBones=True )[0]
-
-	copySkinWeights( sourceSkin=sourceSkinCluster, destinationSkin=targetSkinCluster, noMirror=True, surfaceAssociation='closestPoint', smooth=True )
-
-	return targetSkinCluster
 
 
 #end

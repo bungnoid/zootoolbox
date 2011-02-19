@@ -25,7 +25,7 @@ class Hand(RigPart):
 		colour = ColourDesc( 'orange' )
 
 		suffix = parity.asName()
-		parityMult = parity.asMultiplier()
+		parityMult = 1.0  #parity.asMultiplier()
 
 		worldPart = WorldPart.Create()
 		partsControl = worldPart.parts
@@ -93,8 +93,11 @@ class Hand(RigPart):
 			startColour = ColourDesc( (1, 0.3, 0, 0.65) )
 			endColour = ColourDesc( (0.8, 1, 0, 0.65) )
 			colour = startColour
-			colourInc = (endColour - startColour) / float( len( joints ) - 1 )
+			colourInc = (endColour - startColour)
 			iColor = 1
+
+			if len( joints ) > 1:
+				colourInc /= len( joints ) - 1
 
 
 			for i, j in enumerate( joints ):

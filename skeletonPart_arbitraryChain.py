@@ -72,12 +72,10 @@ class ArbitraryChain(SkeletonPart):
 					for i in self.getOrphanJoints():
 						autoAlignItem( i, parity, worldUpVector=normal )
 
-
-		# readjust the rotations to be inline with the parent joint -- wish we didn't have to do this
-		cmd.setAttr( '%s.rotate' % self.endPlacer, 0.0, 0.0, 0.0, type='double3' )
-
-
-
+		# read just the rotations to be inline with the parent joint -- wish we didn't have to do this
+		endPlacer = self.endPlacer
+		if endPlacer:
+			setAttr( '%s.r' % endPlacer, 0, 0, 0 )
 	def visualize( self ):
 		scale = self.getBuildScale() / 10.0
 		midJoint = self[ len( self ) / 2 ]

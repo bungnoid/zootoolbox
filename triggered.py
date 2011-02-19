@@ -210,7 +210,7 @@ class Trigger(object):
 					cacheName = cmd.getAttr( cacheAttrName )
 					if objExists( cacheName ):
 						self.connect( cacheName, slot )  #add the object to the connect slot
-						connects.append( cacheName )
+						connects.append( (cacheName, slot) )
 		except TypeError: pass
 
 		return connects
@@ -269,8 +269,19 @@ class Trigger(object):
 	def isConnected( self, object ):
 		'''returns whether a given <object> is connected as a connect to this trigger'''
 		object = str( object )
-		if not objExists(object): return []
-		return bool( self.getConnectSlots(object) )
+		if not objExists(object):
+			return []
+
+		conPrefix = 'zooTrig'
+		cons = listConnections( '%s.message' % object, s=False, p=True ) or []
+		for con in cons:
+			splits = con.split( '.' )
+			obj = splits[0]
+			if obj == self.obj:
+				if splits[1].startswith( conPrefix ):
+					return True
+
+		return False
 	def connect( self, object, slot=None ):
 		'''
 		performs the actual connection of an object to a connect slot

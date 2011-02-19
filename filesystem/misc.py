@@ -1,56 +1,10 @@
+
+from trackableClass import trackableClassFactory
+
 import os
 import sys
 import threading
 import inspect
-
-
-def trackableClassFactory( superClass=object ):
-	'''
-	returns a class that tracks subclasses.  for example, if you had classB(classA)
-	ad you wanted to track subclasses, you could do this:
-
-	class classB(trackableClassFactory( classA )):
-		...
-
-	a classmethod called GetSubclasses is created in the returned class for
-	querying the list of subclasses
-	'''
-	subclassList = []
-	class TrackableType(type):
-		def __new__( cls, name, bases, attrs ):
-			new = type.__new__( cls, name, bases, attrs )
-			subclassList.append( new )
-
-			return new
-
-	class TrackableClass(superClass): __metaclass__ = TrackableType
-	def IterSubclasses( cls ):
-		'''
-		returns an iterator for subclasses
-		'''
-		for c in subclassList:
-			if c is cls:
-				continue
-
-			if issubclass( c, cls ):
-				yield c
-	def GetSubclasses( cls ):
-		'''
-		returns a list of subclasses
-		'''
-		return list( cls.IterSubclasses() )
-	def GetNamedSubclass( cls, name ):
-		'''
-		returns the first subclass found with the given name
-		'''
-		for c in cls.IterSubclasses():
-			if c.__name__ == name: return c
-
-	TrackableClass.IterSubclasses = classmethod( IterSubclasses )
-	TrackableClass.GetSubclasses = classmethod( GetSubclasses )
-	TrackableClass.GetNamedSubclass = classmethod( GetNamedSubclass )
-
-	return TrackableClass
 
 
 def removeDupes( iterable ):

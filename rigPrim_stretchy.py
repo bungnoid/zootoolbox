@@ -32,6 +32,12 @@ class StretchRig(RigSubPart):
 			raise NotImplemented( 'auto axis support not written yet - complain loudly!' )
 
 
+		#grab the world part - we'll need the parts control to stuff a few things under
+		worldPart = WorldPart.Create()
+		worldControl = worldPart.control
+		partsControl = worldPart.parts
+
+
 		#setup some current unit variables, and take parity into account
 		stretchAuto = "autoStretch"
 		stretchName = "stretch"
@@ -71,6 +77,7 @@ class StretchRig(RigSubPart):
 		measure = loc_b
 
 		parent( loc_b, loc_a )
+		parent( loc_a, partsControl )
 		constraint_a = pointConstraint( startObj, loc_a )[ 0 ]
 
 		aim = aimConstraint( endObj, loc_a, aimVector=(1,0,0) )[ 0 ]

@@ -270,9 +270,9 @@ def align( src=None, tgt=None, key=False, pivotOnly=False ):
 		setKeyframe( tgt, at=('t', 'r') )
 
 
-def trace( srcs, tgts, keysOnly=True, keysOnlyRotate=True, matchRotationOrder=True, processPostCmds=True, sortByHeirarchy=True, start=None, end=None ):
+def trace( srcs, tgts, keysOnly=True, keysOnlyRotate=True, matchRotationOrder=True, processPostCmds=True, sortByHeirarchy=True, start=None, end=None, skip=1 ):
 	api.mel.zooXferAnimUtils()
-	api.mel.zooXferTrace( srcs, tgts, 2 if keysOnly else 0, int( keysOnlyRotate ), int( matchRotationOrder ), int( processPostCmds ), int( sortByHeirarchy ), int( start ), int( end ) )
+	api.mel._zooXferTrace( srcs, tgts, 2 if keysOnly else 0, int( keysOnlyRotate ), int( matchRotationOrder ), int( processPostCmds ), int( sortByHeirarchy ), int( start ), int( end ), int( skip ) )
 
 
 """

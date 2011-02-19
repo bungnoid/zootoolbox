@@ -17,6 +17,9 @@ class Parity(int):
 	def __new__( cls, idx ):
 		return int.__new__( cls, idx )
 	def __eq__( self, other ):
+		if other is None:
+			return False
+
 		return self % 2 == int( other ) % 2
 	def __nonzero__( self ):
 		return self % 2
@@ -26,6 +29,10 @@ class Parity(int):
 		return (-1) ** self
 	def asName( self ):
 		return self.NAMES[ self ]
+	def isOpposite( self, other ):
+		return (self % 2) != (other % 2)
+
+Parity.LEFT, Parity.RIGHT = Parity( Parity.LEFT ), Parity( Parity.RIGHT )
 
 
 class Name(object):
@@ -123,6 +130,8 @@ class Name(object):
 
 		return self._parity
 	parity = property( get_parity )
+	def strip_parity( self ):
+		return str( stripParity( self ) )
 	def swap_parity( self ):
 		return self.__class__( swapParity(self) )
 	def cache_prefix( self, delimeters=None ):
@@ -375,6 +384,9 @@ def swapParity( name ):
 
 
 def stripParity( name ):
+	if not isinstance( name, Name ):
+		name = Name( name )
+
 	nameToks = name.split()
 	lowerToks = [ tok.lower() for tok in nameToks ]
 	lowerToksSet = set( lowerToks )
@@ -646,7 +658,7 @@ def camelCaseToNice( theString, abbreviationsToExpand=None, niceParityNames=True
 
 
 INVALID_CHARS = """`~!@#$%^&*()-+=[]\\{}|;':"/?><., """
-def niceNameToValid( theString, cleanDoubles=True, stripTrailing=True ):
+def stripInvalidChars( theString, cleanDoubles=True, stripTrailing=True ):
 	'''
 	strips "invalid" characters from the given string, replacing them with an "_" character.  if
 	cleanDoubles is true, then any double "_" occurances are replaced with a single "_"

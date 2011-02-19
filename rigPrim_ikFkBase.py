@@ -16,7 +16,7 @@ class IkFkBase(RigSubPart):
 
 	def _build( self, skeletonPart, **kw ):
 		return self.doBuild( *skeletonPart.getIkFkItems(), **kw )
-	def doBuild( self, bicep, elbow, wrist, nameScheme=ARM_NAMING_SCHEME, alignEnd=True, **kw ):
+	def doBuild( self, bicep, elbow, wrist, nameScheme=ARM_NAMING_SCHEME, alignEnd=False, **kw ):
 		idx = kw[ 'idx' ]
 		scale = kw[ 'scale' ]
 

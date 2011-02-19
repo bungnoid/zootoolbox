@@ -164,8 +164,8 @@ class XferAnimForm(MelForm):
 		toSort = [ (len(list(api.iterParents( srcAndTgt[ idx ] ))), srcAndTgt) for srcAndTgt in mapping.iteritems() if cmd.objExists( srcAndTgt[ idx ] ) ]
 		toSort.sort()
 		for idx, (src, tgt) in toSort:
-				theSrcs.append( src )
-				theTgts.append( tgt )
+			theSrcs.append( src )
+			theTgts.append( tgt )
 
 		offset = ''
 		isDupe = self.isTraceMode( self.RAD_dupe )

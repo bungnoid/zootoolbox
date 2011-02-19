@@ -1,4 +1,5 @@
 
+from __future__ import with_statement
 from cacheDecorators import *
 
 import os
@@ -138,8 +139,17 @@ class Path(str):
 	__CASE_MATTERS = os.name != 'nt'
 
 	@classmethod
+	def DoP4( cls ):
+		return False
+	@classmethod
+	def SetCaseMatter( cls, state ):
+		cls.__CASE_MATTERS = state
+	@classmethod
 	def DoesCaseMatter( cls ):
 		return cls.__CASE_MATTERS
+	@classmethod
+	def Join( cls, *toks, **kw ):
+		return cls( '/'.join( toks ), **kw )
 
 	def __new__( cls, path='', caseMatters=None, envDict=None ):
 		'''
@@ -147,6 +157,11 @@ class Path(str):
 		to False will do things like caseless equality testing, caseless hash generation
 		'''
 
+		#early out if we've been given a Path instance - paths are immutable so there is no reason not to just return what was passed in
+		if isinstance( path, cls ):
+			return path
+
+		#set to an empty string if we've been init'd with None
 		if path is None:
 			path = ''
 
@@ -540,7 +555,7 @@ class Path(str):
 			os.makedirs( str( self ) )
 	def delete( self ):
 		'''
-		WindowsError is raised if the file cannot be deleted.
+		WindowsError is raised if the file cannot be deleted
 		'''
 		if self.isfile():
 			try:
@@ -558,19 +573,22 @@ class Path(str):
 	def rename( self, newName, nameIsLeaf=False ):
 		'''
 		it is assumed newPath is a fullpath to the new dir OR file.  if nameIsLeaf is True then
-		newName is taken to be a filename, not a filepath.  the instance is modified in place.
+		newName is taken to be a filename, not a filepath.  the fullpath to the renamed file is
+		returned
 		'''
 		newPath = Path( newName )
 		if nameIsLeaf:
 			newPath = self.up() / newName
 
 		if self.isfile():
-			tgtExists = newPath.exists
+			if newPath != self:
+				if newPath.exists:
+					newPath.delete()
 
 			#now perform the rename
 			os.rename( self, newPath )
 		elif self.isdir():
-			raise NotImplementedError('dir renaming not implemented yet...')
+			raise NotImplementedError( 'dir renaming not implemented yet...' )
 
 		return newPath
 	move = rename
@@ -584,15 +602,14 @@ class Path(str):
 				asPath = self.up() / target
 				target = asPath
 
-			try:
-				shutil.copy2( str( self ), str( target ) )
-			#this happens when src and dest are the same...  its pretty harmless, so we do nothing...
-			except shutil.Error:
-				pass
+			if self == target:
+				return target
+
+			shutil.copy2( str( self ), str( target ) )
 
 			return target
 		elif self.isdir():
-			raise NotImplementedError('dir copying not implemented yet...')
+			raise NotImplementedError( 'dir copying not implemented yet...' )
 			#shutil.copytree( str(self), str(target) )
 	def read( self, strip=True ):
 		'''
@@ -610,30 +627,22 @@ class Path(str):
 			return lines
 	def write( self, contentsStr ):
 		'''
-		writes a given string to the file defined by self.
+		writes a given string to the file defined by self
 		'''
+
 		#make sure the directory to we're writing the file to exists
 		self.up().create()
 
-		existedBeforeWrite = self.exists
-		isUnderClient = False
-
-		fileId = file( self, 'w' )
-		fileId.write( str(contentsStr) )
-		fileId.close()
+		with open( self, 'w' ) as f:
+			f.write( str(contentsStr) )
 	def pickle( self, toPickle ):
 		'''
 		similar to the write method but pickles the file
 		'''
-		Path( self ).up().create()
+		self.up().create()
 
-		#make sure the file is writeable - it may have been made unwriteable by copying from a non writeable source (ie from p4)
-		if not self.getWritable():
-			self.setWritable()
-
-		fileId = file( self, 'wb' )
-		cPickle.dump( toPickle, fileId, PICKLE_PROTOCOL )
-		fileId.close()
+		with open( self, 'w' ) as f:
+			cPickle.dump( toPickle, f, PICKLE_PROTOCOL )
 	def unpickle( self ):
 		'''
 		unpickles the file
@@ -672,7 +681,7 @@ class Path(str):
 
 		newPathToks = []
 		pathsToDiscard = lenOther
-		for pathN, otherN in zip( path[ 1: ], other[ 1: ] ):
+		for pathN, otherN in zip( pathToks[ 1: ], otherToks[ 1: ] ):
 			if pathN == otherN:
 				continue
 			else:
@@ -829,14 +838,14 @@ class Path(str):
 					yield p
 	def dirs( self, namesOnly=False, recursive=False ):
 		'''
-		lists all sub-directories.  If namesOnly is True, then only directory names (relative to
-		teh current dir) are returned
+		returns a generator that lists all sub-directories.  If namesOnly is True, then only directory
+		names (relative to the current dir) are returned
 		'''
 		return self._list_filesystem_items( os.path.isdir, namesOnly, recursive )
 	def files( self, namesOnly=False, recursive=False ):
 		'''
-		lists all files in the directory.  If namesOnly is True, then only directory names (relative
-		to teh current dir) are returned
+		returns a generator that lists all files under the path (assuming its a directory).  If namesOnly
+		is True, then only directory names (relative to the current dir) are returned
 		'''
 		return self._list_filesystem_items( os.path.isfile, namesOnly, recursive )
 

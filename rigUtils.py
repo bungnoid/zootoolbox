@@ -34,6 +34,12 @@ kTransform = MSpace.kTransform
 kObject = MSpace.kObject
 
 Axis = vectors.Axis
+AXES = Axis.BASE_AXES
+
+#these are the enum values for the rotation orders for transform nodes in maya
+MAYA_ROTATION_ORDERS = ROO_XYZ, ROO_YZX, ROO_ZXY, ROO_XZY, ROO_YXZ, ROO_ZYX = range( 6 )
+MATRIX_ROTATION_ORDER_CONVERSIONS_FROM = Matrix.FromEulerXYZ, Matrix.FromEulerYZX, Matrix.FromEulerZXY, Matrix.FromEulerXZY, Matrix.FromEulerYXZ, Matrix.FromEulerZYX
+MATRIX_ROTATION_ORDER_CONVERSIONS_TO = Matrix.ToEulerXYZ, Matrix.ToEulerYZX, Matrix.ToEulerZXY, Matrix.ToEulerXZY, Matrix.ToEulerYXZ, Matrix.ToEulerZYX
 
 
 def cleanDelete( node ):

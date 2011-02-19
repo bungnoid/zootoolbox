@@ -272,13 +272,17 @@ def buildControl( name,
                   parent=None, qss=None,
                   asJoint=False, freeze=True,
                   lockAttrs=( 'scale', ), hideAttrs=DEFAULT_HIDE_ATTRS,
-                  niceName=None ):
+                  niceName=None,
+                  displayLayer=None ):
 	'''
 	this rather verbosely called function deals with creating control objects in
 	a variety of ways.
 
 	the following args take "struct" like instances of the classes defined above,
 	so look to them for more detail on defining those options
+
+	displayLayer (int) will create layers (if doesn't exist) and add control shape to that layer.
+	layer None or zero doesn't create.
 	'''
 
 	select( cl=True )
@@ -543,6 +547,21 @@ def buildControl( name,
 	if niceName:
 		setNiceName( obj, niceName )
 
+	# display layer
+	if displayLayer and not int( displayLayer ) <= 0 :
+		layerName = 'ctrl_%d' % int( displayLayer )
+		allLayers = ls( type='displayLayer' )
+
+		layer = ''
+		if layerName in allLayers:
+			layer = layerName
+		else:
+			layer = createDisplayLayer( n=layerName, number=1, empty=True )
+			setAttr( '%s.color' % layer,  24 + int( displayLayer ) )
+
+		for s in listRelatives( obj, s=True, pa=True ) or []:
+			connectAttr( '%s.drawInfo.visibility' % layer, '%s.v' % s )
+			connectAttr( '%s.drawInfo.displayType' % layer, '%s.overrideDisplayType' % s )
 
 	return obj
 

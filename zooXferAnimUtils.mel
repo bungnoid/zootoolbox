@@ -249,7 +249,11 @@ global proc zooXferAnimTransferAdd( string $src, string $tgt, string $rangeStr, 
 //all frames once for each object
 //------
 global proc zooXferTrace( string $srcList[], string $tgtList[], int $keysOnly, int $keysOnlyRotate, int $matchRo, int $processPostCmds, int $sortByHeirarchy, int $start, int $end ) {
-	print("zooXferTrace {\""+ `zooArrayToStr_str $srcList "\",\""` +"\"} {\""+ `zooArrayToStr_str $tgtList "\",\""` +"\"} "+ $keysOnly +" "+ $keysOnlyRotate +" "+ $matchRo +" "+ $processPostCmds +" "+ $sortByHeirarchy +" "+ $start +" "+ $end +";\n" );
+	_zooXferTrace( $srcList, $tgtList, $keysOnly, $keysOnlyRotate, $matchRo, $processPostCmds, $sortByHeirarchy, $start, $end, 1 );
+	}
+
+
+global proc _zooXferTrace( string $srcList[], string $tgtList[], int $keysOnly, int $keysOnlyRotate, int $matchRo, int $processPostCmds, int $sortByHeirarchy, int $start, int $end, int $skipFrames ) {
 	//first, make sure the src and tgt lists contain only valid items
 	string $cleanSrc[] = {};
 	string $cleanTgt[] = {};
@@ -260,6 +264,7 @@ global proc zooXferTrace( string $srcList[], string $tgtList[], int $keysOnly, i
 	$srcList = $cleanSrc;
 	$tgtList = $cleanTgt;
 
+	if( !`size $srcList` || !`size $tgtList` ) error "zooXferAnimUtils::zooXferTrace()  no objects to trace";
 	float $timeList[] = `keyframe -q -tc $srcList`;
 	float $progress = 0;
 	float $increment = 100/(float)( `size $srcList` );
@@ -278,6 +283,7 @@ global proc zooXferTrace( string $srcList[], string $tgtList[], int $keysOnly, i
 		$tgtList = `zooOrderArrayUsing_str $tgtList $orderList`;
 		}
 
+	print("zooXferTrace {\""+ `zooArrayToStr_str $srcList "\",\""` +"\"} {\""+ `zooArrayToStr_str $tgtList "\",\""` +"\"} "+ $keysOnly +" "+ $keysOnlyRotate +" "+ $matchRo +" "+ $processPostCmds +" "+ $sortByHeirarchy +" "+ $start +" "+ $end +";\n" );
 	progressWindow -title "Trace in progress" -progress ((int)$progress) -status "Progress: 0%" -isInterruptable 1;
 
 	//if keys only is non-zero, the create an array with all key times
@@ -289,7 +295,7 @@ global proc zooXferTrace( string $srcList[], string $tgtList[], int $keysOnly, i
 	//if its not keys only, build a list of each frame to trace
 	if( $keysOnly == 0 ) {
 		clear $timeList;
-		for( $n=$start; $n<=$end; $n++ ) $timeList[`size $timeList`] = $n;
+		for( $n=$start; $n<=$end; $n+=$skipFrames ) $timeList[`size $timeList`] = $n;
 		}
 
 	//if there are no keys in the key list, issue a warning
@@ -311,7 +317,7 @@ global proc zooXferTrace( string $srcList[], string $tgtList[], int $keysOnly, i
 	for( $i=0; $i<`size $timeList`; $i++ ) {
 		if( `progressWindow -q -isCancelled` ) break;
 
-		int $t = $timeList[$i];
+		float $t = $timeList[$i];
 		currentTime -e $t;
 		for( $j=0; $j<$numSrcs; $j++ ) {
 			//update progress window
@@ -319,18 +325,30 @@ global proc zooXferTrace( string $srcList[], string $tgtList[], int $keysOnly, i
 			progressWindow -e -progress ((int)$progress) -status ( $srcList[$j] +" -> "+ $tgtList[$j] );
 
 			//if we're doing keys only, make sure there is a key on the current frame of the src object before doing the trace
+			int $didTrace = 0;
 			if( $keysOnly ) {
-				if( `keyframe -t $t -q -kc $srcList[$j]` ) zooXferTraceTime $srcList[$j] $tgtList[$j] $t $keysOnly $keysOnlyRotate;
+				if( `keyframe -t $t -q -kc $srcList[$j]` ) {
+					zooXferTraceTime $srcList[$j] $tgtList[$j] $t $keysOnly $keysOnlyRotate;
+					$didTrace = 1;
+					}
 				}
 			//otherwise, just do the trace
-			else zooXferTraceTime $srcList[$j] $tgtList[$j] $t $keysOnly $keysOnlyRotate;
+			else {
+				zooXferTraceTime $srcList[$j] $tgtList[$j] $t $keysOnly $keysOnlyRotate;
+				$didTrace = 1;
+				}
 
 			//execute any post trace commands on the tgt object
-			if( $processPostCmds ) {
+			if( $processPostCmds && $didTrace ) {
 				string $cmd = $postCmds[$j];
 				if( $cmd != "" ) if( catch(eval($cmd))) warning "the post trace command failed";
 				}
 			}
+		}
+
+	//filter curves
+	for( $tgt in $tgtList ) {
+		filterCurve ( $tgt +".rx" ) ( $tgt +".ry" ) ( $tgt +".rz" );
 		}
 
 	autoKeyframe -st $autoKey;
@@ -356,29 +374,29 @@ global proc zooXferTraceTime( string $src, string $tgt, float $time, int $keysOn
 	if( $keysOnly ) {
 		for( $n=0; $n<3; $n++ )
 			if( `keyframe -t $time -q -kc ( $src +"."+ $transformAttrs[$n] )`)
-				setKeyframe -t $time ( $tgt +"."+ $transformAttrs[$n] );
+				setKeyframe ( $tgt +"."+ $transformAttrs[$n] );
 
-	if( $keysOnlyRotate ) {
+		if( $keysOnlyRotate ) {
 			for( $n=3; $n<6; $n++ )
 				if( `keyframe -t $time -q -kc ( $src +"."+ $transformAttrs[$n] )`)
-					setKeyframe -t $time ( $tgt +"."+ $transformAttrs[$n] );
+					setKeyframe ( $tgt +"."+ $transformAttrs[$n] );
 			}
 		else if( `keyframe -t $time -q -kc ( $src +".r" )`) {
-			for( $n=3; $n<6; $n++ ) setKeyframe -t $time ( $tgt +"."+ $transformAttrs[$n] );
+			for( $n=3; $n<6; $n++ ) setKeyframe ( $tgt +"."+ $transformAttrs[$n] );
 			}
 		}
 	//if keysonly is off, then just set keys on all transform attrs
-	else setKeyframe -t $time ( $tgt +".t" ) ( $tgt +".r" );
+	else setKeyframe ( $tgt +".t" ) ( $tgt +".r" );
 
 	string $attrs[] = zooSubtractArray_str(`listAttr -keyable -visible -scalar -multi $src`, $transformAttrs);
 	for( $attr in $attrs ) if( `objExists ( $tgt +"."+ $attr )`) {
 		if( `getAttr -settable -keyable ( $tgt +"."+ $attr )`) {
 			//if keysOnly is on, check to see if there is a key on the source attr
 			if( $keysOnly ) {
-				if( `keyframe -t $time -q -kc ( $src +"."+ $attr )`) setKeyframe -t $time -at $attr -v `getAttr ( $src +"."+ $attr )` $tgt;
+				if( `keyframe -q -kc ( $src +"."+ $attr )`) setKeyframe -at $attr -v `getAttr ( $src +"."+ $attr )` $tgt;
 				}
 			//otherwise just set a key anyway
-			else setKeyframe -at $attr -v `getAttr ( $src +"."+ $attr )` -t $time $tgt;
+			else setKeyframe -at $attr -v `getAttr ( $src +"."+ $attr )` $tgt;
 			}
 		}
 	}

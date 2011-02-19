@@ -336,7 +336,7 @@ def findConstraint( obj ):
 	if not objExists( pAttr ):
 		return None
 
-	conditions = listConnections( pAttr, type='condition', s=False )
+	conditions = listConnections( pAttr, type='condition', s=False ) or []
 	for condition in conditions:
 		constraints = listConnections( '%s.outColorR' % condition, type='constraint', s=False )
 		if constraints:

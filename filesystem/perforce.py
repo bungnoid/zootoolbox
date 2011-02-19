@@ -2,10 +2,14 @@ import os
 import re
 import sys
 import time
+import marshal
 import datetime
 import subprocess
 
+import path
+
 from path import *
+from misc import iterBy
 
 
 class FinishedP4Operation(Exception): pass
@@ -13,6 +17,20 @@ class TimedOutP4Operation(Exception): pass
 
 
 class P4Exception(Exception): pass
+
+
+def _p4fast( *args ):
+	p = subprocess.Popen( 'p4 -G '+ ' '.join( args ), shell=True, stdout=subprocess.PIPE )
+
+	results = []
+	try:
+		while True:
+			results.append( marshal.loads( p.stdout.read() ) )
+	except EOFError: pass
+
+	p.wait()
+
+	return results
 
 
 class P4Output(dict):
@@ -90,6 +108,8 @@ class P4Output(dict):
 
 			dataList.sort()
 			self[ prefix ] = [ d[ 1 ] for d in dataList ]
+	def __unicode__( self ):
+		return self.__str__()
 	def __getattr__( self, attr ):
 		return self[ attr ]
 	def asStr( self ):
@@ -182,6 +202,7 @@ def populateChange( change ):
 
 class P4Change(dict):
 	def __init__( self ):
+		self[ 'user' ] = ''
 		self[ 'change' ] = None
 		self[ 'description' ] = ''
 		self[ 'files' ] = []
@@ -270,6 +291,11 @@ class P4Change(dict):
 		change = cls()
 		change.change = number
 
+		toks = lines[ 0 ].split()
+		if 'by' in toks:
+			idx = toks.index( 'by' )
+			change.user = toks[ idx+1 ]
+
 		change.description = ''
 		lineIter = iter( lines[ 2: ] )
 		try:
@@ -286,13 +312,9 @@ class P4Change(dict):
 				change.description += line
 				line = lineIter.next()
 
-			prefix = 'info1:'
-			PREFIX_LEN = len( prefix )
+			lineIter.next()
+			line = lineIter.next()
 			while not line.startswith( prefix ):
-				line = lineIter.next()
-
-			while line.startswith( prefix ):
-				line = line[ PREFIX_LEN: ].lstrip()
 				idx = line.rfind( '#' )
 				depotFile = Path( line[ :idx ] )
 
@@ -456,18 +478,17 @@ class P4File(Path):
 			return False
 
 		f = self.getFile( f )
-		results = self.getStatus()
-		if not results:
-			try:
-				errors = results.errors
-			except AttributeError:
-				return False
-			else:
-				phrases = [ "not in client view", "not under client's root" ]
+		results = _p4fast( 'fstat', f )
+		if results:
+			fstatDict = results[0]
+			if 'code' in fstatDict:
+				if fstatDict[ 'code' ] == 'error':
+					phrases = [ "not in client view", "not under" ]
 
-				for e in results.errors:
+					dataStr = fstatDict[ 'data' ].lower()
 					for ph in phrases:
-						if ph in e: return False
+						if ph in dataStr:
+							return False
 
 		return True
 	def getAction( self, f=None ):
@@ -645,7 +666,7 @@ class P4File(Path):
 			return
 
 		if change is None:
-			change = self.getChange()
+			change = self.getChange().change
 
 		self.run( 'submit', '-c', change )
 	def getChange( self, f=None ):
@@ -700,7 +721,7 @@ class P4File(Path):
 		if description is None:
 			description = self.DEFAULT_CHANGE
 
-		return P4Change.FetchByDescription( description, createIfNotFound )
+		return P4Change.FetchByDescription( description, createIfNotFound ).change
 	def allPaths( self, f=None ):
 		'''
 		returns all perforce paths for the file (depot path, workspace path and disk path)
@@ -729,7 +750,9 @@ class P4File(Path):
 		return self.allPaths( f )[ 1 ]
 
 
-P4Data = P4File  #userd to be called P4Data - this is just for any legacy references...
+P4Data = P4File  #used to be called P4Data - this is just for any legacy references...
+
+path.P4File = P4File  #insert the class into the path script...  HACKY!
 
 
 ###--- Add Perforce Integration To Path Class ---###
@@ -781,6 +804,173 @@ Path.editoradd = edit
 Path.add = add
 Path.revert = revert
 Path.asDepot = asDepot
+
+
+#now wrap existing methods on the Path class - like write, delete, copy etc so that they work nicely with perforce
+pathWrite = Path.write
+def _p4write( filepath, contentsStr, doP4=True ):
+	'''
+	wraps Path.write:  if doP4 is true, the file will be either checked out of p4 before writing or add to perforce
+	after writing if its not managed already
+	'''
+
+	assert isinstance( filepath, Path )
+	if doP4 and P4File.DoP4():
+
+		hasBeenHandled = False
+
+		isUnderClient = P4File().isUnderClient( filepath )
+		if filepath.exists:
+			#assume if its writeable that its open for edit already
+			if not filepath.getWritable():
+				_p4fast( 'edit', filepath )
+				if not filepath.getWritable():
+					filepath.setWritable()
+
+				hasBeenHandled = True
+
+		ret = pathWrite( filepath, contentsStr )
+
+		if isUnderClient and not hasBeenHandled:
+			_p4fast( 'add', filepath )
+
+		return ret
+
+	return pathWrite( filepath, contentsStr )
+
+Path.write = _p4write
+
+
+pathPickle = Path.pickle
+def _p4Pickle( filepath, toPickle, doP4=True ):
+	assert isinstance( filepath, Path )
+	if doP4 and P4File.DoP4():
+
+		hasBeenHandled = False
+
+		isUnderClient = P4File().isUnderClient( filepath )
+		if filepath.exists:
+			if not filepath.getWritable():
+				_p4fast( 'edit', filepath )
+				if not filepath.getWritable():
+					filepath.setWritable()
+
+				hasBeenHandled = True
+
+		ret = pathPickle( filepath, toPickle )
+
+		if isUnderClient and not hasBeenHandled:
+			#need to explicitly add pickled files as binary type files, otherwise p4 mangles them
+			_p4fast( 'add -t binary', filepath )
+
+		return ret
+
+	return pathPickle( filepath, toPickle )
+
+Path.pickle = _p4Pickle
+
+
+pathDelete = Path.delete
+def _p4Delete( filepath, doP4=True ):
+	if doP4 and P4File.DoP4():
+		try:
+			asP4 = P4File( filepath )
+			if asP4.managed():
+				if asP4.action is None:
+					asP4.delete()
+					if not filepath.exists:
+						return
+				else:
+					asP4.revert()
+					asP4.delete()
+
+					#only return if the file doesn't exist anymore - it may have been open for add in
+					#which case we still need to do a normal delete...
+					if not filepath.exists:
+						return
+		except Exception, e: pass
+
+	return pathDelete( filepath )
+
+Path.delete = _p4Delete
+
+
+pathRename = Path.rename
+def _p4Rename( filepath, newName, nameIsLeaf=False, doP4=True ):
+	'''
+	it is assumed newPath is a fullpath to the new dir OR file.  if nameIsLeaf is True then
+	newName is taken to be a filename, not a filepath.  the instance is modified in place.
+	if the file is in perforce, then a p4 rename (integrate/delete) is performed
+	'''
+
+	newPath = Path( newName )
+	if nameIsLeaf:
+		newPath = filepath.up() / newName
+
+	if filepath.isfile():
+		tgtExists = newPath.exists
+		if doP4 and P4File.DoP4():
+			reAdd = False
+			change = None
+			asP4 = P4File( filepath )
+
+			#if its open for add, revert - we're going to rename the file...
+			if asP4.action == 'add':
+				asP4.revert()
+				change = asP4.getChange()
+				reAdd = True
+
+			#so if we're managed by p4 - try a p4 rename, and return on success.  if it
+			#fails however, then just do a normal rename...
+			if asP4.managed():
+				asP4.rename( newPath )
+				return newPath
+
+			#if the target exists and is managed by p4, make sure its open for edit
+			if tgtExists and asP4.managed( newPath ):
+				_p4fast( 'edit', newPath )
+
+			#now perform the rename
+			ret = pathRename( filepath, newName, nameIsLeaf )
+
+			if reAdd:
+				_p4fast( 'add', newPath )
+				asP4.setChange( change, newPath )
+
+			return ret
+	elif filepath.isdir():
+		raise NotImplementedError( 'dir renaming not implemented yet...' )
+
+	return pathRename( filepath, newName, nameIsLeaf )
+
+Path.rename = _p4Rename
+
+
+pathCopy = Path.copy
+def _p4Copy( filepath, target, nameIsLeaf=False, doP4=True ):
+	'''
+	same as rename - except for copying.  returns the new target name
+	'''
+	if filepath.isfile():
+		target = Path( target )
+		if nameIsLeaf:
+			target = filepath.up() / target
+
+		if doP4 and P4File.DoP4():
+			try:
+				asP4 = P4File( filepath )
+				tgtAsP4 = P4File( target )
+				if asP4.managed() and tgtAsP4.isUnderClient():
+					#so if we're managed by p4 - try a p4 rename, and return on success.  if it
+					#fails however, then just do a normal rename...
+					asP4.copy( target )
+
+					return target
+			except: pass
+
+	return pathCopy( filepath )
+
+Path.copy = _p4Copy
 
 
 def lsP4( queryStr, includeDeleted=False ):
