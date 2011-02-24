@@ -314,11 +314,14 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 			idxB = j.rfind('|')
 			idx = max(idxA, idxB)
 			if idx != -1:
-				leafName = j[idx:]
-				search = cmd.ls('%s*' % leafName, r=True, type='joint')
-				if len(search):
-					joints[n] = search[0]
-					print '%s remapped to %s' % (j, search[0])
+				leafName = j[idx + 1:]
+				if objExists( leafName ):
+					joints[n] = leafName
+				else:
+					search = cmd.ls('%s*' % leafName, r=True, type='joint')
+					if search:
+						joints[n] = search[0]
+						print '%s remapped to %s' % (j, search[0])
 
 
 	#now that we've remapped joint names, we go through the joints again and remap missing joints to their nearest parent
@@ -430,12 +433,12 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 			[ weightDataById.setdefault(i.getVertName(), (i.joints, i.weights)) for i in weightData ]
 
 			for vert in verts:
-				progressWindow(edit=True, progress=cur / num * 100.0)
-				if progressWindow(q=True, isCancelled=True):
-					progressWindow(ep=True)
-					return
+				#progressWindow(edit=True, progress=cur / num * 100.0)
+				#if progressWindow(q=True, isCancelled=True):
+					#progressWindow(ep=True)
+					#return
 
-				cur += 1
+				#cur += 1
 				try:
 					jointList, weightList = weightDataById[vert]
 				except KeyError:
@@ -443,6 +446,7 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 					print '### no point found for %s' % vert
 					continue
 				else:
+					jointList = [ joints[ j ] for j in jointList ]
 					jointsAndWeights = zip(jointList, weightList)
 					skinPercent(skinCluster, vert, tv=jointsAndWeights)
 

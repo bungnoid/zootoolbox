@@ -4,7 +4,7 @@ from rigPrim_stretchy import StretchRig
 
 
 class IkFkArm(PrimaryRigPart):
-	__version__ = 1
+	__version__ = 2 + IkFkBase.__version__  #factor in the version of the ikfk sub rig part
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'Arm' ), )
 	CONTROL_NAMES = 'control', 'fkBicep', 'fkElbow', 'fkWrist', 'poleControl', 'clavicle', 'allPurpose', 'poleTrigger'
 
@@ -75,7 +75,7 @@ class IkFkArm(PrimaryRigPart):
 
 
 class IkFkLeg(PrimaryRigPart):
-	__version__ = 0
+	__version__ = 1 + IkFkBase.__version__  #factor in the version of the ikfk sub rig part
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'Leg' ), )
 	CONTROL_NAMES = 'control', 'fkThigh', 'fkKnee', 'fkAnkle', 'poleControl', 'allPurpose', 'poleTrigger'
 
@@ -274,7 +274,8 @@ class IkFkLeg(PrimaryRigPart):
 		#make the limb stretchy
 		if stretchy:
 			StretchRig.Create( self._skeletonPart, legControl, fkControls, '%s.ikBlend' % ikHandle, parity=parity )
-			renameAttr( '%s.elbowPos' % legControl, 'kneePos' )
+			if objExists( '%s.elbowPos' % legControl ):
+				renameAttr( '%s.elbowPos' % legControl, 'kneePos' )
 
 
 		return legControl, driverThigh, driverKnee, driverAnkle, kneeControl, allPurposeObj, ikFkPart.poleTrigger

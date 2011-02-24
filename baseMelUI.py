@@ -211,6 +211,15 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 		#raise TypeError( "Cannot compare these types!" )
 	def __ne__( self, other ):
 		return not self.__eq__( other )"""
+	def setChangeCB( self, cb ):
+		self.setCB( self.KWARG_CHANGE_CB_NAME, cb )
+	def getChangeCB( self ):
+		return self.getCB( self.KWARG_CHANGE_CB_NAME )
+	def setCB( self, cbFlagName, cb ):
+		self.WIDGET_CMD( self, **{ 'e': True, cbFlagName: cb } )
+		self._cbDict[ cbFlagName ] = cb
+	def getCB( self, cbFlagName ):
+		return self._cbDict.get( cbFlagName, None )
 	def getFullName( self ):
 		'''
 		returns the fullname to the UI widget
@@ -477,6 +486,14 @@ class MelFormLayout(BaseMelLayout):
 	WIDGET_CMD = cmd.formLayout
 	ALL_EDGES = 'top', 'left', 'right', 'bottom'
 
+	def getOtherEdges( self, edges ):
+		otherEdges = list( self.ALL_EDGES )
+		for edge in edges:
+			if edge in otherEdges:
+				otherEdges.remove( edge )
+
+		return otherEdges
+
 MelForm = MelFormLayout
 
 
@@ -510,6 +527,8 @@ class MelSingleLayout(MelForm):
 class _AlignedFormLayout(MelForm):
 	_EDGES = 'left', 'right'
 
+	def getOtherEdges( self ):
+		return MelFormLayout.getOtherEdges( self, self._EDGES )
 	def layoutExpand( self, children ):
 		edge1, edge2 = self._EDGES
 
@@ -518,9 +537,7 @@ class _AlignedFormLayout(MelForm):
 		except AttributeError:
 			padding = 0
 
-		otherEdges = list( MelFormLayout.ALL_EDGES )
-		otherEdges.remove( edge1 )
-		otherEdges.remove( edge2 )
+		otherEdges = self.getOtherEdges()
 		otherEdge1, otherEdge2 = otherEdges
 
 		for child in children:
@@ -556,7 +573,10 @@ class MelHLayout(_AlignedFormLayout):
 		return max( [ ui.getHeight() for ui in self.getChildren() ] )
 	def getWidth( self ):
 		return sum( [ ui.getWidth() for ui in self.getChildren() ] )
-	def layout( self ):
+	def layout( self, expand=None ):
+		if expand is not None:
+			self.expand = expand
+
 		padding = self.padding
 		children = self.getChildren()
 
@@ -621,7 +641,10 @@ class MelHRowLayout(_AlignedFormLayout):
 	                        #if True the layout will expand to fill the layout in the "other" direction.  Ie HLayouts will expand vertically and VLayouts will expand horizontally to the extents of the layout
 	                        'expand': False }
 
-	def layout( self ):
+	def layout( self, expand=None ):
+		if expand is not None:
+			self.expand = expand
+
 		padding = self.padding
 		children = self.getChildren()
 
@@ -666,7 +689,10 @@ class MelHSingleStretchLayout(_AlignedFormLayout):
 
 		self._stretchWidget = widget
 		self.layout()
-	def layout( self ):
+	def layout( self, expand=None ):
+		if expand is not None:
+			self.expand = expand
+
 		padding = self.padding
 		children = self.getChildren()
 
@@ -932,15 +958,6 @@ class BaseMelWidget(BaseMelUI):
 	def getValue( self ):
 		kw = { 'q': True, self.KWARG_VALUE_NAME: True }
 		return self.WIDGET_CMD( self, **kw )
-	def setChangeCB( self, cb ):
-		self.setCB( self.KWARG_CHANGE_CB_NAME, cb )
-	def getChangeCB( self ):
-		return self.getCB( self.KWARG_CHANGE_CB_NAME )
-	def setCB( self, cbFlagName, cb ):
-		self.WIDGET_CMD( self, **{ 'e': True, cbFlagName: cb } )
-		self._cbDict[ cbFlagName ] = cb
-	def getCB( self, cbFlagName ):
-		return self._cbDict.get( cbFlagName, None )
 	def enable( self, state=True ):
 		try: self( e=True, enable=state )
 		except: pass

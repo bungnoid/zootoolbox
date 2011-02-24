@@ -782,9 +782,9 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 				#as a sort metric to find the most appropriate match for the cases where there are multiple, non-ideal matches
 				idxDelta = 0
 				if isLeft:
-					idxDelta = thisIdx - idx
-				else:
 					idxDelta = idx - thisIdx
+				else:
+					idxDelta = thisIdx - idx
 
 				if idxDelta == 1:
 					return part
@@ -1388,8 +1388,6 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		freezes the transforms for all joints in this part
 		'''
 		makeIdentity( self.items, a=True, t=True, r=True )
-	def getParityMultiplier( self ):
-		return self.getParity().asMultiplier()
 
 	### VISUALIZATION ###
 	def visualize( self ):
@@ -1666,21 +1664,6 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		returns whether this skeleton part is rigged or not
 		'''
 		return self.getRigContainer() is not None
-	def getRigContainer( self ):
-		'''
-		returns the container for the rig part - if this part is rigged.  None is returned otherwise
-
-		NOTE: the container is returned instead of the rig instance because this script can't import
-		the RigPart base class without causing circular import statements - there is a getRigPart
-		method that is implemented in the baseRigPrimitive script that gets added to this class
-		'''
-		rigContainerAttrpath = '%s.rigContainer' % self.container
-		if objExists( rigContainerAttrpath ):
-			cons = listConnections( rigContainerAttrpath, d=False )
-			if cons:
-				return cons[0]
-
-		return None
 
 	### VOLUME CREATION ###
 	def buildVolumes( self ):

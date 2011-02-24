@@ -1,5 +1,5 @@
 
-from vectors import Vector, Matrix, Axis, AX_X
+from vectors import Vector, Matrix, Axis, AX_X, AX_Y, AX_Z
 from rigUtils import MATRIX_ROTATION_ORDER_CONVERSIONS_FROM, MATRIX_ROTATION_ORDER_CONVERSIONS_TO
 from maya.cmds import *
 from maya.OpenMaya import MGlobal
@@ -15,66 +15,45 @@ except:
 	MGlobal.displayError( 'Failed to load zooMirror.py plugin - is it in your plugin path?' )
 
 
-def getLocalMatrix( obj, includeRotatePivot=True ):
+def getLocalRotMatrix( obj ):
 	'''
 	returns the local matrix for the given obj
 	'''
 	localMatrix = Matrix( getAttr( '%s.matrix' % obj ), 4 )
-	#if includeRotatePivot:
-		#rp = Vector( getAttr( '%s.rp' % obj )[0] )
-		#localMatrix.set_position( localMatrix.get_position() + rp )
+	localMatrix.set_position( (0, 0, 0) )
 
 	return localMatrix
 
 
-def getWorldMatrix( obj, includeRotatePivot=True ):
+def getWorldRotMatrix( obj ):
 	'''
 	returns the world matrix for the given obj
 	'''
 	worldMatrix = Matrix( getAttr( '%s.worldMatrix' % obj ), 4 )
-	if includeRotatePivot:
-		#get teh rotation pivot
-		rp = Vector( getAttr( '%s.rp' % obj )[0] )
-
-		#transform it to be in the same space as the object
-		rp = Matrix( getAttr( '%s.matrix' % obj ), 4 ).crop( 3 ) * rp
-		worldMatrix.set_position( worldMatrix.get_position() + rp )
+	worldMatrix.set_position( (0, 0, 0) )
 
 	return worldMatrix
 
 
-def setWorldMatrix( obj, matrix, t=True, r=True, matrixIncludesRotatePivot=True ):
+def setWorldRotMatrix( obj, matrix ):
 	'''
 	given a world matrix, will set the transforms of the object
 	'''
 	parentInvMatrix = Matrix( getAttr( '%s.parentInverseMatrix' % obj ) )
 	localMatrix = matrix * parentInvMatrix
 
-	setLocalMatrix( obj, localMatrix, t, r, matrixIncludesRotatePivot )
+	setLocalRotMatrix( obj, localMatrix )
 
 
-def setLocalMatrix( obj, matrix, t=True, r=True, matrixIncludesRotatePivot=True ):
+def setLocalRotMatrix( obj, matrix ):
 	'''
 	given a world matrix, will set the transforms of the object
 	'''
-	attrs = []
-	if t:
-		pos = Vector( matrix.get_position() )
-		#if matrixIncludesRotatePivot:
-			#pos = pos - Vector( getAttr( '%s.rp' % obj )[0] )
 
-		attrs.append( ('t', pos) )
+	roo = getAttr( '%s.rotateOrder' % obj )
+	rot = MATRIX_ROTATION_ORDER_CONVERSIONS_TO[ roo ]( matrix, True )
 
-	if r:
-		roo = getAttr( '%s.rotateOrder' % obj )
-		rot = MATRIX_ROTATION_ORDER_CONVERSIONS_TO[ roo ]( matrix, True )
-		attrs.append( ('r', rot) )
-
-	for c, vals in attrs:
-		for ax, val in zip( AXES, vals):
-			attrpath = '%s.%s%s' % (obj, c, ax)
-			if getAttr( attrpath, se=True ):
-				setAttr( attrpath, val )
+	setAttr( '%s.r' % obj, *rot )
 
 
 def mirrorMatrix( matrix, axis=AX_X, orientAxis=AX_X ):
@@ -106,18 +85,6 @@ def mirrorMatrix( matrix, axis=AX_X, orientAxis=AX_X ):
 	return mirroredMatrix
 
 
-def mirrorTransform( obj, axis=AX_X, orientAxis=AX_X ):
-	'''
-	this is basically a convenience function to do mirroring on the given object
-	'''
-
-	#grab the world matrix and mirror it across the world X axis
-	worldMat = getWorldMatrix( obj )
-	mirroredWorldMat = mirrorMatrix( worldMat, axis, orientAxis )
-
-	setWorldMatrix( obj, mirroredWorldMat )
-
-
 class ControlPair(object):
 	'''
 	sets up a relationship between two controls so that they can mirror/swap/match one
@@ -126,26 +93,31 @@ class ControlPair(object):
 	NOTE: when you construct a ControlPair setup (using the Create classmethod)
 	'''
 
+	#NOTE: these values are copied from the zooMirror script - they're copied because the plugin generally doesn't exist on the pythonpath so we can't rely on an import working....
+	FLIP_AXES = (), (AX_X, AX_Y), (AX_X, AX_Z), (AX_Y, AX_Z)
+
 	@classmethod
 	def GetPairNode( cls, obj ):
 		'''
 		given a transform will return the pair node the control is part of
 		'''
 
-		objType = nodeType( obj )
-		if objType == 'transform':
+		if obj is None:
+			return None
+
+		if objectType( obj, isAType='transform' ):
 			cons = listConnections( '%s.message' % obj, s=False, type='controlPair' )
 			if not cons:
 				return None
 
 			return cons[0]
 
-		if objType == 'controlPair':
+		if nodeType( obj ) == 'controlPair':
 			return obj
 
 		return None
 	@classmethod
-	def Create( cls, controlA, controlB=None, axis=None, orientAxis=None ):
+	def Create( cls, controlA, controlB=None, axis=None ):
 		'''
 		given two controls will setup the relationship between them
 
@@ -172,9 +144,10 @@ class ControlPair(object):
 					return new
 
 			#if controlB HAS been given, check whether to see whether it has the same pairNode - if so, we're done
-			pairNodeB = cls.GetPairNode( controlB )
-			if pairNode == pairNodeB:
-				return cls( pairNode )
+			if controlB:
+				pairNodeB = cls.GetPairNode( controlB )
+				if pairNode == pairNodeB:
+					return cls( pairNode )
 
 		#otherwise create a new one
 		pairNode = createNode( 'controlPair' )
@@ -188,7 +161,7 @@ class ControlPair(object):
 
 		#instantiate it and run the initial setup code over it
 		new = cls( pairNode )
-		new.setup( axis, orientAxis )
+		new.setup( axis )
 
 		return new
 
@@ -213,47 +186,63 @@ class ControlPair(object):
 			other
 
 		return self.node == other.node
+	def __ne__( self, other ):
+		return not self.__eq__( other )
 	def __hash__( self ):
 		return hash( self.node )
-	def getOffsetMatrix( self ):
-		return Matrix( getAttr( '%s.offsetMatrix' % self.node ) )
 	def getAxis( self ):
 		return Axis( getAttr( '%s.axis' % self.node ) )
-	def getOrientAxis( self ):
-		return Axis( getAttr( '%s.orientationAxis' % self.node ) )
+	def setAxis( self, axis ):
+		setAttr( '%s.axis' % self.node, axis )
+	def getFlips( self ):
+		axes = getAttr( '%s.flipAxes' % self.node )
+		return list( self.FLIP_AXES[ axes ] )
+	def setFlips( self, flips ):
+		if isinstance( flips, int ):
+			setAttr( '%s.flipAxes' % self.node, flips )
 	def isSingular( self ):
 		return self.controlB is None
-	def setup( self, axis=None, orientAxis=None ):
+	def setup( self, axis=None ):
 		'''
-		sets up the initial state of the pair node - this basically just stores the
-		initial offsets of each pose on the pair node
+		sets up the initial state of the pair node
 		'''
 
-		#only do this if the instance has both a controlA and a controlB
+		if axis:
+			axis = abs( Axis( axis ) )
+			setAttr( '%s.axis' % self.node, axis )
+
+		#if we have two controls try to auto determine the orientAxis and the flipAxes
 		if self.controlA and self.controlB:
-			worldMatrixA = getWorldMatrix( self.controlA )
-			worldMatrixB = getWorldMatrix( self.controlB )
+			worldMatrixA = getWorldRotMatrix( self.controlA )
+			worldMatrixB = getWorldRotMatrix( self.controlB )
 
 			#so restPoseB = restPoseA * offsetMatrix
 			#restPoseAInv * restPoseB = restPoseAInv * restPoseA * offsetMatrix
 			#restPoseAInv * restPoseB = I * offsetMatrix
 			#thus offsetMatrix = restPoseAInv * restPoseB
 			offsetMatrix = worldMatrixA.inverse() * worldMatrixB
-			offsetMatrix.cullSmallValues( 1e-5 )
 
-			#throw away the position
-			offsetMatrix.set_position( (0, 0, 0) )
+			AXES = AX_X.asVector(), AX_Y.asVector(), AX_Z.asVector()
+			flippedAxes = []
+			for n in range( 3 ):
+				axisNVector = Vector( offsetMatrix[ n ][ :3 ] )
+				if axisNVector.dot( AXES[n] ) < 0:
+					flippedAxes.append( n )
 
-			maya.mel.eval( 'setAttr -type "matrix" %s.offsetMatrix %s' % (self.node, ' '.join( map( str, offsetMatrix.as_list() ) )) )
-			#setAttr( '%s.offsetMatrix' % self.node, type='matrix', *offsetMatrix.as_list() )  #this doesn't work 'coz maya is teh gheyz
+			for n, flipAxes in enumerate( self.FLIP_AXES ):
+				if tuple( flippedAxes ) == flipAxes:
+					setAttr( '%s.flipAxes' % self.node, n )
+					break
 
-		if axis:
-			axis = abs( Axis( axis ) )
-			setAttr( '%s.axis' % self.node, axis )
+		#this is a bit of a hack - and not always true, but generally singular controls built by skeleton builder will work with this value
+		elif self.controlA:
+			setAttr( '%s.flipAxes' % self.node, 1 )
+	def mirrorMatrix( self, matrix ):
+		matrix = mirrorMatrix( matrix, self.getAxis() )
+		for flipAxis in self.getFlips():
+			matrix.setRow( flipAxis, -Vector( matrix.getRow( flipAxis ) ) )
 
-		if orientAxis:
-			orientAxis = abs( Axis( orientAxis ) )
-			setAttr( '%s.orientationAxis' % self.node, orientAxis )
+		return matrix
 	def swap( self ):
 		'''
 		mirrors the pose of each control, and swaps them
@@ -267,16 +256,25 @@ class ControlPair(object):
 		#restPoseB = restPoseA * offsetMatrix
 		#and similarly:
 		#so restPoseB * offsetMatrixInv = restPoseA
-		worldMatrixA = getWorldMatrix( self.controlA )
-		worldMatrixB = getWorldMatrix( self.controlB )
+		worldMatrixA = getWorldRotMatrix( self.controlA )
+		worldMatrixB = getWorldRotMatrix( self.controlB )
 
+		newB = self.mirrorMatrix( worldMatrixA )
+		newA = self.mirrorMatrix( worldMatrixB )
 
-		offsetMatrix = self.getOffsetMatrix()
-		newB = mirrorMatrix( worldMatrixA, self.getAxis(), self.getOrientAxis() ) * offsetMatrix
-		newA = mirrorMatrix( worldMatrixB, self.getAxis(), self.getOrientAxis() ) * offsetMatrix.inverse()
+		setWorldRotMatrix( self.controlA, newA )
+		setWorldRotMatrix( self.controlB, newB )
 
-		setWorldMatrix( self.controlA, newA )
-		setWorldMatrix( self.controlB, newB )
+		#do position
+		axis = self.getAxis()
+		newPosA = xform( self.controlB, q=True, ws=True, rp=True )
+		newPosA[ axis ] = -newPosA[ axis ]
+
+		newPosB = xform( self.controlA, q=True, ws=True, rp=True )
+		newPosB[ axis ] = -newPosB[ axis ]
+
+		move( newPosA[0], newPosA[1], newPosA[2], self.controlA, ws=True, rpr=True )
+		move( newPosB[0], newPosB[1], newPosB[2], self.controlB, ws=True, rpr=True )
 	def mirror( self, controlAIsSource=True ):
 		'''
 		mirrors the pose of controlA (or controlB if controlAIsSource is False) and
@@ -286,7 +284,9 @@ class ControlPair(object):
 		and put on to controlB, otherwise the reverse is done
 		'''
 		if self.isSingular():
-			mirrorTransform( self.controlA, self.getAxis(), self.getOrientAxis() )
+			worldMatrix = getWorldRotMatrix( self.controlA )
+			pos = xform( self.controlA, q=True, ws=True, rp=True )
+			control = self.controlA
 		else:
 			#NOTE:
 			#restPoseB = restPoseA * offsetMatrix
@@ -294,16 +294,20 @@ class ControlPair(object):
 			#so restPoseB * offsetMatrixInv = restPoseA
 
 			if controlAIsSource:
-				worldMatrix = getWorldMatrix( self.controlA )
-				offsetMatrix = self.getOffsetMatrix()
+				worldMatrix = getWorldRotMatrix( self.controlA )
+				pos = xform( self.controlA, q=True, ws=True, rp=True )
 				control = self.controlB
 			else:
-				worldMatrix = getWorldMatrix( self.controlB )
-				offsetMatrix = self.getOffsetMatrix().inverse()
+				worldMatrix = getWorldRotMatrix( self.controlB )
+				pos = xform( self.controlB, q=True, ws=True, rp=True )
 				control = self.controlA
 
-			newControlMatrix = mirrorMatrix( worldMatrix, self.getAxis(), self.getOrientAxis() ) * offsetMatrix
-			setWorldMatrix( control, newControlMatrix )
+		newControlMatrix = self.mirrorMatrix( worldMatrix )
+		setWorldRotMatrix( control, newControlMatrix )
+
+		#do position
+		pos[ self.getAxis() ] = -pos[ self.getAxis() ]
+		move( pos[0], pos[1], pos[2], control, ws=True, rpr=True )
 	def match( self, controlAIsSource=True ):
 		'''
 		pushes the pose of controlA (or controlB if controlAIsSource is False) to the
@@ -323,17 +327,16 @@ class ControlPair(object):
 		#so restPoseB * offsetMatrixInv = restPoseA
 
 		if controlAIsSource:
-			worldMatrix = getWorldMatrix( self.controlA )
-			offsetMatrix = self.getOffsetMatrix()
+			worldMatrix = getWorldRotMatrix( self.controlA )
 			control = self.controlB
 		else:
-			worldMatrix = getWorldMatrix( self.controlB )
-			offsetMatrix = self.getOffsetMatrix().inverse()
+			worldMatrix = getWorldRotMatrix( self.controlB )
 			control = self.controlA
 
-		newControlMatrix = mirrorMatrix( worldMatrix, self.getAxis(), self.getOrientAxis() ) * offsetMatrix
-		setWorldMatrix( control, newControlMatrix, t=False )
-		setWorldMatrix( control, worldMatrix, r=False )
+		newControlMatrix = self.mirrorMatrix( worldMatrix )
+
+		setWorldRotMatrix( control, newControlMatrix, t=False )
+		setWorldRotMatrix( control, worldMatrix, r=False )
 
 
 def getPairNodesFromObjs( objs ):
@@ -355,6 +358,23 @@ def getPairsFromObjs( objs ):
 
 def getPairsFromSelection():
 	return getPairsFromObjs( ls( sl=True ) )
+
+
+def iterPairAndObj( objs ):
+	'''
+	yields a 2-tuple containing the pair node and the initializing object
+	'''
+	pairNodesVisited = set()
+	for obj in objs:
+		pairNode = ControlPair.GetPairNode( obj )
+		if pairNode:
+			if pairNode in pairNodesVisited:
+				continue
+
+			pair = ControlPair( pairNode )
+
+			yield pair, obj
+			pairNodesVisited.add( pairNode )
 
 
 #end

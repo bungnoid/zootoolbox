@@ -5,6 +5,7 @@ import maya.cmds as cmd
 import maya.OpenMaya as OpenMaya
 import maya.OpenMayaMPx as OpenMayaMPx
 
+import vectors
 import apiExtensions
 
 from maya.OpenMaya import MObject, MFnMatrixAttribute, MFnCompoundAttribute, MFnMessageAttribute, MGlobal, \
@@ -278,10 +279,12 @@ class ControlPairNode(MPxNode):
 
 	controlA = MObject()
 	controlB = MObject()
-	offsetMatrix = MObject()
 
 	axis = MObject()  #this is the axis which things get mirrored across
-	orientAxis = MObject()  #this is the object axis that gets flipped when mirroring orientation
+	flipAxes = MObject()
+
+	#these are the values for the flip axes
+	FLIP_AXES = (), (vectors.AX_X, vectors.AX_Y), (vectors.AX_X, vectors.AX_Z), (vectors.AX_Y, vectors.AX_Z)
 
 	@classmethod
 	def Creator( cls ):
@@ -295,10 +298,6 @@ class ControlPairNode(MPxNode):
 		cls.addAttribute( cls.controlA )
 		cls.addAttribute( cls.controlB )
 
-		attrMat = MFnMatrixAttribute()
-		cls.offsetMatrix = attrMat.create( "offsetMatrix", "offm" )
-		cls.addAttribute( cls.offsetMatrix )
-
 		attrEnum = MFnEnumAttribute()
 		cls.axis = attrEnum.create( "axis", "ax" )
 		attrEnum.addField( 'x', 0 )
@@ -310,15 +309,19 @@ class ControlPairNode(MPxNode):
 
 		cls.addAttribute( cls.axis )
 
-		cls.orientAxis = attrEnum.create( "orientationAxis", "oax" )
-		attrEnum.addField( 'x', 0 )
-		attrEnum.addField( 'y', 1 )
-		attrEnum.addField( 'z', 2 )
-		attrEnum.setDefault( 'x' )
+		cls.axis = attrEnum.create( "flipAxes", "flax" )
+		for n, thisAxes in enumerate( cls.FLIP_AXES ):
+			if thisAxes:
+				enumStr = ''.join( [ ax.asName() for ax in thisAxes ] )
+			else:
+				enumStr = 'none'
+
+			attrEnum.addField( enumStr, n )
+
 		attrEnum.setKeyable( False )
 		attrEnum.setChannelBox( True )
 
-		cls.addAttribute( cls.orientAxis )
+		cls.addAttribute( cls.axis )
 
 
 class CreateMirrorNode(MPxCommand):

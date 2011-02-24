@@ -1024,6 +1024,9 @@ class SkeletonBuilderWindow(BaseMelWindow):
 		menu = self.getMenu( 'Tools' )
 		menu.clear()
 
+		MelMenuItem( menu, l='Pose Mirroring Tool', c=self.on_loadMirrorTool )
+		MelMenuItemDiv( menu )
+
 		enableState = rigUtils.getSkinClusterEnableState()
 
 		MelMenuItem( menu, l='Space Switching Tool', c=lambda *a: spaceSwitchingUI.SpaceSwitchingWindow() )
@@ -1056,6 +1059,12 @@ class SkeletonBuilderWindow(BaseMelWindow):
 		reloadMayaTools.flushMaya()
 		import skeletonBuilderUI
 		skeletonBuilderUI.SkeletonBuilderWindow()
+	def on_loadMirrorTool( self, *a ):
+		#check the rig to see if its been setup for pose mirroring
+		#rigPrimitives.setupMirroring()
+
+		import poseSymUI
+		poseSymUI.PoseSymWindow()
 
 SkeletonBuilderUI = SkeletonBuilderWindow
 

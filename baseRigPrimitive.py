@@ -504,6 +504,23 @@ class RigPart(filesystem.trackableClassFactory()):
 			kwargList.append( (argName, default) )
 
 		return kwargList
+	def isPartContained( self ):
+		'''
+		returns whether this rig part is "contained" by another rig part.  Ie if a rig part was build from within another
+		rig part, then it is contained.  Examples of this are things like the arm rig which builds upon the ikfk sub
+		primitive rig - the sub-primitive is contained within the arm rig
+		'''
+		cons = listConnections( '%s.message' % self.container, s=False, type='objectSet' )
+		if cons:
+			for con in cons:
+				if isRigPartContainer( con ):
+					rigPart = RigPart( con )
+					if isinstance( rigPart, WorldPart ):
+						continue
+
+					return True
+
+		return False
 	def getBuildKwargs( self ):
 		theDict = eval( getAttr( '%s._rigPrimitive.buildKwargs' % self.container ) )
 		return theDict
@@ -561,7 +578,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		controlIdx = self.getControlIdx( control )
 
 		try:
-			return self.CONTROL_NAMES[ index ]
+			return self.CONTROL_NAMES[ controlIdx ]
 		except IndexError:
 			return None
 
@@ -835,9 +852,44 @@ these functions get added to the SkeletonPart class as a way of implementing fun
 the RigPart class - which isn't available in the baseSkeletonPart script (otherwise you'd have a circular
 import dependency)
 '''
-def _getRigPart( self ):
-	return RigPart( self.getRigContainer() )
 
+def _getRigContainer( self ):
+	'''
+	returns the container for the rig part - if this part is rigged.  None is returned otherwise
+
+	NOTE: the container is returned instead of the rig instance because this script can't import
+	the RigPart base class without causing circular import statements - there is a getRigPart
+	method that is implemented in the baseRigPrimitive script that gets added to this class
+	'''
+	rigContainerAttrpath = '%s.rigContainer' % self.container
+	if objExists( rigContainerAttrpath ):
+		cons = listConnections( rigContainerAttrpath, d=False )
+		if cons:
+			return cons[0]
+
+	cons = listConnections( '%s.message' % self.container, s=False, type='objectSet' )
+	if cons:
+		connectedRigParts = []
+		for con in cons:
+			if isRigPartContainer( con ):
+				connectedRigParts.append( RigPart( con ) )
+
+		#now we have a list of connected rig parts - lets figure out which ones are "top level" parts - ie don't belong to another part
+		if connectedRigParts:
+			for rigPart in connectedRigParts:
+				if not rigPart.isPartContained():
+					return rigPart
+
+	return None
+
+def _getRigPart( self ):
+	rigContainer = self.getRigContainer()
+	if rigContainer:
+		return RigPart( self.getRigContainer() )
+
+	return None
+
+SkeletonPart.getRigContainer = _getRigContainer
 SkeletonPart.getRigPart = _getRigPart
 
 

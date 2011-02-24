@@ -1068,6 +1068,7 @@ class Matrix(list):
 		easy = self[0][2]
 		y = -asin( easy )
 		cosY = cos( y )
+
 		x = atan2( self[1][2] * cosY, self[2][2] * cosY )
 		z = atan2( self[0][1] * cosY, self[0][0] * cosY )
 
