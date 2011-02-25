@@ -1564,6 +1564,96 @@ class MelObjectScrollList(MelTextScrollList):
 			except: pass
 
 
+class MelTreeView(BaseMelWidget):
+	'''
+	Thanks to Dave Shaw for the majority of this implementation
+	'''
+	WIDGET_CMD = cmd.treeView
+
+	#the valid button "types"
+	BUTTON_TYPES = BT_PUSH_BUTTON, BT_2STATE, BT_3STATE = 'pushButton', '2StateButton', '3StateButton'
+
+	#the valid button "states"
+	BUTTON_STATES = BS_UP, BS_DOWN, BS_BETWEEN = 'buttonUp', 'buttonDown', 'buttonThirdState'
+
+	def __init__( self, parent, *a, **kw ):
+		BaseMelWidget.__init__( self, parent, *a, **kw )
+
+		self( e=True, **kw )
+		self._pressCBs = {}
+	def addItem( self, itemName, itemParent=None ):
+		self( edit=True, addItem=(itemName, itemParent) )
+	def doesItemExist( self, itemName ):
+		return self( q=True, itemExists=itemName )
+	def getItemIndex( self, itemName ):
+		return self( q=True, itemIndex=itemName )
+	def getItemParent( self, itemName ):
+		return self( q=True, itemParent=itemName )
+	def isItemSelected( self, itemName ):
+		return self( q=True, itemSelected=itemName )
+	def setButtonLabel( self, itemName, buttonIndex, label ):
+		self( e=True, buttonTextIcon=(itemName, buttonIndex, label) )
+	def setButtonState( self, itemName, buttonIndex, state ):
+		'''
+		There are only 3 valid states:
+		buttonUp - button is up
+		buttonDown - button is down
+		buttonThirdState - button is in state three (used by the "3StateButton" button style)
+		'''
+		if state not in self.BUTTON_STATES:
+			raise TypeError( "Invalid button state: %s" % state )
+
+		self( e=True, buttonState=(a_item, a_button, a_state) )
+	def setButtonStyle( self, itemName, buttonIndex, style ):
+		'''
+		Possible button types:
+		pushButton - two possible states, button is reset to up upon release
+		2StateButton - two possible states, button changes state on click
+		3StateButton - three button states, button changes state on click
+		'''
+		if style not in self.BUTTON_TYPES:
+			raise TypeError( "Invalid button style: %s" % style )
+
+		self( e=True, buttonStyle=(itemName, buttonIndex, style) )
+	def removeAll( self ):
+		self( e=True, removeAll=True )
+	def setPressCommand( self, buttonIndex, cb ):
+		'''
+		Sets the python callback function to be invoked when the button at <buttonIndex> is pressed.  The callback should
+		take two args - the first is the itemName that the button pressed belongs to, and the second is the button press state
+		that has just been activated
+		'''
+
+		#generate a likely unique name for a global proc - treeView press commands have to be mel proc names and can't be python
+		#callbacks.  This hack makes it easier to work with tree view callbacks and keep everything in python
+		melCmdName = '__%s_pressCB%d' % (self, buttonIndex)
+
+		#construct the mel proc
+		melCmd = """global proc %s( string $str, int $index ) {
+		python( "import baseMelUI; baseMelUI.BaseMelUI.FromStr( '%s' )._executePressCB( %d, '"+ $str +"', "+ $index +" );" );
+		}""" % (melCmdName, self, buttonIndex)
+
+		#execute the proc we just constructed
+		maya.mel.eval( melCmd )
+
+		#store the python function we want to execute - NOTE: the function needs to take 3 args: func( str, int ) - see treeView docs for details
+		self._pressCBs[ buttonIndex ] = cb
+
+		#tell the widget what its press callback is...
+		self( e=True, pressCommand=(buttonIndex, melCmdName) )
+	def getPressCommand( self, buttonIndex ):
+		try:
+			return self._pressCBs[ buttonIndex ]
+		except KeyError:
+			return None
+	def _executePressCB( self, a_button, *a ):
+		self._pressCBs[ a_button ]( *a )
+	def getItemChildren( self, itemName ):
+		return self( q=True, children=itemName )
+	def clearSelection( self ):
+		self( e=True, clearSelection=True )
+
+
 class _MelBaseMenu(BaseMelWidget):
 	DYNAMIC = False
 
