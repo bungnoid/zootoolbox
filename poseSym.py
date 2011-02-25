@@ -85,6 +85,17 @@ def mirrorMatrix( matrix, axis=AX_X, orientAxis=AX_X ):
 	return mirroredMatrix
 
 
+def getKeyableAttrs( obj ):
+	attrs = listAttr( obj, keyable=True )
+	for attrToRemove in ('translateX', 'translateY', 'translateZ', \
+	                     'rotateX', 'rotateY', 'rotateZ'):
+		try:
+			attrs.remove( attrToRemove )
+		except ValueError: pass
+
+	return attrs
+
+
 class ControlPair(object):
 	'''
 	sets up a relationship between two controls so that they can mirror/swap/match one
@@ -243,7 +254,7 @@ class ControlPair(object):
 			matrix.setRow( flipAxis, -Vector( matrix.getRow( flipAxis ) ) )
 
 		return matrix
-	def swap( self ):
+	def swap( self, t=True, r=True, other=True ):
 		'''
 		mirrors the pose of each control, and swaps them
 		'''
@@ -253,29 +264,44 @@ class ControlPair(object):
 			self.mirror()
 			return
 
-		#restPoseB = restPoseA * offsetMatrix
-		#and similarly:
-		#so restPoseB * offsetMatrixInv = restPoseA
-		worldMatrixA = getWorldRotMatrix( self.controlA )
-		worldMatrixB = getWorldRotMatrix( self.controlB )
+		#do the other attributes first - the parent attribute for example will change the position so we need to set it before setting transforms
+		if other:
+			if not self.isSingular():
+				for attr in getKeyableAttrs( self.controlA ):
+					attrPathA = '%s.%s' % (self.controlA, attr)
+					attrPathB = '%s.%s' % (self.controlB, attr)
+					if objExists( attrPathA ) and objExists( attrPathB ):
+						attrValA = getAttr( attrPathA )
+						attrValB = getAttr( attrPathB )
+						setAttr( attrPathA, attrValB )
+						setAttr( attrPathB, attrValA )
 
-		newB = self.mirrorMatrix( worldMatrixA )
-		newA = self.mirrorMatrix( worldMatrixB )
+		#do rotation
+		if r:
+			#restPoseB = restPoseA * offsetMatrix
+			#and similarly:
+			#so restPoseB * offsetMatrixInv = restPoseA
+			worldMatrixA = getWorldRotMatrix( self.controlA )
+			worldMatrixB = getWorldRotMatrix( self.controlB )
 
-		setWorldRotMatrix( self.controlA, newA )
-		setWorldRotMatrix( self.controlB, newB )
+			newB = self.mirrorMatrix( worldMatrixA )
+			newA = self.mirrorMatrix( worldMatrixB )
+
+			setWorldRotMatrix( self.controlA, newA )
+			setWorldRotMatrix( self.controlB, newB )
 
 		#do position
-		axis = self.getAxis()
-		newPosA = xform( self.controlB, q=True, ws=True, rp=True )
-		newPosA[ axis ] = -newPosA[ axis ]
+		if t:
+			axis = self.getAxis()
+			newPosA = xform( self.controlB, q=True, ws=True, rp=True )
+			newPosA[ axis ] = -newPosA[ axis ]
 
-		newPosB = xform( self.controlA, q=True, ws=True, rp=True )
-		newPosB[ axis ] = -newPosB[ axis ]
+			newPosB = xform( self.controlA, q=True, ws=True, rp=True )
+			newPosB[ axis ] = -newPosB[ axis ]
 
-		move( newPosA[0], newPosA[1], newPosA[2], self.controlA, ws=True, rpr=True )
-		move( newPosB[0], newPosB[1], newPosB[2], self.controlB, ws=True, rpr=True )
-	def mirror( self, controlAIsSource=True ):
+			move( newPosA[0], newPosA[1], newPosA[2], self.controlA, ws=True, rpr=True )
+			move( newPosB[0], newPosB[1], newPosB[2], self.controlB, ws=True, rpr=True )
+	def mirror( self, controlAIsSource=True, t=True, r=True, other=True ):
 		'''
 		mirrors the pose of controlA (or controlB if controlAIsSource is False) and
 		puts it on the "other" control
@@ -283,32 +309,40 @@ class ControlPair(object):
 		NOTE: if controlAIsSource is True, then the pose of controlA is mirrored
 		and put on to controlB, otherwise the reverse is done
 		'''
+
 		if self.isSingular():
-			worldMatrix = getWorldRotMatrix( self.controlA )
-			pos = xform( self.controlA, q=True, ws=True, rp=True )
-			control = self.controlA
+			control = otherControl = self.controlA
 		else:
-			#NOTE:
-			#restPoseB = restPoseA * offsetMatrix
-			#and similarly:
-			#so restPoseB * offsetMatrixInv = restPoseA
-
 			if controlAIsSource:
-				worldMatrix = getWorldRotMatrix( self.controlA )
-				pos = xform( self.controlA, q=True, ws=True, rp=True )
 				control = self.controlB
+				otherControl = self.controlA
 			else:
-				worldMatrix = getWorldRotMatrix( self.controlB )
-				pos = xform( self.controlB, q=True, ws=True, rp=True )
 				control = self.controlA
+				otherControl = self.controlB
 
-		newControlMatrix = self.mirrorMatrix( worldMatrix )
-		setWorldRotMatrix( control, newControlMatrix )
+		#do the other attributes first - the parent attribute for example will change the position so we need to set it before setting transforms
+		if other:
+			if not self.isSingular():
+				for attr in getKeyableAttrs( otherControl ):
+					attrPath = '%s.%s' % (control, attr)
+					otherAttrPath = '%s.%s' % (otherControl, attr)
+
+					if objExists( attrPath ):
+						setAttr( attrPath, getAttr( otherAttrPath ) )
+
+		worldMatrix = getWorldRotMatrix( otherControl )
+		pos = xform( otherControl, q=True, ws=True, rp=True )
+
+		#do rotation
+		if r:
+			newControlMatrix = self.mirrorMatrix( worldMatrix )
+			setWorldRotMatrix( control, newControlMatrix )
 
 		#do position
-		pos[ self.getAxis() ] = -pos[ self.getAxis() ]
-		move( pos[0], pos[1], pos[2], control, ws=True, rpr=True )
-	def match( self, controlAIsSource=True ):
+		if t:
+			pos[ self.getAxis() ] = -pos[ self.getAxis() ]
+			move( pos[0], pos[1], pos[2], control, ws=True, rpr=True )
+	def match( self, controlAIsSource=True, t=True, r=True, other=True ):
 		'''
 		pushes the pose of controlA (or controlB if controlAIsSource is False) to the
 		"other" control

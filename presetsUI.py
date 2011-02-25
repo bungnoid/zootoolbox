@@ -208,7 +208,6 @@ class PresetLayout(MelFormLayout):
 		handles asking the user whether they want to submit changes - called after any file operation that happens
 		in the global locale
 		'''
-		return
 		ans = api.doConfirm(t='submit files?', m='do you want to submit the files?', b=api.ui_QUESTION, db=api.YES)
 
 		p4 = P4File()
