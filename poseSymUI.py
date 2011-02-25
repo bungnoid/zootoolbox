@@ -27,8 +27,9 @@ class PoseSymLayout(MelVSingleStretchLayout):
 
 		hLayout = MelHLayout( self )
 		MelLabel( hLayout, l='mirror: ' )
-		self.UI_mirror_t = MelCheckBox( hLayout, l='translate', v=1, en=False )
-		self.UI_mirror_r = MelCheckBox( hLayout, l='rotate', v=1, en=False )
+		self.UI_mirror_t = MelCheckBox( hLayout, l='translate', v=1 )
+		self.UI_mirror_r = MelCheckBox( hLayout, l='rotate', v=1 )
+		self.UI_mirror_other = MelCheckBox( hLayout, l='other', v=1 )
 		hLayout.layout()
 
 		self.setStretchWidget( spacer )
@@ -37,13 +38,13 @@ class PoseSymLayout(MelVSingleStretchLayout):
 	### EVENT HANDLERS ###
 	def on_swap( self, *a ):
 		for pair, obj in poseSym.iterPairAndObj( cmd.ls( sl=True ) ):
-			pair.swap()
+			pair.swap( t=self.UI_mirror_t.getValue(), r=self.UI_mirror_r.getValue(), other=self.UI_mirror_other.getValue() )
 	def on_mirror( self, *a ):
 		for pair, obj in poseSym.iterPairAndObj( cmd.ls( sl=True ) ):
-			pair.mirror( obj==pair.controlA )
+			pair.mirror( obj==pair.controlA, t=self.UI_mirror_t.getValue(), r=self.UI_mirror_r.getValue(), other=self.UI_mirror_other.getValue() )
 	def on_match( self, *a ):
 		for pair, obj in poseSym.iterPairAndObj( cmd.ls( sl=True ) ):
-			pair.match( obj==pair.controlA )
+			pair.match( obj==pair.controlA, t=self.UI_mirror_t.getValue(), r=self.UI_mirror_r.getValue(), other=self.UI_mirror_other.getValue() )
 
 
 class PoseSymWindow(BaseMelWindow):

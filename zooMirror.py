@@ -283,6 +283,10 @@ class ControlPairNode(MPxNode):
 	axis = MObject()  #this is the axis which things get mirrored across
 	flipAxes = MObject()
 
+	neverDoT = MObject()  #if this is true then translation won't get mirrored/swapped
+	neverDoR = MObject()  #if this is true then rotation won't get mirrored/swapped
+	neverDoOther = MObject()  #if this is true then other keyable attributes won't get mirrored/swapped
+
 	#these are the values for the flip axes
 	FLIP_AXES = (), (vectors.AX_X, vectors.AX_Y), (vectors.AX_X, vectors.AX_Z), (vectors.AX_Y, vectors.AX_Z)
 
@@ -322,6 +326,15 @@ class ControlPairNode(MPxNode):
 		attrEnum.setChannelBox( True )
 
 		cls.addAttribute( cls.axis )
+
+		numAttr = MFnNumericAttribute()
+		cls.neverDoT = numAttr.create( "neverDoT", "nvt", MFnNumericData.kBoolean )
+		cls.neverDoR = numAttr.create( "neverDoR", "nvr", MFnNumericData.kBoolean )
+		cls.neverDoOther = numAttr.create( "neverDoOther", "nvo", MFnNumericData.kBoolean )
+
+		cls.addAttribute( cls.neverDoT )
+		cls.addAttribute( cls.neverDoR )
+		cls.addAttribute( cls.neverDoOther )
 
 
 class CreateMirrorNode(MPxCommand):
