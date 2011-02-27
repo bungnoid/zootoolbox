@@ -5,6 +5,7 @@ from maya.cmds import *
 from maya.OpenMaya import MGlobal
 
 import maya
+import apiExtensions
 
 AXES = Axis.BASE_AXES
 
@@ -12,7 +13,8 @@ AXES = Axis.BASE_AXES
 try:
 	loadPlugin( 'zooMirror.py', quiet=True )
 except:
-	MGlobal.displayError( 'Failed to load zooMirror.py plugin - is it in your plugin path?' )
+	import zooToolbox
+	zooToolbox.loadZooPlugin( 'zooMirror.py' )
 
 
 def getLocalRotMatrix( obj ):
@@ -142,7 +144,12 @@ class ControlPair(object):
 			return None
 
 		if controlB:
-			if not objectType( controlB, isAType='transform' ):
+
+			#if controlA is the same node as controlB then set controlB to None - this makes it more obvious the pair is singular
+			#NOTE: cmpNodes compares the actual MObjects, not the node names - just in case we've been handed a full path and a partial path that are the same node...
+			if apiExtensions.cmpNodes( controlA, controlB ):
+				controlB = None
+			elif not objectType( controlB, isAType='transform' ):
 				return None
 
 		#see if we have a pair node for the controls already
@@ -212,7 +219,15 @@ class ControlPair(object):
 		if isinstance( flips, int ):
 			setAttr( '%s.flipAxes' % self.node, flips )
 	def isSingular( self ):
-		return self.controlB is None
+		if self.controlB is None:
+			return True
+
+		#a pair is also singular if contorlA is the same as controlB
+		#NOTE: cmpNodes does a rigorous comparison so it will catch a fullpath and a partial path that point to the same node
+		if apiExtensions.cmpNodes( self.controlA, self.controlB ):
+			return True
+
+		return False
 	def neverDoT( self ):
 		return getAttr( '%s.neverDoT' % self.node )
 	def neverDoR( self ):
@@ -243,7 +258,9 @@ class ControlPair(object):
 			flippedAxes = []
 			for n in range( 3 ):
 				axisNVector = Vector( offsetMatrix[ n ][ :3 ] )
-				if axisNVector.dot( AXES[n] ) < 0:
+
+				#if the axes are close to being opposite, then consider it a flipped axis...
+				if axisNVector.dot( AXES[n] ) < -0.8:
 					flippedAxes.append( n )
 
 			for n, flipAxes in enumerate( self.FLIP_AXES ):
@@ -418,6 +435,50 @@ def iterPairAndObj( objs ):
 
 			yield pair, obj
 			pairNodesVisited.add( pairNode )
+
+
+def setupMirroringFromNames( mandatoryTokens=('control', 'ctrl') ):
+	'''
+	sets up control pairs for all parity based controls in the scene as determined by their names.
+	'''
+	import names
+
+	#stick the tokens in a set and ensure they're lower-case
+	mandatoryTokens = set( [ tok.lower() for tok in mandatoryTokens ] )
+
+	visitedTransforms = set()
+	for t in ls( type='transform' ):
+		if t in visitedTransforms:
+			continue
+
+		visitedTransforms.add( t )
+
+		tName = names.Name( t )
+		if tName.get_parity() is names.Parity.NONE:
+			continue
+
+		containsMandatoryToken = False
+		for tok in tName.split():
+			if tok.lower() in mandatoryTokens:
+				containsMandatoryToken = True
+				break
+
+		if not containsMandatoryToken:
+			continue
+
+		otherT = names.Name( tName ).swap_parity()  #swap_parity changes the parity of the instance - Name objects are mutable...  ugh!  should re-write it
+		if otherT:
+			if objExists( str( otherT ) ):
+				visitedTransforms.add( str( otherT ) )
+
+				#sort the controls into left and right - we want the left to be controlA and right to be controlB
+				controlPairs = [(tName.get_parity(), tName), (otherT.get_parity(), otherT)]
+				controlPairs.sort()
+
+				leftT, rightT = str( controlPairs[0][1] ), str( controlPairs[1][1] )
+
+				ControlPair.Create( leftT, rightT )
+				print 'creating a control pair on %s -> %s' % (leftT, rightT)
 
 
 #end

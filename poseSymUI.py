@@ -68,7 +68,7 @@ class PoseSymWindow(BaseMelWindow):
 		menu.clear()
 
 		MelMenuItem( menu, l='Create Paired Mirror', ann='Will put the two selected objects into a "paired" relationship - they will know how to mirror/exchange poses with one another', c=self.on_setupPair )
-		MelMenuItem( menu, l='Create Single Mirror', ann='Will setup the selected control with a mirror node so it knows how to mirror poses on itself', c=self.on_setupSingle )
+		MelMenuItem( menu, l='Create Single Mirror For Selected', ann='Will setup each selected control with a mirror node so it knows how to mirror poses on itself', c=self.on_setupSingle )
 		MelMenuItemDiv( menu )
 		MelMenuItem( menu, l='Auto Setup Skeleton Builder', ann='Tries to determine mirroring relationships from skeleton builder', c=self.on_setupSingle )
 
@@ -83,9 +83,12 @@ class PoseSymWindow(BaseMelWindow):
 			cmd.select( pair.node )
 	def on_setupSingle( self, *a ):
 		sel = cmd.ls( sl=True, type='transform' )
-		if len( sel ) == 1:
-			pair = poseSym.ControlPair.Create( sel[0] )
-			cmd.select( pair.node )
+		nodes = []
+		for s in sel:
+			pair = poseSym.ControlPair.Create( s )
+			nodes.append( pair.node )
+
+		cmd.select( nodes )
 	def on_setupSkeletonBuilder( self, *a ):
 		import rigPrimitives
 		rigPrimitives.setupMirroring()

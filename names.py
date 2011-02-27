@@ -357,6 +357,9 @@ def hasParity( nameToks, popParityToken=True ):
 
 
 def swapParity( name ):
+	if not isinstance( name, Name ):
+		name = Name( name )
+
 	nameToks = name.split()
 	lowerToks = [tok.lower() for tok in nameToks]
 	lowerToksSet = set(lowerToks)
@@ -364,7 +367,7 @@ def swapParity( name ):
 	allParityTests = [ parityTestsL, parityTestsR ]
 
 	for parityTests, otherTests in zip( allParityTests, reversed( allParityTests ) ):
-		parityTokensPresent = lowerToksSet.intersection( set(parityTestsL) )
+		parityTokensPresent = lowerToksSet.intersection( set(parityTests) )
 
 		if parityTokensPresent:
 			#this is the caseless parity token

@@ -1,6 +1,56 @@
 
 from baseMelUI import *
 from maya.mel import eval as evalMel
+from filesystem import Path
+
+import maya
+
+try:
+	#try to connect to wing - otherwise don't worry
+	import wingdbstub
+except ImportError: pass
+
+
+def setupZooToolBox():
+	#all the files for zooToolBox should live in the same directory as this script, including plug-ins
+	thisFile = Path( __file__ )
+	thisPath = thisFile.up()
+
+	existingPlugPathStr = maya.mel.eval( 'getenv MAYA_PLUG_IN_PATH;' )
+	existingPlugPaths = existingPlugPathStr.split( ';' )
+
+	newPlugPaths = []
+	pathsAlreadyInList = set()
+
+	zooPlugPathAdded = False
+	for path in existingPlugPaths:
+		path = Path( path )
+		if path in pathsAlreadyInList:
+			continue
+
+		pathsAlreadyInList.add( path )
+		newPlugPaths.append( path.unresolved() )
+
+		if path == thisPath:
+			zooPlugPathAdded = True
+
+	if not zooPlugPathAdded:
+		newPlugPaths.append( thisPath )
+
+	newPlugPathStr = ';'.join( newPlugPaths )
+
+	maya.mel.eval( 'putenv MAYA_PLUG_IN_PATH "%s";' % newPlugPathStr )
+
+
+def loadZooPlugin( pluginName ):
+	try:
+		cmd.loadPlugin( pluginName, quiet=True )
+	except:
+		setupZooToolBox()
+		try:
+			cmd.loadPlugin( pluginName, quiet=True )
+		except:
+			maya.OpenMaya.MGlobal.displayError( 'Failed to load zooMirror.py plugin - is it in your plugin path?' )
 
 
 def loadSkeletonBuilderUI( *a ):
@@ -97,6 +147,7 @@ class ToolboxWindow(BaseMelWindow):
 	DEFAULT_MENU = None
 
 	def __init__( self ):
+		setupZooToolBox()
 		ToolboxTabs( self )
 		self.show()
 
