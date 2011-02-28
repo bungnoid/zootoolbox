@@ -218,6 +218,10 @@ class ControlPair(object):
 	def setFlips( self, flips ):
 		if isinstance( flips, int ):
 			setAttr( '%s.flipAxes' % self.node, flips )
+	def getWorldSpace( self ):
+		return getAttr( '%s.worldSpace' % self.node )
+	def setWorldSpace( self, state ):
+		setAttr( '%s.worldSpace' % self.node, state )
 	def isSingular( self ):
 		if self.controlB is None:
 			return True
@@ -271,6 +275,7 @@ class ControlPair(object):
 		#this is a bit of a hack - and not always true, but generally singular controls built by skeleton builder will work with this value
 		elif self.controlA:
 			setAttr( '%s.flipAxes' % self.node, 1 )
+			self.setWorldSpace( False )
 	def mirrorMatrix( self, matrix ):
 		matrix = mirrorMatrix( matrix, self.getAxis() )
 		for flipAxis in self.getFlips():
@@ -286,6 +291,8 @@ class ControlPair(object):
 		if not self.controlB:
 			self.mirror()
 			return
+
+		worldSpace = self.getWorldSpace()
 
 		#do the other attributes first - the parent attribute for example will change the position so we need to set it before setting transforms
 		if other:
@@ -303,27 +310,42 @@ class ControlPair(object):
 		#do rotation
 		if r:
 			if not self.neverDoR():
-				worldMatrixA = getWorldRotMatrix( self.controlA )
-				worldMatrixB = getWorldRotMatrix( self.controlB )
+				if worldSpace:
+					getMatrix = getWorldRotMatrix
+					setMatrix = setWorldRotMatrix
+				else:
+					getMatrix = getLocalRotMatrix
+					setMatrix = setLocalRotMatrix
+
+				worldMatrixA = getMatrix( self.controlA )
+				worldMatrixB = getMatrix( self.controlB )
 
 				newB = self.mirrorMatrix( worldMatrixA )
 				newA = self.mirrorMatrix( worldMatrixB )
 
-				setWorldRotMatrix( self.controlA, newA )
-				setWorldRotMatrix( self.controlB, newB )
+				setMatrix( self.controlA, newA )
+				setMatrix( self.controlB, newB )
 
 		#do position
 		if t:
 			if not self.neverDoT():
 				axis = self.getAxis()
-				newPosA = xform( self.controlB, q=True, ws=True, rp=True )
-				newPosA[ axis ] = -newPosA[ axis ]
+				if worldSpace:
+					newPosA = xform( self.controlB, q=True, ws=True, rp=True )
+					newPosB = xform( self.controlA, q=True, ws=True, rp=True )
+				else:
+					newPosA = list( getAttr( '%s.t' % self.controlB )[0] )
+					newPosB = list( getAttr( '%s.t' % self.controlA )[0] )
 
-				newPosB = xform( self.controlA, q=True, ws=True, rp=True )
+				newPosA[ axis ] = -newPosA[ axis ]
 				newPosB[ axis ] = -newPosB[ axis ]
 
-				move( newPosA[0], newPosA[1], newPosA[2], self.controlA, ws=True, rpr=True )
-				move( newPosB[0], newPosB[1], newPosB[2], self.controlB, ws=True, rpr=True )
+				if worldSpace:
+					move( newPosA[0], newPosA[1], newPosA[2], self.controlA, ws=True, rpr=True )
+					move( newPosB[0], newPosB[1], newPosB[2], self.controlB, ws=True, rpr=True )
+				else:
+					setAttr( '%s.t' % self.controlA, *newPosA )
+					setAttr( '%s.t' % self.controlB, *newPosB )
 	def mirror( self, controlAIsSource=True, t=True, r=True, other=True ):
 		'''
 		mirrors the pose of controlA (or controlB if controlAIsSource is False) and
@@ -343,6 +365,8 @@ class ControlPair(object):
 				control = self.controlA
 				otherControl = self.controlB
 
+		worldSpace = self.getWorldSpace()
+
 		#do the other attributes first - the parent attribute for example will change the position so we need to set it before setting transforms
 		if other:
 			if not self.neverDoOther():
@@ -354,20 +378,31 @@ class ControlPair(object):
 						if objExists( attrPath ):
 							setAttr( attrPath, getAttr( otherAttrPath ) )
 
-		worldMatrix = getWorldRotMatrix( otherControl )
-		pos = xform( otherControl, q=True, ws=True, rp=True )
-
 		#do rotation
 		if r:
 			if not self.neverDoR():
-				newControlMatrix = self.mirrorMatrix( worldMatrix )
-				setWorldRotMatrix( control, newControlMatrix )
+				if worldSpace:
+					getMatrix = getWorldRotMatrix
+					setMatrix = setWorldRotMatrix
+				else:
+					getMatrix = getLocalRotMatrix
+					setMatrix = setLocalRotMatrix
+
+				matrix = getMatrix( otherControl )
+				newMatrix = self.mirrorMatrix( matrix )
+				setMatrix( control, newMatrix )
 
 		#do position
 		if t:
 			if not self.neverDoT():
-				pos[ self.getAxis() ] = -pos[ self.getAxis() ]
-				move( pos[0], pos[1], pos[2], control, ws=True, rpr=True )
+				if worldSpace:
+					pos = xform( otherControl, q=True, ws=True, rp=True )
+					pos[ self.getAxis() ] = -pos[ self.getAxis() ]
+					move( pos[0], pos[1], pos[2], control, ws=True, rpr=True )
+				else:
+					pos = list( getAttr( '%s.t' % otherControl )[0] )
+					pos[ self.getAxis() ] = -pos[ self.getAxis() ]
+					setAttr( control, *pos )
 	def match( self, controlAIsSource=True, t=True, r=True, other=True ):
 		'''
 		pushes the pose of controlA (or controlB if controlAIsSource is False) to the

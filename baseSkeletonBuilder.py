@@ -52,8 +52,12 @@ del( _tmp )
 getLocalAxisInDirection = rigUtils.getLocalAxisInDirection
 getPlaneNormalForObjects = rigUtils.getPlaneNormalForObjects
 
-_thisPath = filesystem.Path( __file__ ).up()
-loadPlugin( _thisPath / 'zooMirror.py', quiet=True )
+#try to load the zooMirror.py plugin
+try:
+	loadPlugin( 'zooMirror.py', quiet=True )
+except:
+	import zooToolbox
+	zooToolbox.loadZooPlugin( 'zooMirror.py' )
 
 
 def getScaleFromMeshes():

@@ -287,6 +287,8 @@ class ControlPairNode(MPxNode):
 	neverDoR = MObject()  #if this is true then rotation won't get mirrored/swapped
 	neverDoOther = MObject()  #if this is true then other keyable attributes won't get mirrored/swapped
 
+	worldSpace = MObject()  #if this is true mirroring is done in world space - otherwise local spaces
+
 	#these are the values for the flip axes
 	FLIP_AXES = (), (vectors.AX_X, vectors.AX_Y), (vectors.AX_X, vectors.AX_Z), (vectors.AX_Y, vectors.AX_Z)
 
@@ -335,6 +337,9 @@ class ControlPairNode(MPxNode):
 		cls.addAttribute( cls.neverDoT )
 		cls.addAttribute( cls.neverDoR )
 		cls.addAttribute( cls.neverDoOther )
+
+		cls.worldSpace = numAttr.create( "worldSpace", "ws", MFnNumericData.kBoolean, True )
+		cls.addAttribute( cls.worldSpace )
 
 
 class CreateMirrorNode(MPxCommand):
