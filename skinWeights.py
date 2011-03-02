@@ -1,8 +1,3 @@
-'''
-this module provides code to save and load skinWeight files.  the skinWeight files contain vert skinning data stored
-both by position and by index, and as such can be used to restore weights using either method.  the actual maya UI
-for this tool is found in zooSkinWeights
-'''
 
 from skinWeightsBase import *
 from api import melPrint
