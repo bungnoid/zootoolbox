@@ -44,7 +44,6 @@ kAPPEND = 0
 kREPLACE = 1
 @api.d_showWaitCursor
 def saveWeights( geos, filepath=None ):
-	reportUsageToAuthor()
 	start = time.clock()
 	miscData = api.writeExportDict(TOOL_NAME, TOOL_VERSION)
 
@@ -139,94 +138,6 @@ def saveWeights( geos, filepath=None ):
 	return filepath
 
 
-_MAX_RECURSE = 35
-
-def getClosestVector( theVector, searchTree, tolerance=1e-6, doPreview=False ):
-	'''
-	given a list of vectors, this method will return the one with the best match based
-	on the distance between any two vectors
-	'''
-
-	global _MAX_RECURSE
-
-	matching = searchTree.getWithin( theVector, tolerance )
-
-	#if not matching: return None
-	itCount = 0
-	while not matching:
-		tolerance *= 1.25
-		itCount += 1
-		matching = searchTree.getWithin( theVector, tolerance )
-		if itCount > _MAX_RECURSE: return None
-
-	best = matching.pop()
-
-	diff = (best - theVector).get_magnitude()
-	for match in matching:
-		curDiff = (match - theVector).get_magnitude()
-		if curDiff < diff:
-			best = match
-			diff = curDiff
-
-	if doPreview:
-		cmd.select( best.getVertName() )
-		print "skinning data"
-		for x in zip( best.joints, best.weights ): print x
-		raise Exception, 'preview mode'
-
-	return best, diff
-
-
-def getDistanceRatioWeightedVector( theVector, searchTree, tolerance=1e-6, ratio=2, doPreview=False ):
-	global _MAX_RECURSE
-
-	matching = searchTree.getWithin( theVector, tolerance )
-
-	#if not matching: return None
-	itCount = 0
-	while not matching:
-		tolerance *= 1.25
-		itCount += 1
-		matching = searchTree.getWithin( theVector, tolerance )
-		if itCount > _MAX_RECURSE:
-			return None
-
-	closestDist = (theVector - matching[0]).get_magnitude()
-	if len( matching ) == 1 or not closestDist:
-		return matching[0], closestDist
-
-	matching = searchTree.getWithin( theVector, closestDist*ratio )
-
-	if closestDist == 0:
-		newVec = closestV
-	else:
-		jointsWeightsDict = {}
-		for v in matching:
-			dist = (v - theVector).get_magnitude()
-			vDistRatio = dist / closestDist
-
-			for j, w in zip( v.joints, v.weights ):
-				w = w / vDistRatio
-				jointsWeightsDict.setdefault( j, w + jointsWeightsDict.get( j, 0 ) )
-
-		#normalize weight values
-		weightList = jointsWeightsDict.values()
-		weightSum = sum( weightList )
-		if weightSum != 1.0:
-			weightList = [ w/weightSum for w in weightList ]
-
-		newVec = VertSkinWeight( matching[ 0 ] )
-		newVec.populate( None, -1, jointsWeightsDict.keys(), weightList )
-
-	if doPreview:
-		cmd.select( [ m.getVertName() for m in matching ] )
-		print "skinning data - tolerance %0.5f" % tolerance
-		for x in zip( newVec.joints, newVec.weights ): print x
-		raise Exception, "in preview mode"
-
-	return newVec, closestDist
-
-
 @api.d_progress(t='initializing...', status='initializing...', isInterruptable=True)
 def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMult=None, swapParity=True, averageVerts=True, doPreview=False, meshNameRemapDict=None, jointNameRemapDict=None ):
 	'''
@@ -245,7 +156,6 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 		print 'File does not exist %s' % filepath
 		return
 
-	reportUsageToAuthor()
 	start = time.clock()
 
 
@@ -513,52 +423,6 @@ def setSkinWeights( skinCluster, vertJointWeightData ):
 			if weight:
 				infIdx = jApiIndices[ joint ]
 				setAttr( weightFmtStr % infIdx, weight )
-
-
-def printDataFromFile( filepath=DEFAULT_PATH ):
-	miscData,geoAndData = presets.PresetPath( filepath ).unpickle()
-	for geo, data in geoAndData.iteritems():
-		print geo,'------------'
-		joints, weightData = data
-		for joint in joints:
-			print '\t', joint
-		print
-
-
-def printDataFromSelection( filepath=DEFAULT_PATH, tolerance=1e-4 ):
-	miscData,geoAndData = presets.PresetPath(filepath).unpickle()
-	selVerts = cmd.ls( cmd.polyListComponentConversion( cmd.ls( sl=True ), toVertex=True ), fl=True )
-	selGeo = {}
-	for v in selVerts:
-		idx = v.rfind('.')
-		geo = v[ :idx ]
-		vec = Vector( cmd.xform( v, q=True, t=True, ws=True ) )
-		try:
-			selGeo[ geo ].append( ( vec, v ) )
-		except KeyError:
-			selGeo[ geo ] = [ ( vec, v ) ]
-
-	#make sure the geo selected is actually in the file...
-	names = selGeo.keys()
-	for geo in names:
-		try:
-			geoAndData[ geo ]
-		except KeyError:
-			selGeo.pop( item )
-
-	for geo,vecAndVert in selGeo.iteritems():
-		joints, jointHierarchies, weightData = geoAndData[ geo ]
-		weightData = sortByIdx( weightData )
-		for vec, vertName in vecAndVert:
-			try:
-				vertData = getClosestVector( vec, weightData, tolerance )
-				jointList, weightList = vertData.joints, vertData.weights
-				tmpStr = []
-				for items in zip( jointList, weightList ):
-					tmpStr.append( '(%s %0.3f)' % items )
-				print '%s: %s' % ( vertName, '  '.join( tmpStr ) )
-			except AttributeError:
-				print '%s no match'
 
 
 def mirrorWeightsOnSelected( tolerance=TOL ):

@@ -501,7 +501,7 @@ class SkinWeightsWindow(BaseMelWindow):
 	WINDOW_NAME = 'weightSave'
 	WINDOW_TITLE = 'weight save'
 
-	DEFAULT_SIZE = 200, 30
+	DEFAULT_SIZE = 425, 375
 	DEFAULT_MENU = None
 	HELP_MENU = WINDOW_NAME, 'hamish@valvesoftware.com', None
 
@@ -529,10 +529,6 @@ class SkinWeightsWindow(BaseMelWindow):
 					skinWeights.transferSkinning( src, tgt )
 
 		MelButton( col, l='Transfer From Source to Target', c=tmp )
-
-		import smoothWeights
-		frame = MelFrameLayout( col, label='smoothing tool', cll=True, cl=True )
-		PyFuncLayout( frame, smoothWeights.smoothByInfluenceMask )
 
 		self.show()
 		self.layout()
