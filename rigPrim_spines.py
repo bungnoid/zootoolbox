@@ -1,4 +1,5 @@
 from rigPrim_curves import *
+from spaceSwitching import build, NO_TRANSLATION, NO_ROTATION
 
 
 class FkSpine(PrimaryRigPart):
@@ -79,13 +80,26 @@ class IKFKSpine(PrimaryRigPart):
 	__version__ = 0
 	PRIORITY = 10  #make this a lower priority than the simple FK spine rig
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'Spine' ), )
-	CONTROL_NAMES = BaseSplineIK.CONTROL_NAMES
+	CONTROL_NAMES = SplineIK.CONTROL_NAMES
 
 	@classmethod
 	def CanRigThisPart( cls, skeletonPart ):
 		return len( skeletonPart ) >= 3
 	def _build( self, skeletonPart, squish=True, **kw ):
-		return buildControlsForMPath( skeletonPart.base, skeletonPart.end, squish=squish, **kw )
+		objs = skeletonPart.items
+
+		worldPart = WorldPart.Create()
+		worldControl = worldPart.control
+		partsNode = worldPart.parts
+
+		fittedCurve, linearCurve, proxies, controls, halfIdx = buildControls( objs, worldControl, name='spineControl', **kw )
+		setAttr( '%s.v' % controls[0], False )  #hide the first control
+		buildDefaultSpaceSwitching( objs[0], controls[-1] )
+
+		parent( proxies, partsNode )
+		parent( fittedCurve, linearCurve, partsNode )
+
+		return controls
 
 
 #end

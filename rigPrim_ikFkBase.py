@@ -130,6 +130,7 @@ class IkFkBase(RigSubPart):
 		connectAttr( '%s.ikBlend' % limbControl, '%s.firstTerm' % fkVisCond, f=True )
 		connectAttr( '%s.ikBlend' % limbControl, '%s.firstTerm' % poleVisCond, f=True )
 		connectAttr( '%s.outColorR' % fkVisCond, '%s.v' % driverUpper, f=True )
+		connectAttr( '%s.outColorG' % poleVisCond, '%s.v' % lineNode, f=True )
 		connectAttr( '%s.outColorG' % poleVisCond, '%s.v' % poleControlSpace, f=True )
 		connectAttr( '%s.outColorG' % poleVisCond, '%s.v' % limbControl, f=True )
 		setAttr( '%s.secondTerm' % fkVisCond, 1 )

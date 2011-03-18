@@ -267,7 +267,7 @@ def buildControl( name,
                   colour=DEFAULT_COLOUR,
                   constrain=True,
                   oriented=True,
-                  offset=Vector(), offsetSpace=SPACE_OBJECT,
+                  offset=Vector( (0, 0, 0) ), offsetSpace=SPACE_OBJECT,
                   size=Vector( (1, 1, 1) ), scale=1.0, autoScale=False,
                   parent=None, qss=None,
                   asJoint=False, freeze=True,
@@ -301,6 +301,12 @@ def buildControl( name,
 			shapeDesc = ShapeDesc( shapeDesc )
 
 	offset = Vector( offset )
+
+
+	#if we've been given a parent, cast it to be an MObject so that if its name path changes (for example if
+	#parent='aNode' and we create a control called 'aNode' then the parent's name path will change to '|aNode' - yay!)
+	if parent:
+		parent = asMObject( parent )
 
 
 	#unpack placement objects
@@ -407,8 +413,13 @@ def buildControl( name,
 	setAttr( '%s.s' % obj, scale, scale, scale )
 
 
-	#rename the object
-	if not name: name = 'control'
+	#rename the object - if no name has been given, call it "control".  if there is a node with the name already, get maya to uniquify it
+	if not name:
+		name = 'control'
+
+	if objExists( name ):
+		name = '%s#' % name
+
 	rename( obj, name )
 
 
@@ -606,7 +617,7 @@ def getItemRigControl( item ):
 	'''
 	attrPath = '%s._skeletonPartRigControl' % item
 	if objExists( attrPath ):
-		cons = listConnections( attrPath, d=False ) or []
+		cons = listConnections( attrPath, d=False )
 		if cons:
 			return cons[ 0 ]
 

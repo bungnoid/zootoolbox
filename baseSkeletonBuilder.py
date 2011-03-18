@@ -4,6 +4,7 @@ from names import Parity, Name, camelCaseToNice
 from vectors import Vector, Colour
 from control import attrState, NORMAL, HIDE, LOCK_HIDE, NO_KEY
 from apiExtensions import asMObject, castToMObjects, cmpNodes
+from maya.OpenMaya import MGlobal
 
 import names
 import filesystem
@@ -32,6 +33,8 @@ TOOL_NAME = 'skeletonBuilder'
 
 CHANNELS = ('x', 'y', 'z')
 TYPICAL_HEIGHT = 70  #maya units
+
+HUD_NAME = 'skeletonBuilderJointCountHUD'
 
 
 #these are the symbols to use as standard rotation axes on bones...
@@ -245,6 +248,7 @@ def d_restoreLocksAndNames(f):
 			setAttr( '%s.ra%s' % (item, c), 0 )
 
 		f( item, children=children, *args, **kwargs )
+		makeIdentity( item, a=True, r=True )
 
 		#now re-parent children
 		for child, (originalName, lockStates) in childrenPreStates.iteritems():
@@ -502,7 +506,7 @@ def d_disconnectJointsFromSkinning( f ):
 				#if the connection is originating from a joint delete the connection - otherwise leave it alone - we only want to disconnect joints from the skin cluster
 				node = srcConnection.split( '.' )[0]
 				if nodeType( node ) == 'joint':
-					delete( tgtConnection, icn=True )
+					disconnectAttr( srcConnection, tgtConnection )
 					skinClustersConnections.append( (srcConnection, tgtConnection) )
 
 		try:
@@ -1381,7 +1385,6 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 	@d_disconnectJointsFromSkinning
 	def align( self, _initialAlign=False ):
 		self._align( _initialAlign )
-		makeIdentity( self.items, a=True, r=True )
 	def _align( self, _initialAlign=False ):
 		for item in self.selfAndOrphans():
 			autoAlignItem( item )
@@ -1662,6 +1665,10 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 
 		#bulid the rig and connect it to the part
 		theRig = rigType.Create( self, **kw )
+		if theRig is None:
+			MGlobal.displayError( "Failed to create the rig for part %s" % self )
+			return
+
 		connectAttr( '%s.message' % theRig.container, '%s.rigContainer' % self.container, f=True )
 	def isRigged( self ):
 		'''
@@ -2287,7 +2294,7 @@ def volumesToSkinning():
 		targetSkinCluster = skinWeights.transferSkinning( combinedVolumes, charMesh )
 
 		#now lets do a little smoothing
-		skinCluster( targetSkinCluster, e=True, smoothWeights=0.7, smoothWeightsMaxIterations=3 )
+		#skinCluster( targetSkinCluster, e=True, smoothWeights=0.65 )
 
 	"""
 	#JESUS!!!  for some weird as piss reason maya doesn't like this python command: skinCluster( targetSkinCluster, q=True, smoothWeights=0.75 )
@@ -2306,6 +2313,24 @@ def volumesToSkinning():
 
 	#delete the combined meshes - we're done with them
 	delete( combinedVolumes )
+
+
+def getSkeletonBuilderJointCount():
+	#get the root joint and count all joints under it
+	count = 0
+	for root in Root.IterAllParts():
+		count += len( listRelatives( root, ad=True, type='joint' ) or [] )
+
+	return count
+
+
+def setupSkeletonBuilderJointCountHUD():
+	if headsUpDisplay( HUD_NAME, ex=True ):
+		headsUpDisplay( HUD_NAME, rem=True )
+
+	else:
+		jointbb = headsUpDisplay( nfb=0 )
+		headsUpDisplay( HUD_NAME, section=0, block=jointbb, blockSize="small", label="Joint Count:", labelFontSize="small", command=getSkeletonBuilderJointCount, event="SelectionChanged" )  #, nodeChanges="attributeChange"
 
 
 #end

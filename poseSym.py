@@ -55,7 +55,9 @@ def setLocalRotMatrix( obj, matrix ):
 	roo = getAttr( '%s.rotateOrder' % obj )
 	rot = MATRIX_ROTATION_ORDER_CONVERSIONS_TO[ roo ]( matrix, True )
 
-	setAttr( '%s.r' % obj, *rot )
+	#try to set the rotation - check whether all the rotation channels are settable
+	if getAttr( '%s.r' % obj, se=True ):
+		setAttr( '%s.r' % obj, *rot )
 
 
 def mirrorMatrix( matrix, axis=AX_X, orientAxis=AX_X ):
@@ -89,6 +91,9 @@ def mirrorMatrix( matrix, axis=AX_X, orientAxis=AX_X ):
 
 def getKeyableAttrs( obj ):
 	attrs = listAttr( obj, keyable=True )
+	if attrs is None:
+		return []
+
 	for attrToRemove in ('translateX', 'translateY', 'translateZ', \
 	                     'rotateX', 'rotateY', 'rotateZ'):
 		try:
@@ -226,7 +231,7 @@ class ControlPair(object):
 		if self.controlB is None:
 			return True
 
-		#a pair is also singular if contorlA is the same as controlB
+		#a pair is also singular if controlA is the same as controlB
 		#NOTE: cmpNodes does a rigorous comparison so it will catch a fullpath and a partial path that point to the same node
 		if apiExtensions.cmpNodes( self.controlA, self.controlB ):
 			return True
@@ -304,8 +309,13 @@ class ControlPair(object):
 						if objExists( attrPathA ) and objExists( attrPathB ):
 							attrValA = getAttr( attrPathA )
 							attrValB = getAttr( attrPathB )
-							setAttr( attrPathA, attrValB )
-							setAttr( attrPathB, attrValA )
+
+							#make sure the attributes are settable before trying setAttr
+							if getAttr( attrPathA, se=True ):
+								setAttr( attrPathA, attrValB )
+
+							if getAttr( attrPathB, se=True ):
+								setAttr( attrPathB, attrValA )
 
 		#do rotation
 		if r:
@@ -341,11 +351,16 @@ class ControlPair(object):
 				newPosB[ axis ] = -newPosB[ axis ]
 
 				if worldSpace:
-					move( newPosA[0], newPosA[1], newPosA[2], self.controlA, ws=True, rpr=True )
-					move( newPosB[0], newPosB[1], newPosB[2], self.controlB, ws=True, rpr=True )
+					if getAttr( '%s.t' % self.controlA, se=True ):
+						move( newPosA[0], newPosA[1], newPosA[2], self.controlA, ws=True, rpr=True )
+					if getAttr( '%s.t' % self.controlB, se=True ):
+						move( newPosB[0], newPosB[1], newPosB[2], self.controlB, ws=True, rpr=True )
 				else:
-					setAttr( '%s.t' % self.controlA, *newPosA )
-					setAttr( '%s.t' % self.controlB, *newPosB )
+					if getAttr( '%s.t' % self.controlA, se=True ):
+						setAttr( '%s.t' % self.controlA, *newPosA )
+
+					if getAttr( '%s.t' % self.controlB, se=True ):
+						setAttr( '%s.t' % self.controlB, *newPosB )
 	def mirror( self, controlAIsSource=True, t=True, r=True, other=True ):
 		'''
 		mirrors the pose of controlA (or controlB if controlAIsSource is False) and

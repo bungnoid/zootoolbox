@@ -13,6 +13,7 @@ import apiExtensions
 import skeletonBuilder
 import spaceSwitching
 import triggered
+import poseSym
 import vectors
 import control
 import api
@@ -352,10 +353,6 @@ class RigPart(filesystem.trackableClassFactory()):
 		if not cls.CanRigThisPart( skeletonPart ):
 			return
 
-		#check to see if the skeleton part already has a rig
-		if skeletonPart.isRigged():
-			return
-
 		addControlsToQss = kw.get( 'addControlsToQss', cls.ADD_CONTROLS_TO_QSS )
 
 		buildFunc = getattr( cls, '_build', None )
@@ -365,7 +362,9 @@ class RigPart(filesystem.trackableClassFactory()):
 		assert isinstance( skeletonPart, SkeletonPart ), "Need a SkeletonPart instance, got a %s instead" % skeletonPart.__class__
 
 		if not skeletonPart.compareAgainstHash():
-			raise NotFinalizedError( "ERROR :: %s hasn't been finalized!" % skeletonPart )
+			#skeletonPart.finalize()
+			#if not skeletonPart.compareAgainstHash():
+				raise NotFinalizedError( "ERROR :: %s hasn't been finalized!" % skeletonPart )
 
 
 		#now turn the args passed in are a single kwargs dict
@@ -618,11 +617,24 @@ class RigPart(filesystem.trackableClassFactory()):
 
 		return None
 	def setupMirroring( self ):
-		import poseSym
 		for control in self:
 			oppositeControl = self.getOppositeControl( control )
 			pair = poseSym.ControlPair.Create( control, oppositeControl )
 			print 'setting up mirroring on %s %s' % (control, oppositeControl)
+	"""def swapPose( self, t=True, r=True, other=True ):
+		pairsMirrored = set()
+		for control in self:
+			if objectType( control, isAType='transform' ):
+				pairNode = poseSym.ControlPair.GetPairNode( control )
+				if pairNode is None:
+					continue
+
+				pair = poseSym.ControlPair( pairNode )
+				if pair in pairsMirrored:
+					continue
+
+				pairsMirrored.add( pair )
+				pair.swap( t=t, r=r, other=other )"""
 
 
 def generateNiceControlName( control ):
@@ -826,7 +838,8 @@ class WorldPart(RigPart):
 		#the world part has no skeleton part...
 		return None
 	def setupMirroring( self ):
-		return
+		pair = poseSym.ControlPair.Create( self.control )
+		pair.setFlips( 0 )
 
 
 class RigSubPart(RigPart):

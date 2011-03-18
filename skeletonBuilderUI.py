@@ -403,7 +403,7 @@ class CommonButtonsLayout(MelColumn):
 		buttonForm.layout()
 
 		buttonForm = MelHLayout( skinCol )
-		MelButton( buttonForm, l='Open Skin Weights Tool', en=False )  #c=lambda *a: skinWeightsUI.SkinWeightsWindow() )
+		MelButton( buttonForm, l='Open Skin Weights Tool', c=lambda *a: skinWeightsUI.SkinWeightsWindow() )
 		MelButton( buttonForm, l='Generate Skin Weights', c=self.on_generateWeights )
 		buttonForm.layout()
 
@@ -924,8 +924,14 @@ class RiggingLayout(MelForm):
 
 		rigPrimitives.buildRigForModel( referenceModel=referenceModel, deletePlacers=deletePlacers )
 
-		for partUI in self.UI_partForms:
-			partUI.updateBuildRigButton()
+		#if the model is being referenced run populate to update the rig part instances - container names will have changed because they're now referenced
+		if referenceModel:
+			self.populate()
+
+		#if we're not referencing the model however, its safe to just run the updateBuildRigButton method on all rig part UI instances
+		else:
+			for partUI in self.UI_partForms:
+				partUI.updateBuildRigButton()
 
 
 class CreateEditRigTabLayout(MelTabLayout):
@@ -1022,6 +1028,7 @@ class SkeletonBuilderWindow(BaseMelWindow):
 		menu = self.getMenu( 'Tools' )
 		menu.clear()
 
+		MelMenuItem( menu, l='Bone Count HUD', cb=headsUpDisplay( rigPrimitives.HUD_NAME, ex=True ), c=lambda *a: rigPrimitives.setupSkeletonBuilderJointCountHUD() )
 		MelMenuItem( menu, l='Pose Mirroring Tool', c=self.on_loadMirrorTool )
 		MelMenuItemDiv( menu )
 

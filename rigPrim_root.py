@@ -64,6 +64,10 @@ class Root(RigSubPart):
 			                "{\nstring $kids[] = `listRelatives -pa -s #`;\nint $vis = `getAttr ( $kids[0] +\".v\" )`;\nfor( $k in $kids ) setAttr ( $k +\".v\" ) (!$vis);\nselect `listRelatives -p`;\n}" )
 
 		return rootControl, rootGimbal, hipsControl
+	def setupMirroring( self ):
+		for control in self:
+			pair = poseSym.ControlPair.Create( control )
+			pair.setFlips( 0 )
 
 
 #end

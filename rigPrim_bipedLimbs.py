@@ -62,6 +62,7 @@ class IkFkArm(PrimaryRigPart):
 		attrState( allPurposeObj, 'v', *HIDE )
 		parent( allPurposeObj, worldControl )
 
+		buildDefaultSpaceSwitching( bicep, elbowControl, **spaceSwitching.NO_ROTATION )
 		buildDefaultSpaceSwitching( bicep, armControl, [ allPurposeObj ], [ 'All Purpose' ], True )
 		buildDefaultSpaceSwitching( bicep, driverBicep, **spaceSwitching.NO_TRANSLATION )
 
@@ -269,6 +270,7 @@ class IkFkLeg(PrimaryRigPart):
 		spaceSwitching.build( legControl, (worldControl, hipsControl, rootControl, allPurposeObj), ('World', None, 'Root', 'All Purpose'), space=legControlSpace )
 		spaceSwitching.build( kneeControl, (legControl, partParent, rootControl, worldControl), ("Leg", None, "Root", "World"), **spaceSwitching.NO_ROTATION )
 		spaceSwitching.build( driverThigh, (hipsControl, rootControl, worldControl), (None, 'Root', 'World'), **spaceSwitching.NO_TRANSLATION )
+		spaceSwitching.build( kneeControl, (worldControl, hipsControl, rootControl), ('World', None, 'Root'), **spaceSwitching.NO_ROTATION )
 
 
 		#make the limb stretchy

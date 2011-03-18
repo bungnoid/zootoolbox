@@ -285,6 +285,7 @@ class SkinButtonsLayout(MelHLayout):
 		self.UI_skinOn( e=True, en=not state )
 		self.UI_skinOff( e=True, en=state )
 
+	### EVENT HANDLERS ###
 	def on_skinOff( self, e=None ):
 		rigUtils.disableSkinClusters()
 		self.updateSkinButtons()
@@ -294,6 +295,26 @@ class SkinButtonsLayout(MelHLayout):
 	def on_resetSkin( self, e=None ):
 		for sc in ls( typ='skinCluster' ):
 			rigUtils.resetSkinCluster( sc )
+
+
+class WeightsToOtherLayout(MelHLayout):
+	def __init__( self, parent ):
+		MelHLayout.__init__( self, parent )
+
+		self.UI_toParent = MelButton( self, l='Weighting To Parent Joint', ann='Transfers weighting from all selected joints to their respective parents', c=self.on_toParent )
+		self.UI_toOther = MelButton( self, l='Weighting To Last Selected Joint', ann='Transfers the weighting from the selected joints to the joint that was selected last', c=self.on_toOther )
+		self.layout()
+
+	### EVENT HANDLERS ###
+	def on_toParent( self, e=None ):
+		sel = cmd.ls( sl=True, type='transform' ) or []
+		for s in sel:
+			meshUtils.weightsToOther( s )
+	def on_toOther( self, e=None ):
+		sel = cmd.ls( sl=True, type='transform' ) or []
+		lastSelectedJoint = sel.pop()
+		for s in sel:
+			meshUtils.weightsToOther( s, lastSelectedJoint )
 
 
 class MeshMappingEditor(mappingEditor.MappingEditor):
@@ -518,6 +539,10 @@ class SkinWeightsWindow(BaseMelWindow):
 		Spacer( col )
 		SectionLabel( col, 'Skinning Control' )
 		SkinButtonsLayout( col )
+
+		Spacer( col )
+		SectionLabel( col, 'Weight Transfer' )
+		WeightsToOtherLayout( col )
 
 		Spacer( col )
 		SectionLabel( col, 'Transfer Skinning' )

@@ -8,6 +8,11 @@ TOOL_NAME = 'zooPicker'
 VERSION = 0
 
 DEFAULT_COLOUR = 'blue'
+MODIFIERS = SHIFT, CAPS, CTRL, ALT = 2**0, 2**1, 2**2, 2**3
+
+
+def test( dragControl, dropControl, messages, x, y, dragType ):
+	print 'dropped!'
 
 
 def getTopPickerSet():
@@ -24,10 +29,14 @@ def getTopPickerSet():
 
 class Button(object):
 	'''
+	A Button instance is a "container" for a selection preset
 	'''
 
+	SELECTION_STATES = NONE, PARTIAL, COMPLETE = range( 3 )
+	IMG_PARTIAL, IMG_COMPLETE = 'pickerPartialSelect.bmp', 'pickerFullSelect.bmp'
+
 	@classmethod
-	def Create( cls, character, pos, size, colour=None, label=None, objs=(), cmdStr=None, cmdIsPython=False ):
+	def Create( cls, character, pos, size=(18, 18), colour=DEFAULT_COLOUR, label=None, objs=(), cmdStr=None, cmdIsPython=False ):
 		node = sets( em=True, text='zooPickerButton' )
 		node = rename( node, 'pickerButton' )
 
@@ -80,6 +89,8 @@ class Button(object):
 	def getPos( self ): return self.getPosSize()[0]
 	def getSize( self ): return self.getPosSize()[1]
 	def getColour( self ): return getAttr( '%s.colour' % self.getNode() )
+	def getImage( self ):
+		return '%s.bmp' % self.getColour()
 	def getLabel( self ):
 		labelStr = getAttr( '%s.label' % self.getNode() )
 
@@ -133,26 +144,53 @@ class Button(object):
 		setAttr( '%s.cmdStr' % self.getNode(), val, type='string' )
 	def setCmdIsPython( self, val ):
 		setAttr( '%s.cmdIsPython' % self.getNode(), val )
-	def selectCb( self ):
-		existingObjs = []
-		for obj in self.getObjs():
-			if objExists( obj ):
-				existingObjs.append( obj )
-			elif objExists( '%s:%s' % (self.character.getNamespace(), obj) ):
-				existingObjs.append( obj )
+	def select( self ):
+		'''
+		deals with selecting the button
+		'''
+		objs = self.getObjs()
+		mods = getModifiers()
 
-		select( existingObjs )
+		if mods & (SHIFT | CTRL):
+			select( objs, add=True )
+		if mods & SHIFT:
+			select( objs, toggle=True )
+		elif mods & CTRL:
+			select( objs, deselect=True )
+		else:
+			select( objs )
+	def selectedState( self ):
+		'''
+		returns whether this button is partially or fully selected - return values are one of the
+		values in self.SELECTION_STATES
+		'''
+		objs = self.getObjs()
+		sel = ls( objs, sl=True )
+
+		if not sel:
+			return self.NONE
+		elif len( objs ) == len( sel ):
+			return self.COMPLETE
+
+		return self.PARTIAL
 	def executeCmd( self ):
+		'''
+		executes the command string for this button
+		'''
 		if self.cmdStr:
-			if self.cmdIsPython:
-				try:
+			try:
+				if self.cmdIsPython:
 					return eval( self.cmdStr )
-				except:
-					printErrorStr( 'Executing command "%s" on %s button at %s' % (self.cmdStr, self.colour, self.pos) )
+				else:
+					return maya.mel.eval( self.getCmdStr() )
+			except:
+				printErrorStr( 'Executing command "%s" on %s button at %s' % (self.cmdStr, self.colour, self.pos) )
 
 
 class Character(object):
 	'''
+	A Character is made up of many Button instances to select the controls or groups of controls that
+	comprise a puppet rig
 	'''
 
 	@classmethod
@@ -224,23 +262,56 @@ class Character(object):
 				return
 
 
-class ButtonUI(MelIconButton):
-	def __init__( self, parent, button ):
-		self.button = button
+class ButtonUI(unicode):
+	_DRAG_MEL_CMD_STR = r"""global proc string[] buttonDrag( string $drag, int $x, int $y, int $mods ) {
+	print ("draggage (" + $drag + ") from position " + $x + ", " + $y);
+	python( "import baseMelUI; ui = baseMelUI.BaseMelWidget.FromStr( '"+ $drag +"' ); print ui.on_drag; ui.on_drag( '"+ $drag +"', "+ $x +", "+ $y +", "+ $mods +" );" );
+	string $messages[] = {};
+	return $messages;
+	}"""
 
+	_DROP_MEL_CMD_STR = r"""global proc buttonDrop( string $drag, string $drop, string $msgs[], int $x, int $y, int $mods ) {
+	print ("dropperized (" + $drag + ") onto (" + $drop + ")\n");
+	print ("at position " + $x + ", " + $y + "\n");
+	python( "import baseMelUI; ui = baseMelUI.BaseMelWidget.FromStr( '"+ $drag +"' ); print ui.on_drop; ui.on_drop( '"+ $drag +"', '"+ $drop +"', "+ $x +", "+ $y +", "+ $mods +" );" );
+	}"""
+
+	maya.mel.eval( _DRAG_MEL_CMD_STR )
+	maya.mel.eval( _DROP_MEL_CMD_STR )
+	del( _DRAG_MEL_CMD_STR )
+	del( _DROP_MEL_CMD_STR )
+
+	def __new__( cls, parent, button ):
 		assert isinstance( button, Button )
 
 		pos, size = button.getPosSize()
-		self( e=True, style='iconAndTextCentered', image1=button.getColour(), mw=0, mh=0, label=button.getLabel(), w=size.x, h=size.y, command=button.selectCb, dragCallback=self.on_drag, dropCallback=self.on_drop )
-		parent( e=True, ap=((self, 'left', pos.x, 0), (self, 'top', pos.y, 0)), dropCallback=self.on_drop )
+		uiStr = maya.mel.eval( 'iconTextButton -p %s -i "%s" -label "%s" -w %s -h %s -docTag ButtonUI -dgc buttonDrag -dpc buttonDrop' % (parent, button.getImage(), button.getLabel(), size.x, size.y) )
+		self = unicode.__new__( cls, uiStr )
+		self.button = button
+
+		parent( e=True, ap=((self, 'left', pos.x, 0), (self, 'top', pos.y, 0)) )
+
+		self.POP_menu = popupMenu( p=self, b=2, pmc=self.buildMenu )
+
+		return self
+	def __call__( self, *a, **kw ):
+		return iconTextButton( self, *a, **kw )
 	def buildMenu( self ):
 		pass
+	def updateHighlightState( self ):
+		selectedState = self.button.selectedState()
+		if selectedState == Button.PARTIAL:
+			self( e=True, i=Button.IMG_PARTIAL )
+		elif selectedState == Button.COMPLETE:
+			self( e=True, i=Button.IMG_COMPLETE )
+		else:
+			self( e=True, i=self.button.getImage() )
 
 	### EVENT HANDLERS ###
 	def on_drag( self, *a ):
-		print a
+		print 'sweet - this shit is working', a
 	def on_drop( self, *a ):
-		print a
+		print 'dropped', a
 
 
 class MelPicture(BaseMelWidget):
@@ -261,11 +332,18 @@ class CharacterUI(MelHLayout):
 		self.layout()
 
 		self.populate()
+		self.highlightButtons()
 	def populate( self ):
 		self.buttonUIs = []
 		for button in self.character.getButtons():
+			#maya.mel.eval( r"""global proc string[] yay( string $n, int $x, int $y, int $m ) { print( "dragged\n" ); return {}; }""" )
+			#maya.mel.eval( r"""global proc boo( string $dgc, string $dpc, string $msgs[], int $x, int $y, int $type ) { print( "dropped\n" ); }""" )
+			#maya.mel.eval( """iconTextButton -style "iconAndTextCentered" -mw 0 -mh 0 -w 20 -h 20 -dgc testDrag -dropCallback "testDrop";""" )
 			ui = ButtonUI( self, button )
 			self.buttonUIs.append( ui )
+	def highlightButtons( self ):
+		for buttonUI in self.buttonUIs:
+			buttonUI.updateHighlightState()
 
 
 class PickerLayout(MelVSingleStretchLayout):
@@ -273,6 +351,7 @@ class PickerLayout(MelVSingleStretchLayout):
 		self.characterUIs = []
 
 		self.UI_tabs = tabs = MelTabLayout( self )
+		self.UI_tabs.setChangeCB( self.on_tabChange )
 		self.UI_editor = MelFrameLayout( self, l='Edit Current Picker', cll=True, cl=True )
 
 		self.setStretchWidget( tabs )
@@ -282,6 +361,9 @@ class PickerLayout(MelVSingleStretchLayout):
 
 		#make sure the UI gets updated when the scene changes
 		self.setSceneChangeCB( self.on_sceneChange )
+
+		#update button state when the selection changes
+		self.setSelectionChangeCB( self.on_selectionChange )
 	def populate( self ):
 		self.characterUIs = []
 		self.UI_tabs.clear()
@@ -295,13 +377,19 @@ class PickerLayout(MelVSingleStretchLayout):
 				self.UI_tabs.setSelectedTabIdx( idx )
 
 	### EVENT HANDLERS ###
+	def on_tabChange( self, *a ):
+		self.on_selectionChange()
 	def on_sceneChange( self, *a ):
 		self.populate()
+	def on_selectionChange( self, *a ):
+		idx = self.UI_tabs.getSelectedTabIdx()
+		ui = self.characterUIs[ idx ]
+		ui.highlightButtons()
 
 
 class PickerWindow(BaseMelWindow):
-	WINDOW_NAME = ''
-	WINDOW_TITLE = ''
+	WINDOW_NAME = 'zooPicker'
+	WINDOW_TITLE = 'Picker Tool'
 
 	DEFAULT_SIZE = 275, 525
 	DEFAULT_MENU = 'Help'
