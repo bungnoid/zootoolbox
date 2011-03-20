@@ -971,18 +971,15 @@ def buildRigForModel( scene=None, referenceModel=True, deletePlacers=False ):
 
 	#if desired, create a new scene and reference in the model
 	if referenceModel:
-		scene.editoradd()
 		cmd.file( f=True, save=True )
 		cmd.file( f=True, new=True )
 
 		api.referenceFile( scene, 'model' )
 
 		#rename the scene to the rig
-		rigSceneName = namingHelpers.stripKnownAssetSuffixes( scene.name() )
-		rigSceneName = '%s_rig.ma' % rigSceneName
+		rigSceneName = '%s_rig.ma' % scene.name()
 		rigScene = scene.up() / rigSceneName
 		cmd.file( rename=rigScene )
-		rigScene.editoradd()
 		cmd.file( f=True, save=True, typ='mayaAscii' )
 	else:
 		rigScene = scene

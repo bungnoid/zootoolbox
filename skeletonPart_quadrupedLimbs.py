@@ -30,9 +30,7 @@ class _QuadCommon(object):
 
 		return placers
 	def visualize( self ):
-		rigUtils.createTriangleVis( self[-1], self.getBuildScale() / 10.0, self.getParityMultiplier(), BONE_AIM_VECTOR, BONE_ROTATE_VECTOR )
-		rigUtils.createPlanarDisplayOn( self[:3], self.getParityColour() )
-		rigUtils.createPlanarDisplayOn( self[1:4], self.getParityColour() )
+		pass
 
 
 class QuadrupedFrontLeg(_QuadCommon, SkeletonPart.GetNamedSubclass('Arm')):

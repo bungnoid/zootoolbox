@@ -481,9 +481,6 @@ def openFile( filepath, silent=False ):
 	if ext == 'ma' or ext == 'mb':
 		mel.saveChanges( 'file -f -prompt %d -o "%s"' % (silent, filepath) )
 		mel.addRecentFile( filepath, 'mayaAscii' if Path( filepath ).hasExtension( 'ma' ) else 'mayaBinary' )
-	elif ext == 'smd':
-		mel.saveChanges( 'file -f -new' )
-		cmd.vstSmdIO( i=True, importSkeleton=True, filename=filepath )
 
 
 def importFile( filepath, silent=False ):
@@ -491,9 +488,6 @@ def importFile( filepath, silent=False ):
 	ext = filepath.getExtension().lower()
 	if ext == 'ma' or ext == 'mb':
 		cmd.file( filepath, i=True, prompt=silent, rpr='__', type='mayaAscii', pr=True, loadReferenceDepth='all' )
-	elif ext == 'smd':
-		importSmdAnimationAndSkeleton( filepath )
-		#cmd.vstSmdIO( i=True, importSkeleton=True, filename=filepath )
 
 
 class Name(object):

@@ -1846,7 +1846,7 @@ def buildEndPlacer():
 	but can also be useful for marking up interesting pivots on parts such as feet with foot edges etc...
 	'''
 	transform = createNode( 'transform' )
-	shape = createNode( 'vstAttachment', n='%sShape' % transform, p=transform )
+	setAttr( '%s.displayHandle' % transform, True )
 
 	return transform
 
