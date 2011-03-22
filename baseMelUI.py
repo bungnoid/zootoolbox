@@ -365,6 +365,11 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 		NOTE: time change callbacks don't take any args
 		'''
 		cmd.scriptJob( compressUndo=True, parent=self, event=('timeChanged', cb) )
+	def setAttributeChangeCB( self, attrpath, cb, allChildren=False, disregardIndex=False ):
+		'''
+		creates a scriptjob which will fire when the given attribute gets changed
+		'''
+		cmd.scriptJob( compressUndo=True, parent=self, attributeChange=(attrpath, cb), allChildren=allChildren, disregardIndex=disregardIndex )
 	def setDeletionCB( self, cb ):
 		'''
 		define a callback that gets triggered when this piece of UI gets deleted

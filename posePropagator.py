@@ -13,24 +13,43 @@ from maya.cmds import *
 PRE_ATTR_VALUES = {}
 
 
-def attrChangeCallbackFactory( attrpath ):
+class AttrpathCallback(object):
 	'''
-	returns a callback function that gets executed when the value of the attrpath changes
+	callable object that gets executed when the value of the attrpath changes
 	'''
 
-	#setup the initial value of the attrpath in the global attr value dict
-	PRE_ATTR_VALUES[ attrpath ] = getAttr( attrpath )
+	#defines whether the instance should early out when called or not
+	ENABLED = True
 
-	def onChange():
-		preValue = PRE_ATTR_VALUES[ attrpath ]
+	def __init__( self, attrpath ):
+		self.attrpath = attrpath
+
+		#setup the initial value of the attrpath in the global attr value dict
+		time = currentTime( q=True )
+		PRE_ATTR_VALUES[ (time, attrpath) ] = getAttr( attrpath )
+	def __call__( self ):
+		if not self.ENABLED:
+			return
+
+		attrpath = self.attrpath
+		time = currentTime( q=True )
+
+		#if the time/attrpath tuple isn't in PRE_ATTR_VALUES, bail
+		if (time, attrpath) not in PRE_ATTR_VALUES:
+			return
+
+		preValue = PRE_ATTR_VALUES[ (time, attrpath) ]
 		curValue = getAttr( attrpath )
 		valueDelta = curValue - preValue
 
+		#if there was no delta, bail
+		if not valueDelta:
+			return
+
 		#reset the value in the attr dict
-		PRE_ATTR_VALUES[ attrpath ] = curValue
+		PRE_ATTR_VALUES[ (time, attrpath) ] = curValue
 
 		#update keyframe not on this frame
-		time = currentTime( q=True )
 		keyTimes = keyframe( attrpath, q=True, tc=True )
 		if keyTimes is None:
 			return
@@ -39,10 +58,8 @@ def attrChangeCallbackFactory( attrpath ):
 			keyTimes.remove( time )
 
 		for keyTime in keyTimes:
-			keyValue = keyframe( attrpath, q=True, t=(keyTime,), vc=True )
+			keyValue = keyframe( attrpath, q=True, t=(keyTime,), vc=True )[0]
 			keyframe( attrpath, e=True, t=(keyTime,), vc=keyValue + valueDelta )
-
-	return onChange
 
 
 class PosePropagatorLayout(MelHLayout):
@@ -52,8 +69,8 @@ class PosePropagatorLayout(MelHLayout):
 		self._state = False
 
 		self.UI_dummyParent = None
-		self.UI_on = MelButton( self, l='turn ON' )
-		self.UI_off = MelButton( self, l='turn OFF' )
+		self.UI_on = MelButton( self, l='turn ON', c=self.on_enable )
+		self.UI_off = MelButton( self, l='turn OFF', c=self.on_disable )
 
 		self.layout()
 		self.updateState()
@@ -62,14 +79,18 @@ class PosePropagatorLayout(MelHLayout):
 		self.on_selectionChange()
 		self.setSelectionChangeCB( self.on_selectionChange )
 		self.setTimeChangeCB( self.on_timeChange )
-	def setState( self, state=True ):
-		self._state = state
+	def setEnableState( self, state=True ):
+		AttrpathCallback.ENABLED = state
 		self.updateState()
 	def updateState( self ):
-		self.UI_on.setEnabled( self._state )
-		self.UI_off.setEnabled( not self._state )
+		self.UI_on.setEnabled( not AttrpathCallback.ENABLED )
+		self.UI_off.setEnabled( AttrpathCallback.ENABLED )
 
 	### EVENT HANDLERS ###
+	def on_enable( self, *a ):
+		self.setEnableState( True )
+	def on_disable( self, *a ):
+		self.setEnableState( False )
 	def on_selectionChange( self ):
 		'''
 		delete the old attribute change callbacks and add new ones for the current selection
@@ -83,13 +104,16 @@ class PosePropagatorLayout(MelHLayout):
 		for obj in ls( sl=True ):
 			for attr in listAttr( obj, keyable=True ):
 				attrpath = '%s.%s' % (obj, attr)
-				UI_dummyParent.setAttributeChangeCB( attrpath, attrChangeCallbackFactory( attrpath ) )
+				if objExists( attrpath ):
+					UI_dummyParent.setAttributeChangeCB( attrpath, AttrpathCallback( attrpath ) )
 	def on_timeChange( self ):
 		'''
 		when the time changes we need to refresh the values in the PRE_ATTR_VALUES dict
 		'''
+		time = currentTime( q=True )
+		PRE_ATTR_VALUES.clear()
 		for attrpath in PRE_ATTR_VALUES.keys():
-			PRE_ATTR_VALUES[ attrpath ] = getAttr( attrpath )
+			PRE_ATTR_VALUES[ (time, attrpath) ] = getAttr( attrpath )
 
 
 class PosePropagatorWindow(BaseMelWindow):
@@ -102,7 +126,7 @@ class PosePropagatorWindow(BaseMelWindow):
 
 	def __init__( self ):
 		self.UI_editor = PosePropagatorLayout( self )
-		self.UI_editor.setState( True )
+		self.UI_editor.setEnableState( AttrpathCallback.ENABLED )
 		self.show()
 
 
