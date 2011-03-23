@@ -6,6 +6,7 @@ except ImportError: pass
 
 from baseMelUI import *
 from maya.cmds import *
+from maya.OpenMaya import MGlobal
 
 #this dict stores attribute values for the selection - attributeChange scriptjobs fire when an attribute changes
 #but don't pass in pre/post values, or even the name of the attribute that has changed.  So when the scriptjobs
@@ -31,6 +32,11 @@ class AttrpathCallback(object):
 		if not self.ENABLED:
 			return
 
+		#if autokey is turned on, bail - this + autokey = potentially weird behaviour
+		if autoKeyframe( q=True ):
+			MGlobal.displayWarning( "Autokey is enabled - This tool doesn't play nice with autokey!  Please turn it off!" )
+			return
+
 		attrpath = self.attrpath
 		time = currentTime( q=True )
 
@@ -49,13 +55,10 @@ class AttrpathCallback(object):
 		#reset the value in the attr dict
 		PRE_ATTR_VALUES[ (time, attrpath) ] = curValue
 
-		#update keyframe not on this frame
+		#grab the key frame times
 		keyTimes = keyframe( attrpath, q=True, tc=True )
 		if keyTimes is None:
 			return
-
-		if time in keyTimes:
-			keyTimes.remove( time )
 
 		for keyTime in keyTimes:
 			keyValue = keyframe( attrpath, q=True, t=(keyTime,), vc=True )[0]
@@ -66,31 +69,53 @@ class PosePropagatorLayout(MelHLayout):
 	def __init__( self, parent ):
 		MelHLayout.__init__( self, parent )
 
-		self._state = False
+		self._initialAutoKeyState = autoKeyframe( q=True, state=True )
 
-		self.UI_dummyParent = None
-		self.UI_on = MelButton( self, l='turn ON', c=self.on_enable )
-		self.UI_off = MelButton( self, l='turn OFF', c=self.on_disable )
+		self.UI_dummyParent = None  #this is some dummy UI to store attribute change scriptjobs - this easily ensures things get teared down if the tool gets closed
+		self.UI_on = MelButton( self, h=100, c=self.on_toggleEnable )
 
 		self.layout()
 		self.updateState()
 
 		#fire the selection change to update the current selection state
 		self.on_selectionChange()
+
+		self.setSceneChangeCB( self.on_selectionChange )
 		self.setSelectionChangeCB( self.on_selectionChange )
 		self.setTimeChangeCB( self.on_timeChange )
+		self.setDeletionCB( self.on_delete )
 	def setEnableState( self, state=True ):
+		'''
+		sets the on/off state of the tool and updates UI accordingly
+		'''
+
+		#we need to disable autokey when running this tool - but we want to restore the initial autokey state when
+		#the tool is either turned off or closed, so we need to store the initial auto key state on the instance
+		if state:
+			self._initialAutoKeyState = autoKeyframe( q=True, state=True )
+			autoKeyframe( e=True, state=False )
+		else:
+			autoKeyframe( e=True, state=self._initialAutoKeyState )
+
 		AttrpathCallback.ENABLED = state
 		self.updateState()
 	def updateState( self ):
-		self.UI_on.setEnabled( not AttrpathCallback.ENABLED )
-		self.UI_off.setEnabled( AttrpathCallback.ENABLED )
+		self.UI_on.setLabel( 'currently on: turn OFF' if AttrpathCallback.ENABLED else 'turn ON' )
+		self.UI_on.setColour( (1, 0, 0) if AttrpathCallback.ENABLED else (0.6, 0.6, 0.6) )
 
 	### EVENT HANDLERS ###
+	def on_toggleEnable( self, *a ):
+		self.setEnableState( not AttrpathCallback.ENABLED )
 	def on_enable( self, *a ):
 		self.setEnableState( True )
 	def on_disable( self, *a ):
 		self.setEnableState( False )
+	def on_sceneChange( self ):
+		'''
+		turn the tool off, and update state
+		'''
+		self.setEnableState( False )
+		self.on_selectionChange()
 	def on_selectionChange( self ):
 		'''
 		delete the old attribute change callbacks and add new ones for the current selection
@@ -105,7 +130,7 @@ class PosePropagatorLayout(MelHLayout):
 			for attr in listAttr( obj, keyable=True ):
 				attrpath = '%s.%s' % (obj, attr)
 				if objExists( attrpath ):
-					UI_dummyParent.setAttributeChangeCB( attrpath, AttrpathCallback( attrpath ) )
+					UI_dummyParent.setAttributeChangeCB( attrpath, AttrpathCallback( attrpath ), False )
 	def on_timeChange( self ):
 		'''
 		when the time changes we need to refresh the values in the PRE_ATTR_VALUES dict
@@ -114,6 +139,8 @@ class PosePropagatorLayout(MelHLayout):
 		PRE_ATTR_VALUES.clear()
 		for attrpath in PRE_ATTR_VALUES.keys():
 			PRE_ATTR_VALUES[ (time, attrpath) ] = getAttr( attrpath )
+	def on_delete( self ):
+		autoKeyframe( e=True, state=self._initialAutoKeyState )
 
 
 class PosePropagatorWindow(BaseMelWindow):
@@ -121,7 +148,7 @@ class PosePropagatorWindow(BaseMelWindow):
 	WINDOW_TITLE = 'Pose Propagator'
 
 	DEFAULT_MENU = None
-	DEFAULT_SIZE = 275, 60
+	DEFAULT_SIZE = 275, 140
 	FORCE_DEFAULT_SIZE = True
 
 	def __init__( self ):
