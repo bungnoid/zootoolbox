@@ -286,7 +286,10 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 		return self( q=True, bgc=True )
 	getColor = getColour
 	def setColour( self, colour ):
-		self( e=True, bgc=colour )
+		initialVis = self( q=True, vis=True )
+		self( e=True, bgc=colour, vis=False )
+		if initialVis:
+			self( e=True, vis=True )
 	setColor = setColour
 	def resetColour( self ):
 		self( e=True, enableBackground=False )
@@ -341,45 +344,45 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 		return cmd.control( self, ex=True )
 	def delete( self ):
 		cmd.deleteUI( self )
-	def setSelectionChangeCB( self, cb ):
+	def setSelectionChangeCB( self, cb, compressUndo=True, **kw ):
 		'''
 		creates a scriptJob to monitor selection, and fires the given callback when the selection changes
 		the scriptJob is parented to this widget so it dies when the UI is closed
 
 		NOTE: selection callbacks don't take any args
 		'''
-		cmd.scriptJob( compressUndo=True, parent=self, event=('SelectionChanged', cb) )
-	def setSceneChangeCB( self, cb ):
+		return cmd.scriptJob( compressUndo=compressUndo, parent=self, event=('SelectionChanged', cb), **kw )
+	def setSceneChangeCB( self, cb, compressUndo=True, **kw ):
 		'''
 		creates a scriptJob which will fire when the currently open scene changes
 		the scriptJob is parented to this widget so it dies when the UI is closed
 
 		NOTE: scene change callbacks don't take any args
 		'''
-		cmd.scriptJob( compressUndo=True, parent=self, event=('SceneOpened', cb) )
-	def setTimeChangeCB( self, cb ):
+		return cmd.scriptJob( compressUndo=compressUndo, parent=self, event=('SceneOpened', cb), **kw )
+	def setTimeChangeCB( self, cb, compressUndo=True, **kw ):
 		'''
 		creates a scriptJob which will fire when the current time changes
 		the scriptJob is parented to this widget so it dies when the UI is closed
 
 		NOTE: time change callbacks don't take any args
 		'''
-		cmd.scriptJob( compressUndo=True, parent=self, event=('timeChanged', cb) )
-	def setAttributeChangeCB( self, attrpath, cb, allChildren=False, disregardIndex=False ):
+		return cmd.scriptJob( compressUndo=compressUndo, parent=self, event=('timeChanged', cb), **kw )
+	def setAttributeChangeCB( self, attrpath, cb, compressUndo=True, allChildren=False, disregardIndex=False, **kw ):
 		'''
 		creates a scriptjob which will fire when the given attribute gets changed
 		'''
-		cmd.scriptJob( compressUndo=True, parent=self, attributeChange=(attrpath, cb), allChildren=allChildren, disregardIndex=disregardIndex )
-	def setDeletionCB( self, cb ):
+		return cmd.scriptJob( compressUndo=compressUndo, parent=self, attributeChange=(attrpath, cb), allChildren=allChildren, disregardIndex=disregardIndex, **kw )
+	def setDeletionCB( self, cb, compressUndo=True, **kw ):
 		'''
 		define a callback that gets triggered when this piece of UI gets deleted
 		'''
-		cmd.scriptJob( compressUndo=True, uiDeleted=(self, cb) )
-	def setUndoCB( self, cb ):
+		return cmd.scriptJob( compressUndo=compressUndo, uiDeleted=(self, cb), **kw )
+	def setUndoCB( self, cb, compressUndo=True, **kw ):
 		'''
 		define a callback that gets triggered when an undo event is issued
 		'''
-		cmd.scriptJob( compressUndo=True, parent=self, event=('Undo', cb) )
+		return cmd.scriptJob( compressUndo=compressUndo, parent=self, event=('Undo', cb), **kw )
 	@classmethod
 	def FromStr( cls, theStr ):
 		'''
