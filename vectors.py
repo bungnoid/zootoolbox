@@ -344,6 +344,8 @@ class Colour(Vector):
 		lightened[ 3 ] = self[ 3 ]
 
 		return lightened
+	def asRGB( self ):
+		return list( self )[ :3 ]
 	@classmethod
 	def ColourToName( cls, theColour ):
 		'''

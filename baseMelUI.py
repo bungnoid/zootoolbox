@@ -24,6 +24,8 @@ displayInfo = MGlobal.displayInfo
 displayWarning = MGlobal.displayWarning
 displayError = MGlobal.displayError
 
+removeDupes = filesystem.removeDupes
+
 _DEBUG = False
 
 
@@ -1570,6 +1572,110 @@ class MelObjectScrollList(MelTextScrollList):
 
 			#the above might throw an exception if the updated list doesn't have the original items in it anymore
 			except: pass
+
+
+class MelSetMemebershipList(MelObjectScrollList):
+	ALLOWED_NODE_TYPES = None  #if None then ANY node type is allowed in the set - otherwise only types in the iterable are allowed to be added to the set
+	ALLOW_MULTI_SELECTION = True
+
+	def __init__( self, parent, **kw ):
+		MelObjectScrollList.__init__( self, parent, **kw )
+		self.objectSets = []
+		self( e=True, dcc=self.on_doubleClickItem )
+		self.POP_ops = MelPopupMenu( self, pmc=self.buildMenu )
+
+		self._addHandler = None
+	def getSets( self ):
+		return self.objectSets[:]
+	def setSets( self, objectSets ):
+		if not isinstance( objectSets, list ):
+			objectSets = [ objectSets ]
+
+		self.objectSets = objectSets
+		self.update()
+	def getAllItems( self ):
+		items = cmd.sets( self.objectSets, q=True ) or []
+		items.sort()
+
+		return removeDupes( items )
+	def _addItems( self, items ):
+		handler = self._addHandler
+		isHandlerCallable = callable( self._addHandler )
+
+		items = self.filterItems( items )
+		if items:
+			for objectSet in self.objectSets:
+				if isHandlerCallable:
+					handler( objectSet, items )
+				else:
+					cmd.sets( items, add=objectSet )
+
+		self.update()
+	def _setItems( self, items ):
+		items = self.filterItems( items )
+		if items:
+			for objectSet in self.objectSets:
+				cmd.sets( clear=objectSet )
+
+		self._addItems( items )
+	def _removeItems( self, items ):
+		if items:
+			for objectSet in self.objectSets:
+				cmd.sets( items, remove=objectSet )
+
+
+		self.update()
+	def _removeAllItems( self ):
+		for objectSet in self.objectSets:
+			cmd.sets( clear=objectSet )
+
+		self.update()
+	def buildMenu( self, menu, menuParent ):
+		cmd.menu( menu, e=True, dai=True )
+		MelMenuItem( menu, l='ADD selected objects to set', c=self.on_addItem )
+		MelMenuItem( menu, l='REPLACE set items with selected objects', c=self.on_replaceItem )
+		MelMenuItem( menu, l='REMOVE selected objects from set', c=self.on_removeItem )
+		MelMenuItemDiv( menu )
+		MelMenuItem( menu, l='remove HIGHLIGHTED objects from set', c=self.on_removeHighlighted )
+		MelMenuItemDiv( menu )
+		MelMenuItem( menu, l='SELECT highlighted objects', c=self.on_doubleClickItem )
+		MelMenuItemDiv( menu )
+		MelMenuItem( menu, l='update UI', c=self.on_update )
+	def removeItems( self, items ):
+		curItems = self.getItems()
+		if curItems:
+			newItems = curItems.difference( items )
+			if len( curItems ) == len( newItems ):
+				return
+
+			self.setItems( newItems )
+	def filterItems( self, items ):
+		if not self.ALLOWED_NODE_TYPES:
+			return items
+
+		filteredItems = []
+		for item in items:
+			if nodeType in self.ALLOWED_NODE_TYPES:
+				if cmd.objectType( item, isAType=nodeType ):
+					filteredItems.append( item )
+
+		return filteredItems
+
+	### EVENT HANDLERS ###
+	def on_doubleClickItem( self, *a ):
+		sel = self.getSelectedItems()
+		if sel:
+			cmd.select( sel )
+	def on_addItem( self, *a ):
+		self._addItems( cmd.ls( sl=True ) )
+	def on_replaceItem( self, *a ):
+		self._setItems( cmd.ls( sl=True ) )
+	def on_removeItem( self, *a ):
+		self._removeItems( cmd.ls( sl=True ) )
+	def on_removeHighlighted( self, *a ):
+		self._removeItems( self.getSelectedItems() )
+	def on_update( self, *a ):
+		self.update()
 
 
 class MelTreeView(BaseMelWidget):

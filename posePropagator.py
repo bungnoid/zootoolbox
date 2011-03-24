@@ -56,13 +56,10 @@ class AttrpathCallback(object):
 		PRE_ATTR_VALUES[ (time, attrpath) ] = curValue
 
 		#grab the key frame times
-		keyTimes = keyframe( attrpath, q=True, tc=True )
-		if keyTimes is None:
+		if not keyframe( attrpath, q=True, kc=True ):
 			return
 
-		for keyTime in keyTimes:
-			keyValue = keyframe( attrpath, q=True, t=(keyTime,), vc=True )[0]
-			keyframe( attrpath, e=True, t=(keyTime,), vc=keyValue + valueDelta )
+		maya.mel.eval( 'keyframe -e -t ":" -vc %f %s' % (valueDelta, attrpath) )
 
 
 class PosePropagatorLayout(MelHLayout):
