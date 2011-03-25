@@ -66,4 +66,58 @@ def d_handleExceptions(f):
 	return newFunc
 
 
+class ExceptionHandledType(type):
+	'''
+	metaclass that will wrap all callable attributes of a class with the
+	d_handleExceptions exception handler decorator above.  this is mainly useful
+	for maya/modo, because neither app lets you specify your own global exception
+	handler - yet you want to be able to capture this exception data and turn it
+	into a meaningful error description that can be sent back to the tool author
+	'''
+	def __new__( cls, name, bases, attrs ):
+		global d_handleExceptions
+		newAttrs = {}
+		for itemName, item in attrs.iteritems():
+			if callable( item ): newAttrs[ itemName ] = d_handleExceptions( item )
+			else: newAttrs[ itemName ] = item
+
+		return type.__new__( cls, name, bases, newAttrs )
+
+
+def generateTraceableStrFactory( prefix, printFunc=None ):
+	'''
+	returns 2 functions - the first will generate a traceable message string, while
+	the second will print the generated message string.  The second is really a
+	convenience function, but is called enough to be worth it
+
+	you can also specify your own print function - if no print function is specified
+	then the print builtin is used
+	'''
+	def generateTraceableStr( *args, **kw ):
+		frameInfos = inspect.getouterframes( inspect.currentframe() )
+
+		_nFrame = 1
+		if '_nFrame' in kw:
+			_nFrame = kw[ '_nFrame' ]
+
+		#frameInfos[0] contains the current frame and associated calling data, while frameInfos[1] is the frame that called this one - which is the frame we want to print data about
+		callingFrame, callingScript, callingLine, callingName, _a, _b = frameInfos[_nFrame]
+		lineStr = 'line %s of the function %s in the script %s' % (callingLine, callingName, callingScript)
+
+		return '%s%s: %s' % (prefix, lineStr, ' '.join( map( str, args ) ))
+
+	def printTraceableStr( *args ):
+		msg = generateTraceableStr( _nFrame=2, *args )
+		if printFunc is None:
+			print( msg )
+		else:
+			printFunc( msg )
+
+	return generateTraceableStr, printTraceableStr
+
+generateInfoStr, printInfoStr = generateTraceableStrFactory( '*** INFO ***: ' )
+generateWarningStr, printWarningStr = generateTraceableStrFactory( '*** WARNING ***: ' )
+generateErrorStr, printErrorStr = generateTraceableStrFactory( '*** ERROR ***: ' )
+
+
 #end

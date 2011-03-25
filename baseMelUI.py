@@ -941,6 +941,8 @@ class MelFrameLayout(BaseMelLayout):
 		self._expandCB = cb
 	def getExpandCB( self ):
 		return self._expandCB
+	def getCollapse( self ):
+		return self( q=True, collapse=True )
 	def setCollapse( self, state, executeChangeCB=True ):
 		self( e=True, collapse=state )
 		if executeChangeCB:
