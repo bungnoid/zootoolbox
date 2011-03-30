@@ -418,7 +418,44 @@ def findVertsInVolume( meshes, volume ):
 	return meshVertsWithin
 
 
-def jointVerts( joint, tolerance=1e-4 ):
+def isNodeVisible( node ):
+	'''
+	its actually a bit tricky to determine whether a node is visible or not.  A node is hidden if any parent is hidden
+	by either having a zero visibility attribute.  It could also be in a layer or be parented to a node in a layer that
+	is turned off...
+
+	This function will sort all that crap out and return a bool representing the visibility of the given node
+	'''
+
+	def isVisible( n ):
+		#obvious check first
+		if not getAttr( '%s.v' % node ):
+			return False
+
+		#now check the layer
+		displayLayer = listConnections( '%s.drawOverride' % n, d=False, type='displayLayer' )
+		if displayLayer:
+			if not getAttr( '%s.v' % displayLayer[0] ):
+				return False
+
+		return True
+
+	#check the given node
+	if not isVisible( node ):
+		return False
+
+	#now walk up the DAG and check visibility on parents
+	parent = listRelatives( node, p=True, pa=True )
+	while parent:
+		if not isVisible( parent[0] ):
+			return False
+
+		parent = listRelatives( parent, p=True, pa=True )
+
+	return True
+
+
+def jointVerts( joint, tolerance=1e-4, onlyVisibleMeshes=True ):
 	'''
 	returns a dict containing data about the verts influences by the given joint - dict keys are mesh names the
 	joint affects.  each dict value is a list of tuples containing (weight, idx) for the verts affected by the joint
@@ -452,6 +489,11 @@ def jointVerts( joint, tolerance=1e-4 ):
 			component = MObject()
 			mSel.getDagPath( n, mesh, component )
 
+			#if we only want visible meshes - check to see that this mesh is visible
+			if onlyVisibleMeshes:
+				if not isNodeVisible( mesh ):
+					continue
+
 			c = MFnSingleIndexedComponent( component )
 			idxs = MIntArray()
 			c.getElements( idxs )
@@ -461,12 +503,12 @@ def jointVerts( joint, tolerance=1e-4 ):
 	return meshVerts
 
 
-def jointVertsForMaya( joint, tolerance=1e-4 ):
+def jointVertsForMaya( joint, tolerance=1e-4, onlyVisibleMeshes=True ):
 	'''
 	converts the dict returned by jointVerts into maya useable component names
 	'''
 	items = []
-	for mesh, data in jointVerts(joint, tolerance).iteritems():
+	for mesh, data in jointVerts( joint, tolerance, onlyVisibleMeshes ).iteritems():
 		items.extend( ['%s.vtx[%d]' % (mesh, n) for w, n in data] )
 
 	return items
@@ -643,6 +685,54 @@ def getBoundsForJoint( joint ):
 		drawSize = cmd.getAttr('%s.radius' % joint)
 		drawSize /= 2
 		return -drawSize, drawSize, -drawSize, drawSize, -drawSize, drawSize
+
+
+def getAlignedBoundsForJoint( joint, threshold=0.65, onlyVisibleMeshes=True ):
+	'''
+	looks at the verts the given joint/s and determines a local space (local to the first joint
+	in the list if multiple are given) bounding box of the verts, and positions the hitbox
+	accordingly
+
+	if onlyVisibleMeshes is True, then only meshes that are visible in the viewport will
+	contribute to the bounds
+	'''
+	theJoint = joint
+	verts = []
+
+	#so this is just to deal with the input arg being a tuple, list or string.  you can pass in a list
+	#of joint names and the verts affected just get accumulated into a list, and the resulting bound
+	#should be the inclusive bounding box for the given joints
+	if isinstance( joint, (tuple,list) ):
+		theJoint = joint[0]
+		for joint in joint:
+			verts += jointVertsForMaya( joint, threshold, onlyVisibleMeshes )
+	else:
+		verts += jointVertsForMaya( joint, threshold, onlyVisibleMeshes )
+
+	jointDag = api.getMDagPath( theJoint )
+	jointMatrix = jointDag.inclusiveMatrix()
+	vJointPos = OpenMaya.MTransformationMatrix( jointMatrix ).rotatePivot( OpenMaya.MSpace.kWorld ) + OpenMaya.MTransformationMatrix( jointMatrix ).getTranslation( OpenMaya.MSpace.kWorld )
+	vJointPos = Vector( [vJointPos.x, vJointPos.y, vJointPos.z] )
+	vJointBasisX = OpenMaya.MVector(-1,0,0) * jointMatrix
+	vJointBasisY = OpenMaya.MVector(0,-1,0) * jointMatrix
+	vJointBasisZ = OpenMaya.MVector(0,0,-1) * jointMatrix
+
+	bbox = OpenMaya.MBoundingBox()
+	for vert in verts:
+		#get the position relative to the joint in question
+		vPos = Vector( xform(vert, query=True, ws=True, t=True) )
+		vPos = vJointPos - vPos
+
+		#now transform the joint relative position into the coordinate space of that joint
+		#we do this so we can get the width, height and depth of the bounds of the verts
+		#in the space oriented along the joint
+		vPosInJointSpace = Vector( (vPos.x, vPos.y, vPos.z) )
+		vPosInJointSpace = vPosInJointSpace.change_space( vJointBasisX, vJointBasisY, vJointBasisZ )
+		bbox.expand( OpenMaya.MPoint( *vPosInJointSpace ) )
+
+	minB, maxB = bbox.min(), bbox.max()
+
+	return minB[0], minB[1], minB[2], maxB[0], maxB[1], maxB[2]
 
 
 def getJointScale( joint ):

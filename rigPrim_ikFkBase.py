@@ -10,7 +10,7 @@ class IkFkBase(RigSubPart):
 	'''
 	this is a subpart, not generally exposed directly to the user
 	'''
-	__version__ = 1
+	__version__ = 2
 	CONTROL_NAMES = 'control', 'fkUpper', 'fkMid', 'fkLower', 'poleControl', 'ikSpace', 'fkSpace', 'ikHandle', 'endOrient', 'poleTrigger'
 	ADD_CONTROLS_TO_QSS = False
 
@@ -52,9 +52,9 @@ class IkFkBase(RigSubPart):
 		fkArmSpace = buildAlignedNull( bicep, "fk_%sSpace%s" % (nameScheme[ 0 ], suffix) )
 
 		BONE_AXIS = AIM_AXIS + 3 if parity else AIM_AXIS
-		driverUpper = buildControl( "fk_%sControl%s" % (nameScheme[ 1 ], suffix), bicep, PivotModeDesc.MID, shapeDesc=ShapeDesc( 'cube' ), colour=colour, asJoint=True, oriented=False, scale=scale, parent=fkArmSpace )
-		driverMid = buildControl( "fk_%sControl%s" % (nameScheme[ 2 ], suffix), elbow, PivotModeDesc.MID, shapeDesc=ShapeDesc( 'cube' ), colour=colour, asJoint=True, oriented=False, scale=scale, parent=driverUpper )
-		driverLower = buildControl( "fk_%sControl%s" % (nameScheme[ 3 ], suffix), PlaceDesc( wrist, wrist if alignEnd else None ), shapeDesc=ShapeDesc( 'cube' ), colour=colour, asJoint=True, oriented=False, constrain=False, scale=scale )
+		driverUpper = buildControl( "fk_%sControl%s" % (nameScheme[ 1 ], suffix), bicep, PivotModeDesc.MID, shapeDesc=ShapeDesc( 'sphere' ), colour=colour, asJoint=True, oriented=False, scale=scale, parent=fkArmSpace )
+		driverMid = buildControl( "fk_%sControl%s" % (nameScheme[ 2 ], suffix), elbow, PivotModeDesc.MID, shapeDesc=ShapeDesc( 'sphere' ), colour=colour, asJoint=True, oriented=False, scale=scale, parent=driverUpper )
+		driverLower = buildControl( "fk_%sControl%s" % (nameScheme[ 3 ], suffix), PlaceDesc( wrist, wrist if alignEnd else None ), shapeDesc=ShapeDesc( 'sphere' ), colour=colour, asJoint=True, oriented=False, constrain=False, scale=scale )
 
 
 		#don't parent the driverLower in the buildControl command otherwise the control won't be in worldspace
@@ -106,14 +106,26 @@ class IkFkBase(RigSubPart):
 
 
 		#setup constraints to the wrist - it is handled differently because it needs to blend between the ik and fk chains (the other controls are handled by maya)
-		wristOrient = buildAlignedNull( wrist, "%s_follow%s" % (nameScheme[ 3 ], suffix), parent=partsControl )
+		wristOrientParent = buildAlignedNull( wrist, "%s_follow%s_space" % (nameScheme[ 3 ], suffix), parent=partsControl )
+		wristOrient = buildAlignedNull( wrist, "%s_follow%s" % (nameScheme[ 3 ], suffix), parent=wristOrientParent )
 
 		pointConstraint( driverLower, wrist )
 		orientConstraint( wristOrient, wrist, mo=True )
 		setItemRigControl( wrist, wristOrient )
-		wristSpaceOrient = parentConstraint( limbControl, wristOrient, weight=0, mo=True )[ 0 ]
-		wristSpaceOrient = parentConstraint( driverLower, wristOrient, weight=0, mo=True )[ 0 ]
-		setAttr( '%s.interpType' % wristSpaceOrient, 2 )
+		setNiceName( wristOrient, 'Fk %s' % nameScheme[3]  )
+		wristSpaceOrient = parentConstraint( limbControl, wristOrientParent, weight=0, mo=True )[ 0 ]
+		wristSpaceOrient = parentConstraint( driverLower, wristOrientParent, weight=0, mo=True )[ 0 ]
+
+		#constraints to drive the "wrist follow" mode
+		wristFollowConstraint = parentConstraint( wristOrientParent, wristOrient )[0]
+		wristFollowConstraint = parentConstraint( driverLower, wristOrient, mo=True )[0]
+
+
+		#
+		wristFollowAttrs = listAttr( wristFollowConstraint, ud=True )
+		addAttr( limbControl, ln='orientToIk', at='double', min=0, max=1, dv=1 )
+		attrState( limbControl, 'orientToIk', keyable=True, show=True )
+		expression( s='%s.%s = %s.orientToIk;\n%s.%s = 1 - %s.orientToIk;' % (wristFollowConstraint, wristFollowAttrs[0], limbControl, wristFollowConstraint, wristFollowAttrs[1], limbControl), n='wristFollowConstraint_on_off' )
 
 
 		#connect the ikBlend of the arm controller to the orient constraint of the fk wrist - ie turn it off when ik is off...
@@ -129,11 +141,15 @@ class IkFkBase(RigSubPart):
 		poleVisCond = shadingNode( 'condition', asUtility=True )
 		connectAttr( '%s.ikBlend' % limbControl, '%s.firstTerm' % fkVisCond, f=True )
 		connectAttr( '%s.ikBlend' % limbControl, '%s.firstTerm' % poleVisCond, f=True )
-		connectAttr( '%s.outColorR' % fkVisCond, '%s.v' % driverUpper, f=True )
 		connectAttr( '%s.outColorG' % poleVisCond, '%s.v' % lineNode, f=True )
 		connectAttr( '%s.outColorG' % poleVisCond, '%s.v' % poleControlSpace, f=True )
 		connectAttr( '%s.outColorG' % poleVisCond, '%s.v' % limbControl, f=True )
 		setAttr( '%s.secondTerm' % fkVisCond, 1 )
+
+		expression( s='if ( %(limbControl)s.ikBlend > 0 && %(limbControl)s.orientToIk < 1 ) %(driverLower)s.visibility = 1;\nelse %(driverLower)s.visibility = %(fkVisCond)s.outColorG;' % locals(), n='wrist_visSwitch' )
+		for driver in (driverUpper, driverMid):
+			for shape in listRelatives( driver, s=True, pa=True ):
+				connectAttr( '%s.outColorR' % fkVisCond, '%s.v' % shape, f=True )
 
 
 		#add set pole to fk pos command to pole control

@@ -48,7 +48,7 @@ class ArbitraryChain(SkeletonPart):
 
 		num = len( self )
 		if num == 1:
-			alignItemToWorld( self[ 0 ] )
+			autoAlignItem( self[ 0 ], parity )
 		elif num == 2:
 			for i in self.selfAndOrphans(): autoAlignItem( i, parity )
 		else:

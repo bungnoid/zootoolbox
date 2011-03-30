@@ -92,8 +92,9 @@ class IKFKSpine(PrimaryRigPart):
 		worldControl = worldPart.control
 		partsNode = worldPart.parts
 
-		fittedCurve, linearCurve, proxies, controls, halfIdx = buildControls( objs, worldControl, name='spineControl', **kw )
-		setAttr( '%s.v' % controls[0], False )  #hide the first control
+		parentControl, rootControl = getParentAndRootControl( objs[0] )
+
+		fittedCurve, linearCurve, proxies, controls, halfIdx = buildControls( objs, parentControl, name='spineControl', **kw )
 		buildDefaultSpaceSwitching( objs[0], controls[-1] )
 
 		parent( proxies, partsNode )

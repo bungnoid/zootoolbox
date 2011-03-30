@@ -234,7 +234,7 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 	for n, j in joints.iteritems():
 		if not cmd.objExists(j):
 			dealtWith = False
-			for jp in jointHierarchies[j]:
+			for jp in jointHierarchies[n]:
 				if cmd.objExists( jp ):
 					joints[n] = jp
 					dealtWith = True
