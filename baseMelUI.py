@@ -346,6 +346,8 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 		return cmd.control( self, ex=True )
 	def delete( self ):
 		cmd.deleteUI( self )
+		if self in self._INSTANCE_LIST:
+			self._INSTANCE_LIST.remove( self )
 	def setSelectionChangeCB( self, cb, compressUndo=True, **kw ):
 		'''
 		creates a scriptJob to monitor selection, and fires the given callback when the selection changes
@@ -396,6 +398,12 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 			idx = cls._INSTANCE_LIST.index( theStr )
 
 			return cls._INSTANCE_LIST[ idx ]
+		else:
+			theStrLeaf = theStr.split( '|' )[-1]
+			if theStrLeaf in cls._INSTANCE_LIST:
+				idx = cls._INSTANCE_LIST.index( theStrLeaf )
+
+				return cls._INSTANCE_LIST[ idx ]
 
 		try:
 			uiTypeStr = cmd.objectTypeUI( theStr )
@@ -1643,6 +1651,8 @@ class MelSetMemebershipList(MelObjectScrollList):
 		MelMenuItem( menu, l='SELECT highlighted objects', c=self.on_doubleClickItem )
 		MelMenuItemDiv( menu )
 		MelMenuItem( menu, l='update UI', c=self.on_update )
+		MelMenuItem( menu, cb=self.DISPLAY_NAMESPACES, l='Show Namespaces', c=self.on_showNameSpaces )
+		MelMenuItem( menu, cb=self.DISPLAY_NICE_NAMES, l='Show Nice Names', c=self.on_showNiceNames )
 	def removeItems( self, items ):
 		curItems = self.getItems()
 		if curItems:
@@ -1677,6 +1687,12 @@ class MelSetMemebershipList(MelObjectScrollList):
 	def on_removeHighlighted( self, *a ):
 		self._removeItems( self.getSelectedItems() )
 	def on_update( self, *a ):
+		self.update()
+	def on_showNameSpaces( self, *a ):
+		self.DISPLAY_NAMESPACES = not self.DISPLAY_NAMESPACES
+		self.update()
+	def on_showNiceNames( self, *a ):
+		self.DISPLAY_NICE_NAMES = not self.DISPLAY_NICE_NAMES
 		self.update()
 
 
