@@ -272,6 +272,14 @@ def autoAlignItem( item, invertAimAndUp=False, upVector=BONE_ROTATE_VECTOR, worl
 	'''
 	for cases where there is no strong preference about how the item is aligned, this function will determine the best course of action
 	'''
+
+	numChildren = len( children )
+
+	#if there is more than one child, see if there is only one JOINT child...
+	childJoints = ls( children, type='joint' )
+	if len( childJoints ) == 1:
+		children = childJoints
+
 	#if there is only one child, aim the x-axis at said child, and aim the z-axis toward scene-up
 	### WARNING :: STILL NEED TO DEAL WITH CASE WHERE JOINT IS CLOSE TO AIMING AT SCENE UP
 	invertMult = -1 if invertAimAndUp else 1
@@ -636,7 +644,8 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		except AttributeError: pass
 
 		self._items = items = []
-		for idx in getAttr( '%s._skeletonPrimitive.items' % self.container, multiIndices=True ):
+		idxs = getAttr( '%s._skeletonPrimitive.items' % self.container, multiIndices=True ) or []
+		for idx in idxs:
 			cons = listConnections( '%s._skeletonPrimitive.items[%d]' % (self.container, idx), d=False )
 			if cons:
 				assert len( cons ) == 1, "More than one joint was found!!!"
@@ -2316,12 +2325,26 @@ def volumesToSkinning():
 
 
 def getSkeletonBuilderJointCount():
-	#get the root joint and count all joints under it
-	count = 0
-	for root in Root.IterAllParts():
-		count += len( listRelatives( root, ad=True, type='joint' ) or [] )
+	#get the root joint and get a list of all joints under it
+	joints = []
+	for rootPart in Root.IterAllParts():
+		joints += rootPart.items
+		joints += listRelatives( rootPart.items, ad=True, type='joint' ) or []
 
-	return count
+	#generate a list of joints involved in skinning
+	skinnedJoints = []
+	for mesh in ls( type='mesh' ):
+		skinCluster = mel.findRelatedSkinCluster( mesh )
+		if skinCluster:
+			#skinPercent -ib 0.001 -q -t %s "%s.vtx[*]"
+			#skinnedJoints = skinPercent( '%s.vtx[*]' % mesh, ib=0.001, q=True, t=skinCluster )
+			skinnedJoints += mel.eval( 'skinPercent -ib 0.001 -q -t %s "%s.vtx[*]"' % (skinCluster, mesh) )
+
+	#now get the intersection of the two lists - these are the joints on the character that are skinned
+	commonJoints = set( joints ).intersection( set( skinnedJoints ) )
+	print '\n'.join( commonJoints )
+
+	return len( commonJoints )
 
 
 def setupSkeletonBuilderJointCountHUD():

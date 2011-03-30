@@ -407,6 +407,7 @@ def buildControl( name,
 			cmd.parent( s, j, add=True, s=True )
 
 		setAttr( '%s.radius' % j, keyable=False )
+		setAttr( '%s.radius' % j, cb=False )
 		delete( obj )
 		obj = asMObject( j )
 

@@ -27,6 +27,14 @@ def setObjShader( obj, shader ):
 		sets( shape, e=True, forceElement=SG )
 
 
+def getObjColour( obj ):
+	shader = getObjShader( obj )
+	if shader:
+		return getAttr( '%s.outColor' % shader )[0]
+
+	return None
+
+
 def getObjShader( obj ):
 	'''
 	returns the shader currently assigned to the given object
@@ -36,8 +44,9 @@ def getObjShader( obj ):
 
 	cons = listConnections( shapes, s=False, type='shadingEngine' ) or []
 	for c in cons:
-		shaders = listConnections( c.surfaceShader, d=False ) or []
-		if shaders: return shaders[ 0 ]
+		shaders = listConnections( '%s.surfaceShader' % c, d=False ) or []
+		if shaders:
+			return shaders[ 0 ]
 
 
 def getShader( colour, forceCreate=True ):
@@ -62,7 +71,8 @@ def getShader( colour, forceCreate=True ):
 		thisColour.append( alpha )
 		thisColour = Colour( thisColour )
 
-		if thisColour == colour: return shader
+		if thisColour == colour:
+			return shader
 
 	if forceCreate:
 		return createShader( colour )
@@ -100,7 +110,7 @@ def setDrawOverrideColor( obj, color=17 ):
 	for s in listRelatives( obj, s=True, pa=True ) or []:
 		shapes.append( s )
 
-        if shapes:
+	if shapes:
 		for s in shapes:
 			conns = cmd.listConnections( '%s.drawOverride' % s, s=True )
 			if not conns:
