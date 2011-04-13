@@ -1145,8 +1145,16 @@ class MelObjectSelector(MelForm):
 		          (self.UI_obj, 'right', 0)),
 		      ac=((self.UI_obj, 'left', 0, self.UI_label)) )
 
-		self.UI_menu = MelPopupMenu( self.UI_label )
-		MelMenuItem( self.UI_menu, label='clear obj', c=self.on_clear )
+		self.UI_menu = MelPopupMenu( self.UI_label, pmc=self.buildMenu )
+		self.UI_menu = MelPopupMenu( self.UI_obj, pmc=self.buildMenu )
+	def buildMenu( self, menu, menuParent ):
+		cmd.menu( menu, e=True, dai=True )
+
+		obj = self.getValue()
+		enabled = cmd.objExists( obj ) if obj else False
+		MelMenuItem( menu, label='select obj', en=enabled, c=self.on_select )
+		MelMenuItemDiv( menu )
+		MelMenuItem( menu, label='clear obj', c=self.on_clear )
 	def getValue( self ):
 		return self.UI_obj.getValue()
 	def setValue( self, value, executeChangeCB=True ):
@@ -1167,6 +1175,8 @@ class MelObjectSelector(MelForm):
 		sel = cmd.ls( sl=True )
 		if sel:
 			self.setValue( sel[ 0 ] )
+	def on_select( self, *a ):
+		cmd.select( self.getValue() )
 	def on_clear( self, *a ):
 		self.clear()
 
@@ -1342,8 +1352,12 @@ class MelTextScrollList(BaseMelWidget):
 		self( e=True, ams=state )
 	def clear( self ):
 		self( e=True, ra=True )
-	def clearSelection( self ):
+	def clearSelection( self, executeChangeCB=False ):
 		self( e=True, deselectAll=True )
+		if executeChangeCB:
+			cb = self.getChangeCB()
+			if callable( cb ):
+				cb()
 	def moveSelectedItemsUp( self, count=1 ):
 		'''
 		moves selected items "up" <count> units
@@ -2169,6 +2183,8 @@ class BaseMelWindow(BaseMelUI):
 	WINDOW_NAME = 'unnamed_window'
 	WINDOW_TITLE = 'Unnamed Tool'
 
+	RETAIN = False
+
 	DEFAULT_SIZE = 250, 250
 	DEFAULT_MENU = 'File'
 	DEFAULT_MENU_IS_HELP = False
@@ -2219,6 +2235,7 @@ class BaseMelWindow(BaseMelUI):
 		kw.setdefault( 'title', cls.WINDOW_TITLE )
 		kw.setdefault( 'widthHeight', cls.DEFAULT_SIZE )
 		kw.setdefault( 'menuBar', True )
+		kw.setdefault( 'retain', cls.RETAIN )
 
 		if cmd.window( cls.WINDOW_NAME, ex=True ):
 			cmd.deleteUI( cls.WINDOW_NAME )
@@ -2232,6 +2249,8 @@ class BaseMelWindow(BaseMelUI):
 			toolName, authorEmail, helpPage = cls.HELP_MENU
 			helpMenu = new.getMenu( 'Help' )
 			MelMenuItem( helpMenu, l="Help...", en=helpPage is not None, c=lambda x: cmd.showHelp(helpPage, absolute=True) )
+			MelMenuItemDiv( helpMenu )
+			bugReporterUI.addBugReporterMenuItems( toolName, assignee=authorEmail, parent=helpMenu )
 
 		#validate the instance list - this should be done regularly, but not always because its kinda slow...
 		BaseMelUI.ValidateInstanceList()
@@ -2269,13 +2288,21 @@ class BaseMelWindow(BaseMelUI):
 				toks = existingLayout.split( '|' )
 
 				return BaseMelLayout.FromStr( '%s|%s' % (self, toks[1]) )
-	def show( self, state=True ):
+	def exists( self ):
+		return cmd.window( self.WINDOW_NAME, q=True, ex=True )
+	def show( self, state=True, forceDefaultSize=None ):
+		'''
+		if forceDefaultSize is None - it uses the FORCE_DEFAULT_SIZE class attribute
+		'''
 		if state:
 			cmd.showWindow( self )
 		else:
 			self( e=True, visible=False )
 
-		if self.FORCE_DEFAULT_SIZE:
+		if forceDefaultSize is None:
+			forceDefaultSize = self.FORCE_DEFAULT_SIZE
+
+		if forceDefaultSize:
 			self( e=True, widthHeight=self.DEFAULT_SIZE )
 	def layout( self ):
 		'''
