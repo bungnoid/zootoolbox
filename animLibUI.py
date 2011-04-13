@@ -171,7 +171,10 @@ class AnimLibClipLayout(MelForm):
 			attributes = None
 
 		self.objs = objs = cmd.ls( sl=True )
-		self.mapping = mapping = Mapping( objs, self.clipObjs )
+
+		tgts = names.matchNames( self.clipObjs, objs, threshold=kDEFAULT_MAPPING_THRESHOLD )
+		self.mapping = mapping = Mapping( tgts, self.clipObjs )
+
 		self.preClip = self.clipInstance.__class__( objs, *self.clipInstance.generatePreArgs() )
 		self.blended = self.clipInstance.blender( self.preClip, self.clipInstance, mapping, attributes )
 	def onDrag( self, value ):
@@ -561,8 +564,6 @@ class AnimLibLayout(MelHSingleStretchLayout):
 
 		#add the clip to the UI
 		self.UI_local.populate()
-
-		print 'wrote new %s clip!' % typeLabel, newClip
 
 	### EVENT HANDLERS ###
 	def on_close( self, *a ):

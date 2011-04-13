@@ -1,6 +1,7 @@
 import os
 import sys
 import cgitb
+import inspect
 import traceback
 from filesystem import findMostRecentDefitionOf
 
@@ -29,10 +30,22 @@ def exceptionHandler( *args ):
 	printMsg( '### ERROR - Python Unhandled Exception' )
 	printMsg( '### ', eType.__name__, e )
 
+	#
+	toolName = findMostRecentDefitionOf( 'TOOL_NAME' ) or '<NO_TOOL>'
+
+	#generate the message
+	env = os.environ
+	message = 'Subject: [ERROR] %s\n\n%s\n\n%s\n\n%s' % (toolName, cgitb.text( args ), '\n'.join( sys.path ),'\n'.join( [ '%s=%s' % (k, env[ k ]) for k in sorted( env.keys() ) ] ))
+
+	#try to write a log
+	fLog = open( 'c:/python_tool_log_%s.txt' % toolName, 'w' )
+	try: fLog.write( message )
+	except: pass
+	finally: fLog.close()
+
 	#try to mail a callstack
 	try:
 		import smtplib
-		message = 'Subject: [ERROR] assetEditor\n\n%s' % cgitb.text( args )
 
 		author = findMostRecentDefitionOf( '__author__' ) or DEFAULT_AUTHOR
 		svr = smtplib.SMTP( 'exchange2' )
@@ -55,7 +68,7 @@ def d_handleExceptions(f):
 	to alert of the issue...
 	'''
 	def newFunc( *a, **kw ):
-		try: f( *a, **kw )
+		try: return f( *a, **kw )
 		except:
 			exc_info = sys.exc_info()
 			exceptionHandler( *exc_info )
@@ -102,9 +115,9 @@ def generateTraceableStrFactory( prefix, printFunc=None ):
 
 		#frameInfos[0] contains the current frame and associated calling data, while frameInfos[1] is the frame that called this one - which is the frame we want to print data about
 		callingFrame, callingScript, callingLine, callingName, _a, _b = frameInfos[_nFrame]
-		lineStr = 'line %s of the function %s in the script %s' % (callingLine, callingName, callingScript)
+		lineStr = 'from line %s in the function %s in the script %s' % (callingLine, callingName, callingScript)
 
-		return '%s%s: %s' % (prefix, lineStr, ' '.join( map( str, args ) ))
+		return '%s%s: %s' % (prefix, ' '.join( map( str, args ) ), lineStr)
 
 	def printTraceableStr( *args ):
 		msg = generateTraceableStr( _nFrame=2, *args )

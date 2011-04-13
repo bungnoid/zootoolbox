@@ -1,4 +1,8 @@
+
 from filesystem import *
+from common import printInfoStr, printErrorStr
+from mayaDecorators import d_unifyUndo
+
 import maya.cmds as cmd
 import utils
 import names
@@ -146,6 +150,9 @@ class PoseBlender(BaseBlender):
 					if a not in attributes:
 						continue
 
+				if not clipAObj:
+					continue
+
 				attrpath = '%s.%s' % (clipAObj, a)
 				if not cmd.getAttr( attrpath, settable=True ):
 					continue
@@ -158,9 +165,9 @@ class PoseBlender(BaseBlender):
 					try:
 						valueB = attrDictB[ a ]
 						blendedValue = (valueA * (1-pct)) + (valueB * pct)
-						cmdQueue.append( 'setAttr %s %s' % (attrpath, blendedValue) )
+						cmdQueue.append( 'setAttr -clamp %s %f' % (attrpath, blendedValue) )
 					except KeyError:
-						cmdQueue.append( 'setAttr %s %s' % (attrpath, valueA) )
+						cmdQueue.append( 'setAttr -clamp %s %f' % (attrpath, valueA) )
 					except: pass
 
 		cmdQueue()
@@ -345,6 +352,9 @@ class PoseClip(BaseClip):
 			self[ obj ] = objDict = {}
 			for attr in objAttrs:
 				objDict[ attr ] = cmd.getAttr( '%s.%s' % (obj, attr) )
+
+		return True
+	@d_unifyUndo
 	def apply( self, mapping, attributes=None, **kwargs ):
 		'''
 		construct a mel string to pass to eval - so it can be contained in a single undo...
@@ -369,13 +379,16 @@ class PoseClip(BaseClip):
 					if attr not in attributes:
 						continue
 
+				if not tgtObj:
+					continue
+
 				attrpath = '%s.%s' % (tgtObj, attr)
 				try:
 					if not cmd.getAttr( attrpath, settable=True ): continue
 				except TypeError: continue
 
 				if additive: value += cmd.getAttr( attrpath )
-				cmdQueue.append( 'setAttr -clamp %s %s;' % (attrpath, value) )
+				cmdQueue.append( 'setAttr -clamp %s %f;' % (attrpath, value) )
 
 		cmdQueue()
 
@@ -417,11 +430,14 @@ class AnimClip(BaseClip):
 		allKeys.sort()
 		allKeys = [ k for k in allKeys if startFrame <= k <= endFrame ]
 
+		if not allKeys:
+			return False
+
 		self.offset = offset = allKeys[ 0 ]
 		self.__range = allKeys[ -1 ] - offset
 
 		for obj in objects:
-			objAttrs = set( cmd.listAttr( obj, keyable=True, visible=True, scalar=True ) )
+			objAttrs = set( cmd.listAttr( obj, keyable=True, visible=True, scalar=True ) or [] )
 			if attrs:
 				objAttrs = objAttrs.intersection( attrs )
 
@@ -461,6 +477,9 @@ class AnimClip(BaseClip):
 				isWeighted = cmd.keyTangent(attrpath, q=True, t=timeTuple, weightLock=True)
 
 				objDict[ attr ] = weightedTangents, zip(times, values, itts, otts, ixs, iys, oxs, oys, isLocked, isWeighted)
+
+		return True
+	@d_unifyUndo
 	def apply( self, mapping, attributes=None, **kwargs ):
 		'''
 		valid kwargs are:
@@ -716,7 +735,12 @@ class ClipPreset(Preset):
 		clipDict[ kEXPORT_DICT_WORLDSPACE ] = False
 
 		theClip = self.TYPE_CLASSES[ type ]()
-		theClip.generate( objects, **kwargs )
+		success = theClip.generate( objects, **kwargs )
+
+		if not success:
+			printErrorStr( "Failed to generate clip!" )
+			return
+
 		clipDict[ kEXPORT_DICT_THE_CLIP ] = theClip
 
 		#write the preset file to disk
@@ -724,6 +748,9 @@ class ClipPreset(Preset):
 
 		#generate the icon for the clip and add it to perforce if appropriate
 		icon = generateIcon( self )
+		#icon.asP4().add()
+
+		printInfoStr( "Generated clip!" )
 
 
 class ClipManager(PresetManager):

@@ -6,7 +6,7 @@ except ImportError: pass
 
 from baseMelUI import *
 from maya.cmds import *
-from maya.OpenMaya import MGlobal
+from common import printWarningStr
 
 #this dict stores attribute values for the selection - attributeChange scriptjobs fire when an attribute changes
 #but don't pass in pre/post values, or even the name of the attribute that has changed.  So when the scriptjobs
@@ -22,44 +22,51 @@ class AttrpathCallback(object):
 	#defines whether the instance should early out when called or not
 	ENABLED = True
 
-	def __init__( self, attrpath ):
+	def __init__( self, ui, attrpath ):
+		self.ui = ui
 		self.attrpath = attrpath
 
 		#setup the initial value of the attrpath in the global attr value dict
 		time = currentTime( q=True )
-		PRE_ATTR_VALUES[ (time, attrpath) ] = getAttr( attrpath )
+		PRE_ATTR_VALUES[ attrpath ] = getAttr( attrpath )
 	def __call__( self ):
 		if not self.ENABLED:
 			return
 
 		#if autokey is turned on, bail - this + autokey = potentially weird behaviour
+		#NOTE: the tool will turn autokey off automatically when loaded - so if its on, its because the user has turned it back on.  Also
+		#worth noting - this tool will restore the initial autokey state when closed/turned off...
 		if autoKeyframe( q=True ):
-			MGlobal.displayWarning( "Autokey is enabled - This tool doesn't play nice with autokey!  Please turn it off!" )
+			printWarningStr( "Autokey is enabled - This tool doesn't play nice with autokey!  Please turn it off!" )
 			return
 
-		attrpath = self.attrpath
-		time = currentTime( q=True )
-
-		#if the time/attrpath tuple isn't in PRE_ATTR_VALUES, bail
-		if (time, attrpath) not in PRE_ATTR_VALUES:
+		#if there are no entries in here - bail, they've already been handled
+		if not PRE_ATTR_VALUES:
 			return
 
-		preValue = PRE_ATTR_VALUES[ (time, attrpath) ]
-		curValue = getAttr( attrpath )
-		valueDelta = curValue - preValue
+		#put the following into a single undo chunk
+		try:
+			undoInfo( openChunk=True )
+			for attrpath, preValue in PRE_ATTR_VALUES.iteritems():
+				curValue = getAttr( attrpath )
+				valueDelta = curValue - preValue
 
-		#if there was no delta, bail
-		if not valueDelta:
-			return
+				#if there was no delta, keep loopin
+				if not valueDelta:
+					continue
 
-		#reset the value in the attr dict
-		PRE_ATTR_VALUES[ (time, attrpath) ] = curValue
+				#if there are no keyframes on this attribute - keep loopin
+				if not keyframe( attrpath, q=True, kc=True ):
+					continue
 
-		#grab the key frame times
-		if not keyframe( attrpath, q=True, kc=True ):
-			return
+				keyframe( attrpath, e=True, t=(), vc=valueDelta, relative=True )
 
-		maya.mel.eval( 'keyframe -e -t ":" -vc %f %s' % (valueDelta, attrpath) )
+			PRE_ATTR_VALUES.clear()
+		finally:
+			undoInfo( closeChunk=True )
+
+		#setup an idle event to re-populate the PRE_ATTR_VALUES dict when everything has finished processing
+		scriptJob( runOnce=True, idleEvent=self.ui.on_selectionChange )
 
 
 class PosePropagatorLayout(MelHLayout):
@@ -127,7 +134,7 @@ class PosePropagatorLayout(MelHLayout):
 			for attr in listAttr( obj, keyable=True ):
 				attrpath = '%s.%s' % (obj, attr)
 				if objExists( attrpath ):
-					UI_dummyParent.setAttributeChangeCB( attrpath, AttrpathCallback( attrpath ), False )
+					UI_dummyParent.setAttributeChangeCB( attrpath, AttrpathCallback( self, attrpath ), False )
 	def on_timeChange( self ):
 		'''
 		when the time changes we need to refresh the values in the PRE_ATTR_VALUES dict
@@ -135,7 +142,7 @@ class PosePropagatorLayout(MelHLayout):
 		time = currentTime( q=True )
 		PRE_ATTR_VALUES.clear()
 		for attrpath in PRE_ATTR_VALUES.keys():
-			PRE_ATTR_VALUES[ (time, attrpath) ] = getAttr( attrpath )
+			PRE_ATTR_VALUES[ attrpath ] = getAttr( attrpath )
 	def on_delete( self ):
 		autoKeyframe( e=True, state=self._initialAutoKeyState )
 
