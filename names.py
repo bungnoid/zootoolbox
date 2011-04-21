@@ -41,7 +41,7 @@ class Name(object):
 	this class creates some useful ways of comparing and manipulating Name objects
 	'''
 	PREFIX_DELIMETERS = ':|'
-	PUNCTUATION = '_.'
+	PUNCTUATION = '_. '
 
 	def __init__( self, nameItem='' ):
 		#NOTE: this value should never be set directly...  instead use the set method or the string property

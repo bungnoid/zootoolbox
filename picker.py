@@ -25,7 +25,6 @@ ADDITIVE = CTRL | SHIFT
 
 
 def isValidMayaNodeName( theStr ):
-	return True
 	validChars = 'abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 	for char in theStr:
 		if char not in validChars:
@@ -39,7 +38,7 @@ def getLabelWidth( theString ):
 	some guestimate code to determine the width of a given string when displayed as
 	text on a ButtonUI instance
 	'''
-	wideLetters = 'abcdeghkmnopqrsuvwxyz_'
+	wideLetters = 'abcdeghkmnopqrsuvwxyz_ '
 
 	width = 0
 	for char in theString:
@@ -168,7 +167,7 @@ class Button(object):
 	SELECTION_STATES = NONE, PARTIAL, COMPLETE = range( 3 )
 	CMD_MODES = MODE_SELECTION_FIRST, MODE_CMD_FIRST, MODE_CMD_ONLY = range( 3 )
 	CMD_MODES_NAMES = 'selection first', 'cmd first', 'cmd only'
-	MIN_SIZE, MAX_SIZE = 5, 75
+	MIN_SIZE, MAX_SIZE = 5, 100
 	DEFAULT_SIZE = 14, 14
 	DEFAULT_COLOUR = tuple( Colour( (0.25, 0.25, 0.3) ).asRGB() )
 	AUTO_COLOUR = None
@@ -348,13 +347,16 @@ class Button(object):
 		setAttr( '%s.cmdIsPython' % self.getNode(), val )
 	def setCmdMode( self, val ):
 		setAttr( '%s.cmdMode' % self.getNode(), val )
-	def setAutoColour( self ):
+	def setAutoColour( self, defaultColour=None ):
 		objs = self.getObjs()
 		for obj in objs:
 			colour = colours.getObjColour( obj )
 			if colour:
 				self.setColour( colour )
 				return
+
+		if defaultColour is not None:
+			self.setColour( defaultColour )
 	def select( self, forceModifiers=None, executeCmd=True ):
 		'''
 		this is what happens when a user "clicks" or "selects" this button.  It handles executing the button
@@ -802,9 +804,15 @@ class ButtonUI(MelIconButton):
 	def mirrorDuplicate( self ):
 		dupe = self.button.duplicate()
 		dupe.mirrorObjs()
-		dupe.setAutoColour()
+		dupe.setAutoColour( self.button.getColour() )
 
 		self.mirrorPosition( dupe )
+
+		#if the button has a label - see if it has a parity and if so, reverse it
+		label = self.button.getLabel()
+		if label:
+			newLabel = names.swapParity( label )
+			dupe.setLabel( newLabel )
 
 		self.sendEvent( 'appendButton', dupe, True )
 	def mirrorPosition( self, button=None ):
@@ -853,6 +861,7 @@ class ButtonUI(MelIconButton):
 		self.delete()
 		self.button.delete()
 		self.sendEvent( 'refreshImage' )
+		self.sendEvent( 'updateButtonList' )
 
 
 class MelPicture(BaseMelWidget):
@@ -891,6 +900,8 @@ class CharacterUI(MelHLayout):
 			self.appendButton( button )
 	def updateEditor( self ):
 		self.sendEvent( 'updateEditor' )
+	def updateButtonList( self ):
+		self.sendEvent( 'updateButtonList' )
 	def createButton( self, pos, size=Button.DEFAULT_SIZE, colour=Button.AUTO_COLOUR, label='', objs=None ):
 		if objs is None:
 			objs = ls( sl=True, type='transform' )
@@ -911,6 +922,8 @@ class CharacterUI(MelHLayout):
 		ui = ButtonUI( self.UI_buttonLayout, button )
 		if select:
 			self.buttonSelected( ui )
+
+		self.updateButtonList()
 
 		return ui
 	def highlightButtons( self ):
@@ -1230,9 +1243,16 @@ class EditorLayout(MelVSingleStretchLayout):
 
 		self.UI_new.setEnabled( True )
 
-		selectedButtons = self.getSelectedButtonUIs()
-		if selectedButtons:
-			button = selectedButtons[0].button
+		#make sure the selected buttons exist
+		selectedButtonUIs = self.getSelectedButtonUIs()
+		existingButtonUIs = []
+		for buttonUI in selectedButtonUIs:
+			if buttonUI.button.exists():
+				existingButtonUIs.append( buttonUI )
+
+		#if there buttons selected...
+		if existingButtonUIs:
+			button = existingButtonUIs[0].button
 			pos, size = button.getPosSize()
 
 			self.UI_buttonLbl.setLabel( 'editing button "%s"' % button.getNode() )
@@ -1244,13 +1264,13 @@ class EditorLayout(MelVSingleStretchLayout):
 			self.UI_selectedColour.setValue( button.getColour(), False )
 
 			#set set editor edits sets for ALL selected buttons
-			self.UI_selectedObjects.setSets( [ b.button.getNode() for b in selectedButtons ] )
+			self.UI_selectedObjects.setSets( [ b.button.getNode() for b in existingButtonUIs ] )
 
 			#update the auto size from label button
 			self.UI_autoSize.enable( bool( button.getLabel() ) )
 
 			#update the command editor button
-			self.UI_selectedCmdButton.setEnabled( bool( selectedButtons ) )
+			self.UI_selectedCmdButton.setEnabled( bool( existingButtonUIs ) )
 			cmdStr = button.getCmdStr()
 			if cmdStr:
 				self.UI_selectedCmdButton.setLabel( '***EDIT*** Press Command' )
@@ -1260,7 +1280,7 @@ class EditorLayout(MelVSingleStretchLayout):
 			#update the selected buttons lists
 			if selectInList:
 				self.UI_buttons.clearSelection()
-				self.UI_buttons.selectItems( selectedButtons )
+				self.UI_buttons.selectItems( existingButtonUIs )
 		else:
 			self.UI_buttonLbl.setLabel( 'no button selected!' )
 	def nudge( self, buttonUI, vectorIdx, direction=1 ):
@@ -1597,8 +1617,6 @@ class PickerWindow(BaseMelWindow):
 		BUTTONS = OK, CANCEL = 'Ok', 'Cancel'
 
 		defaultName = filesystem.Path( file( q=True, sn=True ) ).name()
-		import namingHelpers
-		defaultName = namingHelpers.stripKnownAssetSuffixes( defaultName )
 		ret = promptDialog( t='Create Picker Tab', m='Enter a name for the new picker tab:', text=defaultName, b=BUTTONS, db=OK )
 
 		if ret == OK:

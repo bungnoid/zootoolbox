@@ -2249,8 +2249,8 @@ class BaseMelWindow(BaseMelUI):
 			toolName, authorEmail, helpPage = cls.HELP_MENU
 			helpMenu = new.getMenu( 'Help' )
 			MelMenuItem( helpMenu, l="Help...", en=helpPage is not None, c=lambda x: cmd.showHelp(helpPage, absolute=True) )
-			MelMenuItemDiv( helpMenu )
-			bugReporterUI.addBugReporterMenuItems( toolName, assignee=authorEmail, parent=helpMenu )
+			#MelMenuItemDiv( helpMenu )
+			#bugReporterUI.addBugReporterMenuItems( toolName, assignee=authorEmail, parent=helpMenu )
 
 		#validate the instance list - this should be done regularly, but not always because its kinda slow...
 		BaseMelUI.ValidateInstanceList()
