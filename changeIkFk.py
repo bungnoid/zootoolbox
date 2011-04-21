@@ -79,7 +79,7 @@ def getControlsFromObjs( control ):
 	try:
 		part = rigPrimitives.RigPart.InitFromItem( control )
 
-		return part.control, part.ikHandle, part.poleControl, (part.fkUpper, part.fkMid, part.fkLower)
+		return part.getControl( 'control' ), part.getControl( 'ikHandle' ), part.getControl( 'poleControl' ), (part.getControl( 'fkUpper' ), part.getControl( 'fkMid' ), part.getControl( 'fkLower' ))
 	except rigPrimitives.RigPartError: pass
 
 	#so if the control we've been given isn't a rig primitive, lets try to extract whatever information we can from right click commands - if any exist
@@ -125,14 +125,14 @@ def getControlsFromObjs( control ):
 		printWarningStr( "Could not find the ik handle at the given connect index!" )
 		return errorValue
 
-	return control, handle, poleControl, getJointsFromIkHandle( handle )
+	return control, poleControl, handle, getJointsFromIkHandle( handle )
 
 
 @d_unifyUndo
 @d_disableViews
 @d_noAutoKey
 @d_restoreTime
-def switchAnimationToFk( control, handle=None, attrName='ikBlend', offValue=0, key=True, startFrame=None, endFrame=None ):
+def switchAnimationToFk( control, handle=None, attrName='ikBlend', onValue=1, offValue=0, key=True, startFrame=None, endFrame=None ):
 
 	#grab the key times for keys set on the t or r channels on the ik control - these are the frames we want to switch to fk on
 	keyTimes = keyframe( control, q=True, at=('t', 'r'), tc=True )
@@ -146,11 +146,11 @@ def switchAnimationToFk( control, handle=None, attrName='ikBlend', offValue=0, k
 	keyTimes.sort()
 	cropValues( keyTimes, startFrame, endFrame )
 
+	joints = getJointsFromIkHandle( handle )
 	for time in keyTimes:
 		currentTime( time, e=True )
-		switchToFk( control, handle, attrName, offValue, key )
+		switchToFk( control, handle, attrName, onValue, offValue, key, joints )
 
-	joints = getJointsFromIkHandle( handle )
 	select( joints[-1] )
 
 
@@ -194,7 +194,7 @@ def switchAnimationToIk( control, poleControl=None, handle=None, attrName='ikBle
 	select( control )
 
 
-def switchToFk( control, handle=None, attrName='ikBlend', offValue=0, key=False, joints=None ):
+def switchToFk( control, handle=None, attrName='ikBlend', onValue=1, offValue=0, key=False, joints=None ):
 	if handle is None:
 		handle = control
 
@@ -206,17 +206,19 @@ def switchToFk( control, handle=None, attrName='ikBlend', offValue=0, key=False,
 	if joints is None:
 		joints = getJointsFromIkHandle( handle )
 
+	#make sure ik is on before querying rotations
+	setAttr( '%s.%s' % (control, attrName), onValue )
 	rots = []
 	for j in joints:
 		rot = getAttr( "%s.r" % j )[0]
 		rots.append( rot )
 
+	#now turn ik off and set rotations for the joints
+	setAttr( '%s.%s' % (control, attrName), offValue )
 	for j, rot in zip( joints, rots ):
 		for ax, r in zip( ('x', 'y', 'z'), rot ):
 			if getAttr( '%s.r%s' % (j, ax), se=True ):
 				setAttr( '%s.r%s' % (j, ax), r )
-
-	setAttr( '%s.%s' % (control, attrName), offValue )
 
 	alignFast( joints[2], handle )
 	if key:
@@ -256,15 +258,19 @@ class ChangeIkFkLayout(MelColumnLayout):
 		self.UI_pole = MelObjectSelector( self, 'pole control ->', None, 100 )
 		self.UI_handle = MelObjectSelector( self, 'IK handle ->', None, 100 )
 
-		self.UI_control.setChangeCB( self.setControl )
+		self.UI_control.setChangeCB( self.on_controlChanged )
 
 		hLayout = MelHLayout( self )
 		self.UI_toFk = MelButton( hLayout, l='Switch to FK', c=self.on_toFk )
 		self.UI_toIk = MelButton( hLayout, l='Switch to IK', c=self.on_toIk )
 		hLayout.layout()
 
-		self.setControl()
-	def setControl( self ):
+		self.on_controlChanged()
+	def setControl( self, control ):
+		self.UI_control.setValue( control )
+
+	### EVENT HANDLERS ###
+	def on_controlChanged( self ):
 		control = self.UI_control.getValue()
 		if control:
 			self.UI_toFk.setEnabled( True )
@@ -307,6 +313,18 @@ class ChangeIkFkWindow(BaseMelWindow):
 	def __init__( self ):
 		self.UI_editor = ChangeIkFkLayout( self )
 		self.show()
+	def setControl( self, control ):
+		self.UI_editor.setControl( control )
+
+
+def loadSelectedInTool():
+	sel = ls( sl=True, type='transform' )
+	if sel:
+		if not ChangeIkFkWindow.Exists():
+			ChangeIkFkWindow()
+
+		for layout in ChangeIkFkLayout.IterInstances():
+			layout.setControl( sel[0] )
 
 
 #end

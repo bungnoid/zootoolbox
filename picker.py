@@ -6,6 +6,7 @@ from baseMelUI import *
 from vectors import Vector, Colour
 from common import printErrorStr, printWarningStr
 from mayaDecorators import d_unifyUndo
+from apiExtensions import asMObject
 
 import re
 import names
@@ -21,6 +22,33 @@ VERSION = 0
 
 MODIFIERS = SHIFT, CAPS, CTRL, ALT = 2**0, 2**1, 2**2, 2**3
 ADDITIVE = CTRL | SHIFT
+
+
+def isValidMayaNodeName( theStr ):
+	return True
+	validChars = 'abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+	for char in theStr:
+		if char not in validChars:
+			return False
+
+	return True
+
+
+def getLabelWidth( theString ):
+	'''
+	some guestimate code to determine the width of a given string when displayed as
+	text on a ButtonUI instance
+	'''
+	wideLetters = 'abcdeghkmnopqrsuvwxyz_'
+
+	width = 0
+	for char in theString:
+		if char in wideLetters:
+			width += 7
+		else:
+			width += 3
+
+	return width
 
 
 def removeRefEdits( objs, cmd=None ):
@@ -166,6 +194,7 @@ class Button(object):
 		self.setLabel( label )
 		self.setObjs( objs )
 		self.setCmdStr( cmdStr )
+		self.setCmdIsPython( cmdIsPython )
 
 		#if the colour is set to "AUTO_COLOUR" then try to determine the button colour based off the object's colour
 		if colour is cls.AUTO_COLOUR:
@@ -182,7 +211,7 @@ class Button(object):
 				addAttr( node, **addAttrKw )
 
 	def __init__( self, node ):
-		self._node = node
+		self._node = asMObject( node )
 	def __repr__( self ):
 		return "%s( '%s' )" % (type( self ).__name__, self.getNode())
 	__str__ = __repr__
@@ -203,13 +232,16 @@ class Button(object):
 	def __hash__( self ):
 		return hash( self._node )
 	def getNode( self ):
-		return self._node
+		return unicode( self._node )
 	def getCharacter( self ):
 		cons = listConnections( self.getNode(), type='objectSet', s=False )
 		if cons:
 			return Character( cons[0] )
 	def getPosSize( self ):
 		valStr = getAttr( '%s.posSize' % self.getNode() )
+		if valStr is None:
+			return Vector( (0,0,0) ), self.DEFAULT_SIZE
+
 		posStr, sizeStr = valStr.split( ';' )
 
 		pos = Vector( [ int( p ) for p in posStr.split( ',' ) ] )
@@ -219,7 +251,11 @@ class Button(object):
 	def getPos( self ): return self.getPosSize()[0]
 	def getSize( self ): return self.getPosSize()[1]
 	def getColour( self ):
-		rgb = getAttr( '%s.colour' % self.getNode() ).split( ',' )
+		rgbStr = getAttr( '%s.colour' % self.getNode() )
+		if rgbStr is None:
+			return self.DEFAULT_COLOUR
+
+		rgb = rgbStr.split( ',' )
 		rgb = map( float, rgb )
 
 		return Colour( rgb )
@@ -286,14 +322,14 @@ class Button(object):
 		setAttr( '%s.label' % self.getNode(), val, type='string' )
 
 		#rename the node to reflect the label
-		if val:
-			self._node = rename( self._node, val )
+		if val and isValidMayaNodeName( val ):
+			rename( self._node, val )
 		else:
 			objs = self.getObjs()
 			if objs:
-				self._node = rename( self._node, '%s_picker' % objs[0] )
+				rename( self._node, '%s_picker' % objs[0] )
 			else:
-				self._node = rename( self._node, 'picker' )
+				rename( self._node, 'picker' )
 	def setObjs( self, val ):
 		if isinstance( val, basestring ):
 			val = [ val ]
@@ -370,6 +406,13 @@ class Button(object):
 			return self.COMPLETE
 
 		return self.PARTIAL
+	def moveBy( self, offset ):
+		pos = self.getPos()
+		self.setPos( pos + offset )
+	def exists( self ):
+		return objExists( self._node )
+	def isEmpty( self ):
+		return not bool( self.getObjs() )
 	def executeCmd( self ):
 		'''
 		executes the command string for this button
@@ -450,7 +493,7 @@ class Character(object):
 		return self
 
 	def __init__( self, node ):
-		self._node = node
+		self._node = asMObject( node )
 	def __repr__( self ):
 		return "%s( '%s' )" % (type( self ).__name__, self.getNode())
 	__str__ = __repr__
@@ -459,7 +502,7 @@ class Character(object):
 	def __ne__( self, other ):
 		return not self.__eq__( other )
 	def getNode( self ):
-		return self._node
+		return unicode( self._node )
 	def getButtons( self ):
 		buttonNodes = sets( self.getNode(), q=True ) or []
 
@@ -477,7 +520,7 @@ class Character(object):
 	def setName( self, val ):
 		setAttr( '%s.name' % self.getNode(), str( val ), type='string' )
 		lockNode( self._node, lock=False )
-		self._node = rename( self.getNode(), val )
+		rename( self.getNode(), val )
 		lockNode( self._node, lock=True )
 	def setBgImage( self, val ):
 		setAttr( '%s.bgImage' % self.getNode(), val, type='string' )
@@ -652,17 +695,40 @@ def _drop( src, tgt, msgs, x, y, mods ):
 	'''
 	src = BaseMelUI.FromStr( src )
 	tgt = BaseMelUI.FromStr( tgt )
+
+	#if dragging an existing button around on the form, interpret it as a move
 	if isinstance( src, ButtonUI ) and isinstance( tgt, DragDroppableFormLayout ):
 		srcX, srcY = map( int, msgs )
 		x -= srcX
 		y -= srcY
 
-		src.button.setPos( (x, y) )
-		src.updateGeometry()
-	elif isinstance( src, CreatePickerButton ) and isinstance( tgt, DragDroppableFormLayout ):
-		pickerLayout = src.getParentOfType( EditorLayout )
-		characterUI = pickerLayout.pickerUI.getCurrentCharacterUI()
-		newButton = characterUI.createButton( (x, y) )
+		#figure out the delta moved
+		curX, curY = src.button.getPos()
+		delta = x - curX, y - curY
+
+		charUI = src.getParentOfType( CharacterUI )
+		buttonsToMove = charUI.getSelectedButtonUIs()
+
+		#if the button dragged isn't in the selection - add it to the selection
+		if src not in buttonsToMove:
+			buttonsToMove.insert( 0, src )
+			charUI.setSelectedButtonUIs( buttonsToMove )
+
+		#now move all the buttons by the given delta
+		for buttonUI in buttonsToMove:
+			buttonUI.button.moveBy( delta )
+			buttonUI.updateGeometry( False )
+
+		#finally, refresh the BG image
+		charUI.refreshImage()
+
+	#if dragging from the form to the form, or dragging from the creation button, interpret it as a create new button
+	elif isinstance( src, CreatePickerButton ) and isinstance( tgt, DragDroppableFormLayout ) or \
+	     isinstance( src, DragDroppableFormLayout ) and isinstance( tgt, DragDroppableFormLayout ):
+
+		characterUI = tgt.getParentOfType( CharacterUI )
+		if characterUI:
+			newButton = characterUI.createButton( (x, y) )
 
 
 class ButtonUI(MelIconButton):
@@ -715,7 +781,7 @@ class ButtonUI(MelIconButton):
 		self.updateGeometry()
 		self.updateAppearance()
 		self.updateHighlightState()
-	def updateGeometry( self ):
+	def updateGeometry( self, refreshUI=True ):
 		pos, size = self.button.getPosSize()
 		x, y = pos
 
@@ -728,7 +794,9 @@ class ButtonUI(MelIconButton):
 		parent( e=True, ap=((self, 'top', y, 0), (self, 'left', x, 0)) )
 
 		self.setSize( size )
-		self.sendEvent( 'refreshImage' )
+
+		if refreshUI:
+			self.sendEvent( 'refreshImage' )
 	def updateAppearance( self ):
 		self.setLabel( self.button.getNiceLabel() )
 	def mirrorDuplicate( self ):
@@ -805,7 +873,7 @@ class DragDroppableFormLayout(MelFormLayout):
 class CharacterUI(MelHLayout):
 	def __init__( self, parent, character ):
 		self.character = character
-		self.currentSelection = []
+		self._selectedButtonUIs = []
 
 		self.UI_picker = MelPicture( self, en=False, dgc=_drag, dpc=_drop )
 		self.UI_picker.setImage( character.getBgImage() )
@@ -830,9 +898,8 @@ class CharacterUI(MelHLayout):
 		newButton = Button.Create( self.character, pos, size, colour, label, objs )
 
 		#we want the drop position to be the centre of the button, not its edge - so we need to factor out the size, which we can only do after instantiating the button so we can query its size
-		x, y = pos
-		size = newButton.getSize()
-		newButton.setPos( (x - (size.x / 2), y - (size.y / 2)) )
+		sizeHalf = newButton.getSize() / 2.0
+		newButton.setPos( Vector( pos ) - sizeHalf )
 
 		self.appendButton( newButton, True )
 
@@ -849,13 +916,23 @@ class CharacterUI(MelHLayout):
 	def highlightButtons( self ):
 		for buttonUI in self.getButtonUIs():
 			buttonUI.updateHighlightState()
+	def getSelectedButtonUIs( self ):
+		selButtonUIs = []
+		for buttonUI in self._selectedButtonUIs:
+			if buttonUI.button.exists():
+				selButtonUIs.append( buttonUI )
+
+		return selButtonUIs
+	def setSelectedButtonUIs( self, buttonUIs ):
+		self._selectedButtonUIs = buttonUIs[:]
+		self.updateEditor()
 	def selectHighlightedButtons( self ):
-		self.currentSelection = currentSelection = []
+		currentSelection = []
 		for buttonUI in self.getButtonUIs():
 			if buttonUI.isButtonHighlighted() == Button.COMPLETE:
 				currentSelection.append( buttonUI )
 
-		self.updateEditor()
+		self.setSelectedButtonUIs( currentSelection )
 	def breakoutButton( self, buttonUI, direction ):
 		buttons = self.character.breakoutButton( buttonUI.button, direction )
 		for button in buttons:
@@ -867,18 +944,18 @@ class CharacterUI(MelHLayout):
 	def buttonSelected( self, button ):
 		mods = getModifiers()
 		if mods & SHIFT and mods & CTRL:
-			if button not in self.currentSelection:
-				self.currentSelection.append( button )
+			if button not in self._selectedButtonUIs:
+				self._selectedButtonUIs.append( button )
 		elif mods & CTRL:
-			if button in self.currentSelection:
-				self.currentSelection.remove( button )
+			if button in self._selectedButtonUIs:
+				self._selectedButtonUIs.remove( button )
 		elif mods & SHIFT:
-			if button in self.currentSelection:
-				self.currentSelection.remove( button )
+			if button in self._selectedButtonUIs:
+				self._selectedButtonUIs.remove( button )
 			else:
-				self.currentSelection.append( button )
+				self._selectedButtonUIs.append( button )
 		else:
-			self.currentSelection = [ button ]
+			self._selectedButtonUIs = [ button ]
 
 		self.updateEditor()
 	def getButtonUIs( self ):
@@ -887,11 +964,12 @@ class CharacterUI(MelHLayout):
 		needToRefresh = False
 		for buttonUI in self.getButtonUIs():
 			if buttonUI.button.isEmpty():
+				buttonUI.button.delete()
 				buttonUI.delete()
 				needToRefresh = True
 
 		if needToRefresh:
-			self.sendEvent( 'refreshImage' )
+			self.refreshImage()
 	def delete( self ):
 		self.character.delete()
 		MelHLayout.delete( self )
@@ -1042,14 +1120,32 @@ class EditorLayout(MelVSingleStretchLayout):
 		hLayout = MelHSingleStretchLayout( self )
 		hLayout.expand = True
 
-		self.UI_buttons = ButtonList( hLayout, w=100, ams=True, sc=self.on_selectButtonFromList )
+		vLayout = MelVSingleStretchLayout( hLayout )
+		self.UI_buttons = ButtonList( vLayout, w=100, ams=True, sc=self.on_selectButtonFromList, dcc=self.on_doubleClickButton )
+		self.UI_selectHighlighted = MelButton( vLayout, l='select highlighted', c=self.on_selectHighlighted )
+
+		vLayout.padding = 0
+		vLayout.setStretchWidget( self.UI_buttons )
+		vLayout.layout()
 
 		selLayout = MelVSingleStretchLayout( hLayout )
 		selLayout.padding = 0
 
 		#UI for label
-		self.UI_selectedLabel = LabelledTextField( selLayout, llabel='label:', llabelWidth=lblWidth )
-		self.UI_selectedColour = MelColourSlider( selLayout, label='colour:', cw=(1, lblWidth), columnAttach=((1, 'left', 0), (2, 'left', 0), (3, 'left', 0)), adj=3 )
+		SZ_lblLabel = MelHSingleStretchLayout( selLayout )
+		lbl = MelLabel( SZ_lblLabel, l='label:', w=lblWidth )
+		SZ_label = MelHSingleStretchLayout( SZ_lblLabel )
+		self.UI_selectedLabel = MelTextField( SZ_label )
+		self.UI_autoSize = MelButton( SZ_label, l='fit to label', c=self.on_autoSize )
+
+		SZ_label.setStretchWidget( self.UI_selectedLabel )
+		SZ_label.layout()
+
+		SZ_lblLabel.setStretchWidget( SZ_label )
+		SZ_lblLabel.layout()
+
+		#UI for colour
+		self.UI_selectedColour = MelColourSlider( selLayout, label='colour:', cw=(1, lblWidth + 7), columnAttach=((1, 'left', 0), (2, 'left', 0), (3, 'left', 0)), adj=3 )
 
 		#UI for position
 		SZ_lblPos = MelHSingleStretchLayout( selLayout )
@@ -1101,7 +1197,7 @@ class EditorLayout(MelVSingleStretchLayout):
 		SZ_size.layout()
 
 		#setup change callbacks
-		self.UI_selectedLabel.ui.setChangeCB( self.on_saveLabel )
+		self.UI_selectedLabel.setChangeCB( self.on_saveLabel )
 		self.UI_selectedColour.setChangeCB( self.on_saveColour )
 
 		#add UI to edit the button set node
@@ -1149,6 +1245,9 @@ class EditorLayout(MelVSingleStretchLayout):
 
 			#set set editor edits sets for ALL selected buttons
 			self.UI_selectedObjects.setSets( [ b.button.getNode() for b in selectedButtons ] )
+
+			#update the auto size from label button
+			self.UI_autoSize.enable( bool( button.getLabel() ) )
 
 			#update the command editor button
 			self.UI_selectedCmdButton.setEnabled( bool( selectedButtons ) )
@@ -1203,8 +1302,37 @@ class EditorLayout(MelVSingleStretchLayout):
 	def on_selectButtonFromList( self, *a ):
 		charUI = self.pickerUI.getCurrentCharacterUI()
 		if charUI:
-			self.pickerUI.getCurrentCharacterUI().currentSelection = self.UI_buttons.getSelectedItems()
+			selectedButtonUIs = self.UI_buttons.getSelectedItems()
+			self.pickerUI.getCurrentCharacterUI().setSelectedButtonUIs( selectedButtonUIs )
+
+			for buttonUI in selectedButtonUIs:
+				buttonUI.button.select( CTRL | SHIFT )
+
 			self.update( False )
+			charUI.highlightButtons()
+	@d_unifyUndo
+	def on_doubleClickButton( self, *a ):
+		pass
+	@d_unifyUndo
+	def on_selectHighlighted( self, *a ):
+		currentCharacterUI = self.getCurrentCharacterUI()
+		if currentCharacterUI:
+			currentCharacterUI.selectHighlightedButtons()
+	@d_unifyUndo
+	def on_autoSize( self, *a ):
+		minHeight = 14
+		extraPadding = 15
+		for buttonUI in self.getSelectedButtonUIs():
+			button = buttonUI.button
+			label = button.getLabel()
+			if label:
+				curSize = button.getSize()
+				width = getLabelWidth( label ) + extraPadding
+				height = max( minHeight, curSize[1] )
+				button.setSize( (width, height) )
+				buttonUI.updateGeometry()
+
+		self.update()
 	@d_unifyUndo
 	def on_nudgeXL( self, *a ):
 		for buttonUI in self.getSelectedButtonUIs():
@@ -1350,7 +1478,7 @@ class PickerLayout(MelVSingleStretchLayout):
 		if selectedTab:
 			currentCharacter = CharacterUI.FromStr( selectedTab )
 			if currentCharacter:
-				return currentCharacter.currentSelection
+				return currentCharacter.getSelectedButtonUIs()
 
 		return []
 	def selectCharacter( self, character ):
@@ -1358,10 +1486,11 @@ class PickerLayout(MelVSingleStretchLayout):
 			if ui.character == character:
 				self.UI_tabs.setSelectedTabIdx( idx )
 	def updateEditor( self ):
-		if self.UI_editor:
+		if self.UI_editor.exists():
 			self.UI_editor.update()
 	def updateButtonList( self ):
-		self.UI_editor.updateButtonList()
+		if self.UI_editor.exists():
+			self.UI_editor.updateButtonList()
 	def loadPreset( self, preset, *a ):  #*a exists only because this gets directly called by a menuItem - and menuItem's always pass a bool arg for some reason...  check state maybe?
 		newCharacter = Character.LoadFromPreset( preset )
 		if newCharacter:
@@ -1388,7 +1517,9 @@ class PickerLayout(MelVSingleStretchLayout):
 		self.updateButtonList()
 		self.updateEditor()
 	def on_tabChange( self, *a ):
-		self.UI_editor.updateButtonList()
+		if self.UI_editor.exists():
+			self.UI_editor.updateButtonList()
+
 		self.on_selectionChange()
 	def on_sceneChange( self, *a ):
 		self.populate()
