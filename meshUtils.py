@@ -7,7 +7,7 @@ design this a little better
 
 from maya.cmds import *
 from maya.OpenMayaAnim import MFnSkinCluster
-from vectors import Vector, Matrix, computeCovariantMatrix, computeSymmetricalEigen
+from vectors import Vector, Matrix
 from filesystem import Path, BreakException
 
 import maya.cmds as cmd
