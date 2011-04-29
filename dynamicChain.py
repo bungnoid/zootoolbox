@@ -1,4 +1,3 @@
-
 from maya.cmds import *
 from baseMelUI import *
 from common import printWarningStr
@@ -14,7 +13,8 @@ class DynamicChain(object):
 		for obj in objs:
 			positions.append( xform( obj, q=True, ws=True, rp=True ) )
 
-		#build a proxy joint chain - the proxy chain will be parented together so we can drive it via spline IK
+		#build a proxy joint chain - the proxy chain will be parented together (because the input objects may 
+      #not be in the same hierarchy) so we can drive it via spline IK, which will in turn, drive the objs
 		proxyJoints = []
 		for obj in objs:
 			select( cl=True )
@@ -90,16 +90,57 @@ class DynamicChain(object):
 
 		attrState( control, ('t', 'r', 's', 'v'), *LOCK_HIDE )
 
-		ikHandle( sj=proxyJoints[0], ee=proxyJoints[-1], curve=dynamicCurveShape, sol='ikSplineSolver', ccv=False )
+		splineIkHandle = ikHandle( sj=proxyJoints[0], ee=proxyJoints[-1], curve=dynamicCurveShape, sol='ikSplineSolver', ccv=False )[0]
+      
+      #put all the nodes created into some sort of container object so we can "get at" them later for
+      #either editing, muting or deletion
+      container = sets( empty=True, text='zooDynamicChain' )
+      sets( (linearCurve, control, follice, splineIkHandle), e=True, add=container )
 
 		return cls( container )
-
+   @classmethod
+   def Iter( cls ):
+   	'''
+   	iterates over all dynamic chains in the current scene
+   	'''
+   	existing = ls( type='objectSet' )
+   	if not existing:
+      	return
+        
+      for s in existing:
+			if sets( s, q=True, text=True ) == 'zooDynamicChain':
+         	yield cls( s )
+            
 	def __init__( self, container ):
-		pass
+		self._node = container
+   def construct( self ):
+      '''
+      builds the actual dynamic hair network
+      ''' 
+   def mute( self ):
+      '''
+      deletes the hair nodes but retains the settings and objects involved in the hair
+      '''
+      pass
+   def getMuted( self ):
+      '''
+      returns whether this dynamic chain is muted or not
+      '''
+      return False
 	def bake( self, skipFrames=4 ):
+      '''
+      if this dynamic chain isn't muted, this will bake the motion to keyframes and mute
+      the dynamic hair
+      '''
 		pass
 	def delete( self ):
-		pass
+      '''
+      deletes the dynamic chain
+      '''
+		for node in sets( q=self._node ):
+         delete( node )
+         
+      delete( self._node )
 
 
 class DynamicChainLayout(MelVSingleStretchLayout):
