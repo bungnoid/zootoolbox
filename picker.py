@@ -623,6 +623,11 @@ class Character(object):
 		'''
 		filepath = filesystem.Path( filepath )
 
+		#make sure the namespaceHint - if we have one - doesn't end in a semi-colon
+		if namespaceHint:
+			if namespaceHint.endswith( ':' ):
+				namespaceHint = namespaceHint[ :-1 ]
+
 		buttonDicts = []
 		with open( filepath ) as fOpen:
 			lineIter = iter( fOpen )
@@ -659,17 +664,22 @@ class Character(object):
 			objs = buttonDict.pop( 'objs', [] )
 			realObjs = []
 			for obj in objs:
+
+				#does the exact object exist?
 				if objExists( obj ):
 					realObjs.append( obj )
 					continue
 
+				#how about inserting a namespace in-between any path tokens?
+				pathToks = obj.split( '|' )
 				if namespaceHint:
-					objNs = '%s:%s' % (namespaceHint, obj)
+					objNs = '|'.join( '%s:%s' % (namespaceHint, tok) for tok in pathToks )
 					if objExists( objNs ):
 						realObjs.append( objNs )
 						continue
 
-				anyMatches = ls( obj )
+				#how about ANY matches on the leaf path token?
+				anyMatches = ls( pathToks[-1] )
 				if anyMatches:
 					realObjs.append( anyMatches[0] )
 					if not namespaceHint:
@@ -745,6 +755,9 @@ class ButtonUI(MelIconButton):
 		self( e=True, dgc=_drag, dpc=_drop, style='textOnly', c=self.on_press )
 		self.POP_menu = MelPopupMenu( self, pmc=self.buildMenu )
 
+		self._hashGeo = 0
+		self._hashApp = 0
+
 		self.update()
 	def buildMenu( self, *a ):
 		menu = self.POP_menu
@@ -784,8 +797,12 @@ class ButtonUI(MelIconButton):
 		self.updateAppearance()
 		self.updateHighlightState()
 	def updateGeometry( self, refreshUI=True ):
-		pos, size = self.button.getPosSize()
+		posSize = pos, size = self.button.getPosSize()
 		x, y = pos
+
+		#check against the stored hash - early out if they match
+		if hash( posSize ) == self._hashGeo:
+			return
 
 		#clamp the pos to the size of the parent
 		parent = self.getParent()
@@ -797,10 +814,18 @@ class ButtonUI(MelIconButton):
 
 		self.setSize( size )
 
+		#store the hash - geo hashes are stored so that we can do lazy refreshes
+		self._hashGeo = hash( posSize )
+
 		if refreshUI:
 			self.sendEvent( 'refreshImage' )
 	def updateAppearance( self ):
-		self.setLabel( self.button.getNiceLabel() )
+		niceLabel = self.button.getNiceLabel()
+		if hash( niceLabel ) == self._hashApp:
+			return
+
+		self.setLabel( niceLabel )
+		self._hashApp = hash( niceLabel )
 	def mirrorDuplicate( self ):
 		dupe = self.button.duplicate()
 		dupe.mirrorObjs()
@@ -1512,9 +1537,18 @@ class PickerLayout(MelVSingleStretchLayout):
 		if self.UI_editor.exists():
 			self.UI_editor.updateButtonList()
 	def loadPreset( self, preset, *a ):  #*a exists only because this gets directly called by a menuItem - and menuItem's always pass a bool arg for some reason...  check state maybe?
-		newCharacter = Character.LoadFromPreset( preset )
+		namespaceHint = None
+
+		#if there is a selection, use any namespace on the selection as the namespace hint
+		sel = ls( sl=True, type='transform' )
+		if sel:
+			namespaceHint = sel[0].split( ':' )[0]
+
+		newCharacter = Character.LoadFromPreset( preset, namespaceHint )
 		if newCharacter:
 			self.appendCharacter( newCharacter )
+		else:
+			printWarningStr( 'No character was created!' )
 	def renameCurrentCharacter( self, newName ):
 		charUIStr = self.UI_tabs.getSelectedTab()
 		if charUIStr:
@@ -1549,6 +1583,13 @@ class PickerLayout(MelVSingleStretchLayout):
 			charUI = CharacterUI.FromStr( charUIStr )
 			charUI.highlightButtons()
 	def on_undo( self, *a ):
+
+		#check to see if the user only wants the undo to work if the editor is open
+		undoOnlyIfEditorOpen = optionVar( q='zooUndoOnlyIfEditorOpen' )
+		if undoOnlyIfEditorOpen:
+			if not EditorWindow.Exists():
+				return
+
 		charUI = self.getCurrentCharacterUI()
 		if charUI:
 			self.updateEditor()
@@ -1599,6 +1640,10 @@ class PickerWindow(BaseMelWindow):
 
 		MelMenuItem( menu, en=charSelected, l='Save Picker Preset', c=self.on_save )
 		self.SUB_presets = MelMenuItem( menu, l='Load Picker Preset', sm=True, pmc=self.buildLoadablePresets )
+
+		undoOnlyIfEditorOpen = optionVar( q='zooUndoOnlyIfEditorOpen' )
+		MelMenuItemDiv( menu )
+		MelMenuItem( menu, l='Only Refresh On Undo If Editor Open', cb=undoOnlyIfEditorOpen, c=self.on_undoPrefChange )
 	def buildLoadablePresets( self, *a ):
 		menu = self.SUB_presets
 
@@ -1662,6 +1707,8 @@ class PickerWindow(BaseMelWindow):
 					currentChar.character.saveToPreset( filesystem.Preset( filesystem.GLOBAL, TOOL_NAME, presetName, TOOL_EXTENSION ) )
 	def on_loadPresetManager( self, *a ):
 		presetsUI.load( TOOL_NAME, ext=TOOL_EXTENSION )
+	def on_undoPrefChange( self, *a ):
+		undoOnlyIfEditorOpen = optionVar( iv=('zooUndoOnlyIfEditorOpen', int( a[0] )) )
 
 
 #end

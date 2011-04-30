@@ -58,6 +58,11 @@ def loadSkeletonBuilderUI( *a ):
 	skeletonBuilderUI.SkeletonBuilderWindow()
 
 
+def loadPicker( *a ):
+	import picker
+	picker.PickerWindow()
+
+
 class ToolCB(object):
 	def __init__( self, melStr ):
 		self.cmdStr = melStr
@@ -77,7 +82,8 @@ TOOL_CATS = ( ('rigging', (('Skeleton Builder - the new CST', "Skeleton Builder 
                            ('zooSurgeon', 'zooSurgeon will automatically cut up a skinned mesh and parent the cut up "proxy" objects to the skeleton.  This allows for near instant creation of a fast geometrical representation of a character.', None),
                            ('zooVisMan', 'visMan is a tool for creating and using heirarchical visibility sets in your scene.  a visibility set holds a collection of items, be it components, objects or anything else that normally fits into a set.  the sets can be organised heirarchically, and easily collapsed, and selected in a UI to show only certain objects in your viewports.  its great for working with large sets, or breaking a character up into parts to focus on', None))),
 
-              ('animation', (('zooAnimStore', '', None),
+              ('animation', (('zooPicker', 'Picker tool - provides a way to create buttons that select scene objects, or run arbitrary code', loadPicker),
+							 ('zooAnimStore', '', None),
                              ('zooXferAnim', 'zooXferAnim is an animation transfer utility.  It allows transfer of animation using a variety of different methods, instancing, duplication, copy/paste, import/export and tracing.  Its also fully externally scriptable for integration into an existing production pipeline.', None),
                              ('zooGraphFilter', 'zooGraphFilter provides a quick and easy way of filtering out certain channels on many objects in the graph editor.', None),
                              ('zooKeyCommands', 'zooKeyCommands is a simple little tool that lets you run a MEL command on an object for each keyframe the object has.  It basically lets you batch a command for each keyframe.', None),
