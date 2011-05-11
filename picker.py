@@ -1504,6 +1504,11 @@ class PickerLayout(MelVSingleStretchLayout):
 
 		#hook up a deletion callback
 		self.setDeletionCB( self.on_delete )
+	def setUndoCbState( self, state ):
+		if state:
+			self.setUndoCB( self.on_undo )
+		else:
+			self.setUndoCB( None )
 	def populate( self ):
 		self.UI_tabs.clear()
 		for character in Character.IterAll():

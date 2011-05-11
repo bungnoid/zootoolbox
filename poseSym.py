@@ -3,6 +3,7 @@ from vectors import Vector, Matrix, Axis, AX_X, AX_Y, AX_Z
 from rigUtils import MATRIX_ROTATION_ORDER_CONVERSIONS_FROM, MATRIX_ROTATION_ORDER_CONVERSIONS_TO
 from maya.cmds import *
 from maya.OpenMaya import MGlobal
+from mayaDecorators import d_unifyUndo
 
 import maya
 import apiExtensions
@@ -47,6 +48,7 @@ def setWorldRotMatrix( obj, matrix ):
 	setLocalRotMatrix( obj, localMatrix )
 
 
+@d_unifyUndo
 def setLocalRotMatrix( obj, matrix ):
 	'''
 	given a world matrix, will set the transforms of the object
@@ -135,6 +137,7 @@ class ControlPair(object):
 
 		return None
 	@classmethod
+	@d_unifyUndo
 	def Create( cls, controlA, controlB=None, axis=None ):
 		'''
 		given two controls will setup the relationship between them
@@ -215,16 +218,19 @@ class ControlPair(object):
 		return hash( self.node )
 	def getAxis( self ):
 		return Axis( getAttr( '%s.axis' % self.node ) )
+	@d_unifyUndo
 	def setAxis( self, axis ):
 		setAttr( '%s.axis' % self.node, axis )
 	def getFlips( self ):
 		axes = getAttr( '%s.flipAxes' % self.node )
 		return list( self.FLIP_AXES[ axes ] )
+	@d_unifyUndo
 	def setFlips( self, flips ):
 		if isinstance( flips, int ):
 			setAttr( '%s.flipAxes' % self.node, flips )
 	def getWorldSpace( self ):
 		return getAttr( '%s.worldSpace' % self.node )
+	@d_unifyUndo
 	def setWorldSpace( self, state ):
 		setAttr( '%s.worldSpace' % self.node, state )
 	def isSingular( self ):
@@ -243,6 +249,7 @@ class ControlPair(object):
 		return getAttr( '%s.neverDoR' % self.node )
 	def neverDoOther( self ):
 		return getAttr( '%s.neverDoOther' % self.node )
+	@d_unifyUndo
 	def setup( self, axis=None ):
 		'''
 		sets up the initial state of the pair node
@@ -287,6 +294,7 @@ class ControlPair(object):
 			matrix.setRow( flipAxis, -Vector( matrix.getRow( flipAxis ) ) )
 
 		return matrix
+	@d_unifyUndo
 	def swap( self, t=True, r=True, other=True ):
 		'''
 		mirrors the pose of each control, and swaps them
@@ -361,6 +369,7 @@ class ControlPair(object):
 
 					if getAttr( '%s.t' % self.controlB, se=True ):
 						setAttr( '%s.t' % self.controlB, *newPosB )
+	@d_unifyUndo
 	def mirror( self, controlAIsSource=True, t=True, r=True, other=True ):
 		'''
 		mirrors the pose of controlA (or controlB if controlAIsSource is False) and
@@ -380,8 +389,6 @@ class ControlPair(object):
 				control = self.controlA
 				otherControl = self.controlB
 
-		worldSpace = self.getWorldSpace()
-
 		#do the other attributes first - the parent attribute for example will change the position so we need to set it before setting transforms
 		if other:
 			if not self.neverDoOther():
@@ -392,6 +399,8 @@ class ControlPair(object):
 
 						if objExists( attrPath ):
 							setAttr( attrPath, getAttr( otherAttrPath ) )
+
+		worldSpace = self.getWorldSpace()
 
 		#do rotation
 		if r:
@@ -417,7 +426,8 @@ class ControlPair(object):
 				else:
 					pos = list( getAttr( '%s.t' % otherControl )[0] )
 					pos[ self.getAxis() ] = -pos[ self.getAxis() ]
-					setAttr( control, *pos )
+					setAttr( '%s.t' % control, *pos )
+	@d_unifyUndo
 	def match( self, controlAIsSource=True, t=True, r=True, other=True ):
 		'''
 		pushes the pose of controlA (or controlB if controlAIsSource is False) to the
@@ -487,6 +497,7 @@ def iterPairAndObj( objs ):
 			pairNodesVisited.add( pairNode )
 
 
+@d_unifyUndo
 def setupMirroringFromNames( mandatoryTokens=('control', 'ctrl') ):
 	'''
 	sets up control pairs for all parity based controls in the scene as determined by their names.
