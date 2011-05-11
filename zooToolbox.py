@@ -58,6 +58,11 @@ def loadSkeletonBuilderUI( *a ):
 	skeletonBuilderUI.SkeletonBuilderWindow()
 
 
+def loadSkinPropagation( *a ):
+	import refPropagation
+	refPropagation.propagateWeightChangesToModel_confirm()
+
+
 def loadPicker( *a ):
 	import picker
 	picker.PickerWindow()
@@ -75,9 +80,10 @@ class ToolCB(object):
 #tool's toolbox button is pressed.
 #NOTE: the press callback should take *a as its args
 TOOL_CATS = ( ('rigging', (('Skeleton Builder - the new CST', "Skeleton Builder is what zooCST initially set out to be", loadSkeletonBuilderUI),
+						   ('Skinning Propagation', "Propagates skinning changes made to referenced geometry to the file it lives in", loadSkinPropagation),
                            ('zooCST', 'The ghetto version of Skeleton Builder', None),
                            ('zooTriggered', 'zooTriggered is one of the most powerful rigging companions around.  It allows the rigger to attach name independent MEL commands to an object.  These commands can be run either on the selection of the object, or by right clicking over that object.\n\nIt allows context sensitive scripted commands to be added to a character rig, which allows the rigger to create more intuitive rigs.  Being able to add name independent MEL scripts to a rig can open up entire new worlds of possibilities, as does selection triggered MEL commands.', None),
-                           ('zooTriggerator', '''zooTriggerator is an interface for building and managing triggered viewport interfaces.  It builds collapsible, in-viewport folders that contain selection triggers.\n\nThey can be used to build selection triggers for complex rigs to make an easy to use interface for animators to use.''', None),
+                           #('zooTriggerator', '''zooTriggerator is an interface for building and managing triggered viewport interfaces.  It builds collapsible, in-viewport folders that contain selection triggers.\n\nThey can be used to build selection triggers for complex rigs to make an easy to use interface for animators to use.''', None),
                            ('zooKeymaster', 'keymaster gives you a heap of tools to manipulate keyframes - scaling around curve pivots, min/max scaling of curves/keys etc...', ToolCB( 'source zooKeymaster; zooKeymasterWin;' )),
                            ('zooSurgeon', 'zooSurgeon will automatically cut up a skinned mesh and parent the cut up "proxy" objects to the skeleton.  This allows for near instant creation of a fast geometrical representation of a character.', None),
                            ('zooVisMan', 'visMan is a tool for creating and using heirarchical visibility sets in your scene.  a visibility set holds a collection of items, be it components, objects or anything else that normally fits into a set.  the sets can be organised heirarchically, and easily collapsed, and selected in a UI to show only certain objects in your viewports.  its great for working with large sets, or breaking a character up into parts to focus on', None))),

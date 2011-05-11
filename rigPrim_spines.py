@@ -1,3 +1,4 @@
+
 from rigPrim_curves import *
 from spaceSwitching import build, NO_TRANSLATION, NO_ROTATION
 
@@ -7,17 +8,8 @@ class FkSpine(PrimaryRigPart):
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'Spine' ), )
 
 	def _build( self, skeletonPart, translateControls=True, **kw ):
-		scale = kw[ 'scale' ]
-
 		spineBase, spineEnd = skeletonPart.base, skeletonPart.end
-
-		worldPart = WorldPart.Create()
-		worldControl = worldPart.control
-		partsControl = worldPart.parts
-
-
 		partParent, rootControl = getParentAndRootControl( spineBase )
-
 
 		#build a list of all spine joints - start from the bottom of the heirarchy, and work up - a joint only has one parent
 		spines = [ spineEnd ]
@@ -29,10 +21,8 @@ class FkSpine(PrimaryRigPart):
 
 			spines.reverse()
 
-
 		#try to figure out a sensible offset for the spine controls - this is basically just an average of the all offsets for all spine joints
 		spineOffset = AX_Z.asVector() * getAutoOffsetAmount( spines[ 0 ], spines )
-
 
 		#create the controls, and parent them
 		#determine what axis to draw the spine controls - assume they're all the same as the spine base
@@ -44,7 +34,7 @@ class FkSpine(PrimaryRigPart):
 		colourInc = (endColour - startColour) / float( len( spines ) )
 
 		for n, j in enumerate( spines ):
-			c = buildControl( "spine_%d_fkControl" % n, j, PivotModeDesc.BASE, ShapeDesc( 'pin', axis=AX_Z ), colour=spineColour, offset=spineOffset, scale=scale*1.5, niceName='Spine %d Control' % n )
+			c = buildControl( "spine_%d_fkControl" % n, j, PivotModeDesc.BASE, ShapeDesc( 'pin', axis=AX_Z ), colour=spineColour, offset=spineOffset, scale=self.scale*1.5, niceName='Spine %d Control' % n )
 			cSpace = getNodeParent( c )
 
 			jParent = partParent
@@ -88,17 +78,18 @@ class IKFKSpine(PrimaryRigPart):
 	def _build( self, skeletonPart, squish=True, **kw ):
 		objs = skeletonPart.items
 
-		worldPart = WorldPart.Create()
-		worldControl = worldPart.control
-		partsNode = worldPart.parts
-
 		parentControl, rootControl = getParentAndRootControl( objs[0] )
 
-		fittedCurve, linearCurve, proxies, controls, halfIdx = buildControls( objs, parentControl, name='spineControl', **kw )
+		fittedCurve, linearCurve, proxies, fixedLengthProxies, controls, splineIkHandle, halfIdx = buildControls( objs, parentControl, name='spineControl', **kw )
 		buildDefaultSpaceSwitching( objs[0], controls[-1] )
 
-		parent( proxies, partsNode )
-		parent( fittedCurve, linearCurve, partsNode )
+		parent( proxies, self.getPartsNode() )
+		parent( fittedCurve, linearCurve, self.getPartsNode() )
+		if splineIkHandle:
+			parent( splineIkHandle, self.getPartsNode() )
+
+		if fixedLengthProxies:
+			parent( fixedLengthProxies[0], self.getPartsNode() )
 
 		return controls
 

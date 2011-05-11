@@ -1,3 +1,4 @@
+
 from names import *
 from vectors import *
 from filesystem import removeDupes, Path, Preset
@@ -25,37 +26,6 @@ kM_ROOS = [eul.kXYZ, eul.kYZX, eul.kZXY, eul.kXZY, eul.kYXZ, eul.kZYX]
 POST_TRACE_ATTR_NAME = 'xferPostTraceCmd'
 
 
-def d_rotOrderToXYZ_andRestore(f):
-	'''
-	basically just handles setting rotation order to default xyz, doing the align,
-	determining the rotation value and transforming it back into the values for
-	the original rotation order
-	'''
-	def func( src, ctrl, *a, **kw ):
-		initOrder = cmd.getAttr( '%s.ro' % ctrl )
-		cmd.xform( ctrl, p=True, rotateOrder=kROOS[ 0 ] )
-
-		ret = f( src, ctrl, *a, **kw )
-
-		curRot = cmd.getAttr( '%s.r' % ctrl )[ 0 ]
-		try:
-			cmd.setAttr( '%s.r' % ctrl, *ret )
-		except RuntimeError: alteredRet = ret
-		else:
-			cmd.xform( ctrl, p=True, rotateOrder=kROOS[ initOrder ] )
-			alteredRet = cmd.getAttr( '%s.r' % ctrl )[ 0 ]
-
-			cmd.setAttr( '%s.r' % ctrl, *curRot )
-
-		return alteredRet
-
-	func.__name__ = f.__name__
-	func.__doc__ = f.__doc__
-
-	return func
-
-
-@d_rotOrderToXYZ_andRestore
 def bakeRotateDelta( src, ctrl, presetStr ):
 	'''
 	Bakes a post trace command into the ctrl object such that when ctrl is aligned to src (with post
@@ -65,9 +35,6 @@ def bakeRotateDelta( src, ctrl, presetStr ):
 	can be useful when you have motion from a tool such as SFM, or generated from motion capture that
 	needs to be applied back to a rig.
 	'''
-	#api.mel.zooAlign( "-load 1" )
-	#api.mel.zooAlign( "-src %s -tgt %s" % (src, ctrl) )
-
 	offset = api.getRotateDelta__( src, ctrl )
 
 	api.mel.zooSetPostTraceCmd( ctrl, presetStr % offset )
@@ -76,7 +43,6 @@ def bakeRotateDelta( src, ctrl, presetStr ):
 	return offset
 
 
-@d_rotOrderToXYZ_andRestore
 def bakeManualRotateDelta( src, ctrl, presetStr ):
 	'''
 	When you need to apply motion from a skeleton that is completely different from a skeleton driven
@@ -84,32 +50,35 @@ def bakeManualRotateDelta( src, ctrl, presetStr ):
 	you can manually align the control to the joint and then use this function to generate offset
 	rotations and bake a post trace cmd.
 	'''
-	srcMat = api.getMDagPath( src ).inclusiveMatrix()
-	ctrlMat = api.getMDagPath( ctrl ).inclusiveMatrix()
+	srcInvMat = Matrix( cmd.getAttr( '%s.worldInverseMatrix' % src ) )
+	ctrlMat = Matrix( cmd.getAttr( '%s.worldMatrix' % ctrl ) )
 
 	#generate the offset matrix as
-	mat_o = ctrlMat * srcMat.inverse()
-
-	##put it into the space of the control
-	#ctrlLocalMat = api.getMDagPath( ctrl ).exclusiveMatrixInverse()
-	#mat_o = mat_o * ctrlLocalMat
+	mat_o = ctrlMat * srcInvMat
 
 	#now figure out the euler rotations for the offset
-	tMat = api.OpenMaya.MTransformationMatrix( mat_o )
-	asEuler = tMat.rotation().asEulerRotation()
-	asEuler = map(api.OpenMaya.MAngle, (asEuler.x, asEuler.y, asEuler.z))
-	asEuler = tuple( a.asDegrees() for a in asEuler )
+	ro = cmd.getAttr( '%s.ro' % ctrl )
+	rotDelta = api.MATRIX_ROTATION_ORDER_CONVERSIONS_TO[ ro ]( mat_o, True )
 
-	api.mel.zooSetPostTraceCmd( ctrl, presetStr % asEuler )
-	#api.mel.zooAlign( "-src %s -tgt %s -postCmds 1" % (src, ctrl) )
+	#now get the positional delta
+	posDelta = Vector( cmd.xform( src, q=True, ws=True, rp=True ) ) - Vector( cmd.xform( ctrl, q=True, ws=True, rp=True ) )
+	posDelta *= -1
+	ctrlParentInvMat = Matrix( cmd.getAttr( '%s.parentInverseMatrix' % ctrl ) )
+	posDelta = posDelta * ctrlParentInvMat
 
-	return asEuler
+	#construct a list to use for the format str
+	formatArgs = tuple( rotDelta ) + tuple( posDelta )
+
+	#build the post trace cmd str
+	api.mel.zooSetPostTraceCmd( ctrl, presetStr % formatArgs )
+
+	return rotDelta
 
 
 #this dict contains UI labels and a presets for offset commands...  when adding new ones make sure it contains exactly three format strings...
-CMD_PRESETS = CMD_DEFAULT, CMD_SRC_TGT, CMD_IK_FOOT, CMD_COPY = ( ('rotate -r -os %0.2f %0.2f %0.2f #; setKeyframe -at r -at t #;', bakeManualRotateDelta),
-                                                                  ('rotate -r -os %0.2f %0.2f %0.2f #; setKeyframe -at r -at t #;', bakeRotateDelta),
-                                                                  ('rotate -r -os %0.2f %0.2f %0.2f #; setKeyframe -at r -at t #; traceToe # %%opt0%% x z;', bakeRotateDelta),
+CMD_PRESETS = CMD_DEFAULT, CMD_SRC_TGT, CMD_IK_FOOT, CMD_COPY = ( ('rotate -r -os %0.2f %0.2f %0.2f #; move -r -os %0.4f %0.4f %0.4f #; setKeyframe -at r -at t #;', bakeManualRotateDelta),
+                                                                  ('rotate -r -os %0.2f %0.2f %0.2f #; move -r -os %0.4f %0.4f %0.4f #; setKeyframe -at r -at t #;', bakeRotateDelta),
+                                                                  ('rotate -r -os %0.2f %0.2f %0.2f #; move -r -os %0.4f %0.4f %0.4f #; setKeyframe -at r -at t #; traceToe # %%opt0%% x z;', bakeRotateDelta),
                                                                   ('float $f[] = `getAttr %%opt0%%.r`; setAttr #.rx $f[0]; setAttr #.ry $f[1]; setAttr #.rz $f[2]; setKeyframe -at r #;', None) )
 
 

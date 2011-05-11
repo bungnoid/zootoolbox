@@ -56,7 +56,7 @@ class ArbitraryChain(SkeletonPart):
 			#for the sake of simplicity take the first, last and some joint in
 			#the middle and fit a plane to them, and use it's normal for the upAxis
 			midJoint = self[ num / 2 ]
-			defaultUpVector = rigUtils.getObjectBasisVectors( self[ 0 ] )[ 1 ]  #defaults to the "Y" axis of the part's parent
+			defaultUpVector = rigUtils.getObjectBasisVectors( self[ 0 ] )[ BONE_OTHER_AXIS ]
 			normal = getPlaneNormalForObjects( self.base, midJoint, self.end, defaultUpVector )
 			normal *= parity.asMultiplier()
 

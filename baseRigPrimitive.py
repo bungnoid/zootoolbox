@@ -8,6 +8,8 @@ from control import *
 from names import Parity, Name, camelCaseToNice, stripParity
 from skeletonBuilder import *
 from vectors import Vector, Matrix
+from mayaDecorators import d_unifyUndo
+from common import printInfoStr, printWarningStr, printErrorStr
 
 import apiExtensions
 import skeletonBuilder
@@ -43,10 +45,6 @@ def connectAttrReverse( srcAttr, destAttr, **kw ):
 
 
 class RigPartError(Exception): pass
-
-
-def createRigPartContainer( name ):
-	return sets( em=True, n=name, text='rigPrimitive' )
 
 
 def isRigPartContainer( node ):
@@ -100,7 +98,7 @@ def getNodesCreatedBy( function, *args, **kwargs ):
 	return newNodes, ret
 
 
-def buildContainer( typeClass, kwDict, nodes, controls ):
+def buildContainer( typeClass, kwDict, nodes, controls, namedNodes=() ):
 	'''
 	builds a container for the given nodes, and tags it with various attributes to record
 	interesting information such as rig primitive version, and the args used to instantiate
@@ -116,16 +114,21 @@ def buildContainer( typeClass, kwDict, nodes, controls ):
 		theInstance = typeClass( None )
 
 	#build the container, and add the special attribute to it to
-	theContainer = createRigPartContainer( '%s_%s' % (typeClass.__name__, kwDict.get( 'idx', 'NOIDX' )) )
+	theContainer = sets( em=True, n='%s_%s' % (typeClass.__name__, kwDict.get( 'idx', 'NOIDX' )), text='rigPrimitive' )
 	theInstance.container = theContainer
 
-	addAttr( theContainer, ln='_rigPrimitive', attributeType='compound', numberOfChildren=6 )
+	addAttr( theContainer, ln='_rigPrimitive', attributeType='compound', numberOfChildren=7 )
 	addAttr( theContainer, ln='typeName', dt='string', parent='_rigPrimitive' )
 	addAttr( theContainer, ln='script', dt='string', parent='_rigPrimitive' )
 	addAttr( theContainer, ln='version', at='long', parent='_rigPrimitive' )
 	addAttr( theContainer, ln='skeletonPart', at='message', parent='_rigPrimitive' )
 	addAttr( theContainer, ln='buildKwargs', dt='string', parent='_rigPrimitive' )
 	addAttr( theContainer, ln='controls',
+	         multi=True,
+	         indexMatters=True,
+	         attributeType='message',
+	         parent='_rigPrimitive' )
+	addAttr( theContainer, ln='namedNodes',
 	         multi=True,
 	         indexMatters=True,
 	         attributeType='message',
@@ -155,8 +158,7 @@ def buildContainer( typeClass, kwDict, nodes, controls ):
 				sets( node, e=True, add=theContainer )
 
 
-	#and now hook up all the controls
-	controlNames = typeClass.CONTROL_NAMES or []  #CONTROL_NAMES can validly be None, so in this case just call it an empty list
+	#hook up all the controls
 	for idx, control in enumerate( controls ):
 		if control is None:
 			continue
@@ -167,6 +169,12 @@ def buildContainer( typeClass, kwDict, nodes, controls ):
 		if objectType( control, isAType='transform' ):
 			triggered.setKillState( control, True )
 
+	#hook up all the named nodes
+	for idx, node in enumerate( namedNodes ):
+		if node is None:
+			continue
+
+		connectAttr( '%s.message' % node, '%s._rigPrimitive.namedNodes[%d]' % (theContainer, idx), f=True )
 
 	return theInstance
 
@@ -184,6 +192,7 @@ class RigPart(filesystem.trackableClassFactory()):
 	__version__ = 0
 	PRIORITY = 0
 	CONTROL_NAMES = None
+	NAMED_NODES = None
 	AVAILABLE_IN_UI = False  #determines whether this part should appear in the UI or not...
 	ADD_CONTROLS_TO_QSS = True
 
@@ -206,6 +215,11 @@ class RigPart(filesystem.trackableClassFactory()):
 
 		self.container = partContainer
 		self._skeletonPart = skeletonPart
+		self._worldPart = None
+		self._worldControl = None
+		self._partsNode = None
+		self._qss = None
+		self._idx = None
 
 		if partContainer:
 			if skeletonPart is None:
@@ -221,27 +235,9 @@ class RigPart(filesystem.trackableClassFactory()):
 		'''
 		return hash( apiExtensions.asMObject( self.container ) )
 	def __eq__( self, other ):
-		return self.base == other.base
+		return self.container == other.container
 	def __neq__( self, other ):
 		return not self == other
-	def __getattr__( self, attrName ):
-		'''
-		returns the control named <attrName>.  control "names" are defined by the CONTROL_NAMES class
-		variable.  This list is asked for the index of <attrName> and the control at that index is returned
-		'''
-		if self.CONTROL_NAMES is None:
-			raise AttributeError( "The %s rig primitive has no named controls" % self.__class__.__name__ )
-
-		idx = list( self.CONTROL_NAMES ).index( attrName )
-		if idx < 0:
-			raise AttributeError( "No control with the name %s" % attrName )
-
-		connected = listConnections( '%s._rigPrimitive.controls[%d]' % (self.container, idx), d=False )
-		if connected:
-			assert len( connected ) == 1, "More than one control was found!!!"
-			return connected[ 0 ]
-
-		return None
 	def __getitem__( self, idx ):
 		'''
 		returns the control at <idx>
@@ -318,6 +314,14 @@ class RigPart(filesystem.trackableClassFactory()):
 				if issubclass( thisCls, cls ):
 					yield cls( c )
 	@classmethod
+	def IterAllPartsInOrder( cls ):
+		for skeletonPart in SkeletonPart.IterAllPartsInOrder():
+			rigPart = skeletonPart.getRigPart()
+			if rigPart is None:
+				continue
+
+			yield rigPart
+	@classmethod
 	def GetUniqueIdx( cls ):
 		'''
 		returns a unique index (unique against the universe of existing indices
@@ -362,9 +366,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		assert isinstance( skeletonPart, SkeletonPart ), "Need a SkeletonPart instance, got a %s instead" % skeletonPart.__class__
 
 		if not skeletonPart.compareAgainstHash():
-			#skeletonPart.finalize()
-			#if not skeletonPart.compareAgainstHash():
-				raise NotFinalizedError( "ERROR :: %s hasn't been finalized!" % skeletonPart )
+			raise NotFinalizedError( "ERROR :: %s hasn't been finalized!" % skeletonPart )
 
 
 		#now turn the args passed in are a single kwargs dict
@@ -392,16 +394,16 @@ class RigPart(filesystem.trackableClassFactory()):
 		#construct an empty instance - empty RigPart instances are only valid inside this method...
 		self = cls( None )
 		self._skeletonPart = skeletonPart
+		self._idx = idx
 
 
 		#generate a default scale for the rig part
 		kw.setdefault( 'scale', getScaleFromSkeleton() / 10.0 )
+		self.scale = kw[ 'scale' ]
 
 
 		#make sure the world part is created first - if its created by the part, then its nodes will be included in its container...
-		worldPart = WorldPart.Create()
-
-		qss = worldPart.qss
+		self.getWorldPart()
 
 
 		#create the shared shape transform - this is the transform under which all shared shapes are temporarily parented to, and all
@@ -416,7 +418,16 @@ class RigPart(filesystem.trackableClassFactory()):
 		realControls = [ c for c in controls if c is not None ]  #its possible for a build function to return None in the control list because it wants to preserve the length of the control list returned - so construct a list of controls that actually exist
 		if addControlsToQss:
 			for c in realControls:
-				sets( c, add=qss )
+				sets( c, add=self._qss )
+
+
+		#check to see if there is a layer for the rig controls and add controls to it
+		if objExists( 'rig_controls' ) and nodeType( 'rig_controls' ) == 'displayLayer':
+			rigLayer = 'rig_controls'
+		else:
+			rigLayer = createDisplayLayer( name='rig_controls', empty=True )
+
+		editDisplayLayerMembers( rigLayer, controls, noRecurse=True )
 
 
 		#make sure there are no intermediate shapes
@@ -448,7 +459,7 @@ class RigPart(filesystem.trackableClassFactory()):
 
 		#stuff the part container into the world container - we want a clean top level in the outliner
 		theContainer = self.container
-		sets( theContainer, e=True, add=worldPart.container )
+		sets( theContainer, e=True, add=self._worldPart.container )
 
 
 		#make sure the container "knows" the skeleton part - its not always obvious trawling through
@@ -473,7 +484,7 @@ class RigPart(filesystem.trackableClassFactory()):
 			idx = c[ c.rfind( '[' )+1:-1 ]
 			try: name = typeClass.CONTROL_NAMES[ idx ]
 			except ValueError:
-				print typeClass, control
+				printErrorStr( 'type: %s  control: %s' % (typeClass, control) )
 				raise RigPartError( "Doesn't have a name!" )
 
 			return name
@@ -528,9 +539,45 @@ class RigPart(filesystem.trackableClassFactory()):
 		returns the index of the part - all parts have a unique index associated
 		with them
 		'''
-		return self.getBuildKwargs()[ 'idx' ]
+		if self._idx is None:
+			if self.container is None:
+				raise RigPartError( 'No index has been defined yet!' )
+			else:
+				buildKwargs = self.getBuildKwargs()
+				self._idx = buildKwargs[ 'idx' ]
+
+		return self._idx
+	def getParity( self ):
+		return self.getSkeletonPart().getParity()
+	def getSuffix( self ):
+		return self.getParity().asName()
+	def getParityColour( self ):
+		return ColourDesc( 'green 0.7' ) if self.getParity() == Parity.LEFT else ColourDesc( 'red 0.7' )
 	def getBuildScale( self ):
 		return self.getBuildKwargs().get( 'scale', self.PART_SCALE )
+	def getWorldPart( self ):
+		if self._worldPart is None:
+			self._worldPart = worldPart = WorldPart.Create()
+			self._worldControl = worldPart.getControl( 'control' )
+			self._partsNode = worldPart.getControl( 'parts' )
+			self._qss = worldPart.getControl( 'qss' )
+
+		return self._worldPart
+	def getWorldControl( self ):
+		if self._worldControl is None:
+			self.getWorldPart()
+
+		return self._worldControl
+	def getPartsNode( self ):
+		if self._partsNode is None:
+			self.getWorldPart()
+
+		return self._partsNode
+	def getQssSet( self ):
+		if self._qss is None:
+			self.getWorldPart()
+
+		return self._qss
 	def getSkeletonPart( self ):
 		'''
 		returns the skeleton part this rig part is driving
@@ -547,6 +594,24 @@ class RigPart(filesystem.trackableClassFactory()):
 		return skeletonPart
 	def getSkeletonPartParity( self ):
 		return self.getSkeletonPart().getParity()
+	def getControl( self, attrName ):
+		'''
+		returns the control named <attrName>.  control "names" are defined by the CONTROL_NAMES class
+		variable.  This list is asked for the index of <attrName> and the control at that index is returned
+		'''
+		if self.CONTROL_NAMES is None:
+			raise AttributeError( "The %s rig primitive has no named controls" % self.__class__.__name__ )
+
+		idx = list( self.CONTROL_NAMES ).index( attrName )
+		if idx < 0:
+			raise AttributeError( "No control with the name %s" % attrName )
+
+		connected = listConnections( '%s._rigPrimitive.controls[%d]' % (self.container, idx), d=False )
+		if connected:
+			assert len( connected ) == 1, "More than one control was found!!!"
+			return connected[ 0 ]
+
+		return None
 	def getControlIdx( self, control ):
 		'''
 		returns the index of the given control - each control is plugged into a given "slot"
@@ -618,23 +683,12 @@ class RigPart(filesystem.trackableClassFactory()):
 		return None
 	def setupMirroring( self ):
 		for control in self:
+			if control is None:
+				continue
+
 			oppositeControl = self.getOppositeControl( control )
 			pair = poseSym.ControlPair.Create( control, oppositeControl )
-			print 'setting up mirroring on %s %s' % (control, oppositeControl)
-	"""def swapPose( self, t=True, r=True, other=True ):
-		pairsMirrored = set()
-		for control in self:
-			if objectType( control, isAType='transform' ):
-				pairNode = poseSym.ControlPair.GetPairNode( control )
-				if pairNode is None:
-					continue
-
-				pair = poseSym.ControlPair( pairNode )
-				if pair in pairsMirrored:
-					continue
-
-				pairsMirrored.add( pair )
-				pair.swap( t=t, r=r, other=other )"""
+			printInfoStr( 'setting up mirroring on %s %s' % (control, oppositeControl) )
 
 
 def generateNiceControlName( control ):
@@ -682,7 +736,7 @@ def buildDefaultSpaceSwitching( theJoint, control=None, additionalParents=(), ad
 
 	theWorld = WorldPart.Create()
 	spaces = getSpaceSwitchControls( theJoint )
-	spaces.append( theWorld.control )
+	spaces.append( theWorld.getControl( 'control' ) )
 
 	#determine default names for the given controls
 	names = []
@@ -732,10 +786,10 @@ def getParentAndRootControl( theJoint ):
 	if parentControl is None or rootControl is None:
 		world = WorldPart.Create()
 		if parentControl is None:
-			parentControl = world.control
+			parentControl = world.getControl( 'control' )
 
 		if rootControl is None:
-			rootControl = world.control
+			rootControl = world.getControl( 'control' )
 
 	return parentControl, rootControl
 
@@ -776,6 +830,7 @@ class WorldPart(RigPart):
 	                    ('show "export relative" node', """""") ]
 
 	@classmethod
+	@d_unifyUndo
 	def Create( cls, **kw ):
 		for existingWorld in cls.IterAllParts():
 			return existingWorld
@@ -787,6 +842,14 @@ class WorldPart(RigPart):
 
 		worldNodes, controls = getNodesCreatedBy( cls._build, **kw )
 		worldPart = buildContainer( WorldPart, { 'idx': 0 }, worldNodes, controls )
+
+		#check to see if there is a layer for the rig controls and add controls to it
+		if objExists( 'rig_controls' ) and nodeType( 'rig_controls' ) == 'displayLayer':
+			rigLayer = 'rig_controls'
+		else:
+			rigLayer = createDisplayLayer( name='rig_controls', empty=True )
+
+		editDisplayLayerMembers( rigLayer, controls, noRecurse=True )
 
 		return worldPart
 	@classmethod
@@ -838,7 +901,7 @@ class WorldPart(RigPart):
 		#the world part has no skeleton part...
 		return None
 	def setupMirroring( self ):
-		pair = poseSym.ControlPair.Create( self.control )
+		pair = poseSym.ControlPair.Create( self.getControl( 'control' ) )
 		pair.setFlips( 0 )
 
 
@@ -910,11 +973,12 @@ def _deleteRig( self ):
 	rigPart = self.getRigPart()
 	rigPart.delete()
 
-SkeletonPart.deleteRig = _deleteRig
+SkeletonPart.deleteRig = d_unifyUndo( _deleteRig )
 
 ### </CHEEKY!> ###
 
 
+@d_unifyUndo
 def setupMirroring():
 	'''
 	sets up all controls in the scene for mirroring
@@ -923,6 +987,7 @@ def setupMirroring():
 		rigPart.setupMirroring()
 
 
+@d_unifyUndo
 @api.d_showWaitCursor
 def buildRigForModel( scene=None, referenceModel=True, deletePlacers=False ):
 	'''
@@ -971,6 +1036,13 @@ def buildRigForModel( scene=None, referenceModel=True, deletePlacers=False ):
 
 	#if desired, create a new scene and reference in the model
 	if referenceModel:
+
+		#remove any unknown nodes in the scene - these cause maya to barf when trying to save
+		unknownNodes = ls( type='unknown' )
+		if unknownNodes:
+			delete( unknownNodes )
+
+		#scene.editoradd()
 		cmd.file( f=True, save=True )
 		cmd.file( f=True, new=True )
 
@@ -990,11 +1062,17 @@ def buildRigForModel( scene=None, referenceModel=True, deletePlacers=False ):
 	return rigScene
 
 
+@d_unifyUndo
 def buildRigForAllParts():
 	for part in SkeletonPart.IterAllPartsInOrder():
 		part.rig()
 
+	#create a layer for the skeleton
+	for rootPart in Root.IterAllParts():
+		pass
 
+
+@d_unifyUndo
 def cleanMeshControls( doConfirm=True ):
 	shapesRemoved = 0
 	for node in getRigPartContainers( True ):
@@ -1012,7 +1090,7 @@ def cleanMeshControls( doConfirm=True ):
 					delete( shape )
 					shapesRemoved += 1
 
-	print "Clean up %d bogus shapes" % shapesRemoved
+	printInfoStr( "Clean up %d bogus shapes" % shapesRemoved )
 	if doConfirm:
 		cmd.confirmDialog( t='Done!', m="I'm done polishing your rig!\n%d shapes removed." % shapesRemoved, b='OK', db='OK' )
 

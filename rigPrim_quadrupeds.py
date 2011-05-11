@@ -3,7 +3,7 @@ from rigPrim_ikFkBase import *
 from rigPrim_stretchy import StretchRig
 
 
-class QuadrupedIkFkLeg(PrimaryRigPart):
+class QuadrupedIkFkLeg(IkFkBase):
 	__version__ = 0
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'QuadrupedFrontLeg' ), SkeletonPart.GetNamedSubclass( 'QuadrupedBackLeg' ) )
 	CONTROL_NAMES = 'control', 'poleControl', 'clavicle'
@@ -28,13 +28,8 @@ class QuadrupedIkFkLeg(PrimaryRigPart):
 		parityMult = parity.asMultiplier()
 
 		nameMod = kw.get( 'nameMod', 'front' )
-
-		worldPart = WorldPart.Create()
-		worldControl, partsControl = worldPart.control, worldPart.parts
-
 		nameSuffix = '%s%s' % (nameMod.capitalize(), parity.asName())
-
-		colour = ColourDesc( 'red 0.7' ) if parity else ColourDesc( 'green 0.7' )
+		colour = self.getParityColour()
 
 		#determine the root
 		partParent, rootControl = getParentAndRootControl( clavicle )
@@ -52,15 +47,14 @@ class QuadrupedIkFkLeg(PrimaryRigPart):
 		cmd.parent( clavCtrlSpace, partParent )
 
 
-		### BUILD THE LEG RIG PRIMITIVE ###
-		ikFkPart = IkFkBase.Create( self.getSkeletonPart(), **kw )
-
-		legCtrl = ikFkPart.control
-		legFkSpace = ikFkPart.fkSpace
+		#build the leg rig primitive
+		self.buildBase( LEG_NAMING_SCHEME )
+		legCtrl = self.control
+		legFkSpace = self.fkSpace
 
 		parent( legFkSpace, clavCtrl )
 
-		poleSpace = getNodeParent( ikFkPart.poleControl )
+		poleSpace = getNodeParent( self.poleControl )
 		pointConstraint( legFkSpace, legCtrl, poleSpace )
 
 
@@ -97,13 +91,13 @@ class QuadrupedIkFkLeg(PrimaryRigPart):
 			setAttr( '%s.v' % c, False )
 			setAttr( '%s.v' % c, lock=True )
 
-		return legCtrl, ikFkPart.poleControl, clavCtrl
+		return legCtrl, self.poleControl, clavCtrl
 
 
 class SatyrLeg(PrimaryRigPart):
 	__version__ = 0
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'SatyrLeg' ), )
-	CONTROL_NAMES = 'control', 'poleControl'
+	CONTROL_NAMES = 'control', 'poleControl', 'anklePoleControl'
 
 	DISPLAY_NAME = 'Satyr Leg Rig'
 
@@ -117,9 +111,6 @@ class SatyrLeg(PrimaryRigPart):
 		parityMult = parity.asMultiplier()
 
 		nameMod = kw.get( 'nameMod', 'front' )
-
-		worldPart = WorldPart.Create()
-		worldControl, partsControl = worldPart.control, worldPart.parts
 
 		nameSuffix = '_%s%s' % (nameMod.capitalize(), parity.asName())
 
@@ -136,7 +127,7 @@ class SatyrLeg(PrimaryRigPart):
 		footCtrl = buildControl( 'Foot%s' % nameSuffix,
 		                         PlaceDesc( toe, PlaceDesc.WORLD ),
 		                         PivotModeDesc.MID,
-			                     ShapeDesc( 'sphere', axis=-AIM_AXIS if parity else AIM_AXIS ),
+			                     ShapeDesc( 'cube', axis=-AIM_AXIS if parity else AIM_AXIS ),
 			                     colour, scale=scale )
 
 		footCtrlSpace = getNodeParent( footCtrl )
@@ -194,27 +185,29 @@ class SatyrLeg(PrimaryRigPart):
 			delete( '%s.t%s' % (toe, ax), icn=True )
 
 		cmd.parent( ikHandle, grpA )
-		cmd.parent( footCtrlSpace, worldControl )
+		cmd.parent( footCtrlSpace, self.getWorldControl() )
 
 		grpASpace = getNodeParent( grpA )
 		grpAAutoNull = buildAlignedNull( PlaceDesc( toe, ankle ), '%sauto_on_ankle_null%s' % (nameMod, nameSuffix), parent=footCtrl )
 		grpAAutoOffNull = buildAlignedNull( PlaceDesc( toe, ankle ), '%sauto_off_ankle_null%s' % (nameMod, nameSuffix), parent=footCtrl )
 		grpA_knee_aimVector = betweenVector( grpAAutoNull, knee )
 		grpA_knee_aimAxis = getObjectAxisInDirection( grpAAutoNull, grpA_knee_aimVector )
-		grpA_knee_upAxis = getObjectAxisInDirection( grpAAutoNull, (0, 0, 1) )
-		grpA_knee_worldAxis = getObjectAxisInDirection( footCtrl, (0, 0, 1) )
+		grpA_knee_upAxis = getObjectAxisInDirection( grpAAutoNull, (1, 0, 0) )
+		grpA_knee_worldAxis = getObjectAxisInDirection( footCtrl, (1, 0, 0) )
 		aimConstraint( thigh, grpAAutoNull, mo=True, aim=grpA_knee_aimAxis.asVector(), u=grpA_knee_upAxis.asVector(), wu=grpA_knee_worldAxis.asVector(), wuo=footCtrl, wut='objectrotation' )
 
 		autoAimConstraint = orientConstraint( grpAAutoNull, grpAAutoOffNull, grpASpace )[0]
 		addAttr( footCtrl, ln='autoAnkle', at='double', dv=1, min=0, max=1 )
 		attrState( footCtrl, 'autoAnkle', *NORMAL )
-		connectAttr( '%s.autoAnkle' % footCtrl, '%s.target[0].targetWeight' % autoAimConstraint, f=True )
-		connectAttrReverse( '%s.autoAnkle' % footCtrl, '%s.target[1].targetWeight' % autoAimConstraint, f=True )
+
+		cAttrs = listAttr( autoAimConstraint, ud=True )
+		connectAttr( '%s.autoAnkle' % footCtrl, '%s.%s' % (autoAimConstraint, cAttrs[0]), f=True )
+		connectAttrReverse( '%s.autoAnkle' % footCtrl, '%s.%s' % (autoAimConstraint, cAttrs[1]), f=True )
 
 		poleCtrl = buildControl( 'Pole%s' % nameSuffix,
 		                         PlaceDesc( knee, PlaceDesc.WORLD ), PivotModeDesc.MID,
 		                         shapeDesc=ShapeDesc( 'sphere', axis=-AIM_AXIS if parity else AIM_AXIS ),
-		                         colour=colour, constrain=False, scale=scale, parent=partsControl )
+		                         colour=colour, constrain=False, scale=scale, parent=self.getPartsNode() )
 
 		poleCtrlSpace = getNodeParent( poleCtrl )
 		polePos = findPolePosition( ankle )
@@ -223,27 +216,14 @@ class SatyrLeg(PrimaryRigPart):
 
 		poleVectorConstraint( poleCtrl, ikHandle )
 
-		#build the ankle roll
-		addAttr( footCtrl, ln='ankleRoll', at='double', dv=0, min=-10, max=10 )
-		attrState( footCtrl, 'ankleRoll', *NORMAL )
+		#build the ankle aim control - its acts kinda like a secondary pole vector
+		anklePoleControl = buildControl( 'Ankle%s' % nameSuffix, ankle, shapeDesc=ShapeDesc( 'sphere' ), colour=colour, scale=scale, constrain=False, parent=grpASpace )
 
-		rollAxis = getObjectAxisInDirection( grpA, (1, 0, 0) )
-		rollAttrpath = '%s.r%s' % (grpA, rollAxis.asCleanName())
-		driverAttrpath = '%s.ankleRoll' % footCtrl
-		setDrivenKeyframe( rollAttrpath, currentDriver=driverAttrpath, v=0, dv=0 )
-		setDrivenKeyframe( rollAttrpath, currentDriver=driverAttrpath, v=85, dv=10 )
-		setDrivenKeyframe( rollAttrpath, currentDriver=driverAttrpath, v=-85, dv=-10 )
-
-		#build the ankle "wag"
-		addAttr( footCtrl, ln='ankleWag', at='double', dv=0, min=-10, max=10 )
-		attrState( footCtrl, 'ankleWag', *NORMAL )
-
-		rollAxis = getObjectAxisInDirection( grpA, (0, 0, 1) )
-		rollAttrpath = '%s.r%s' % (grpA, rollAxis.asCleanName())
-		driverAttrpath = '%s.ankleWag' % footCtrl
-		setDrivenKeyframe( rollAttrpath, currentDriver=driverAttrpath, v=0, dv=0 )
-		setDrivenKeyframe( rollAttrpath, currentDriver=driverAttrpath, v=85, dv=10 )
-		setDrivenKeyframe( rollAttrpath, currentDriver=driverAttrpath, v=-85, dv=-10 )
+		ankleAimVector = betweenVector( grpA, anklePoleControl )
+		ankleAimAxis = getObjectAxisInDirection( grpA, ankleAimVector )
+		ankleUpAxis = getObjectAxisInDirection( grpA, (1, 0, 0) )
+		ankleWorldUpAxis = getObjectAxisInDirection( anklePoleControl, (1, 0, 0) )
+		aimConstraint( anklePoleControl, grpA, aim=ankleAimAxis.asVector(), u=ankleUpAxis.asVector(), wu=ankleWorldUpAxis.asVector(), wuo=anklePoleControl, wut='objectrotation' )
 
 		if stretchy:
 			StretchRig.Create( self._skeletonPart, footCtrl, (thigh, knee, ankle, toe), '%s.ikBlend' % ikHandle, parity=parity, connectEndJoint=True )
@@ -252,8 +232,9 @@ class SatyrLeg(PrimaryRigPart):
 
 			pointConstraint( footCtrl, toe )
 
+		buildDefaultSpaceSwitching( thigh, footCtrl, reverseHierarchy=True, space=footCtrlSpace )
 
-		return [ footCtrl, poleCtrl ]
+		return [ footCtrl, poleCtrl, anklePoleControl ]
 
 
 #end

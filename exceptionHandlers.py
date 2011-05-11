@@ -109,9 +109,7 @@ def generateTraceableStrFactory( prefix, printFunc=None ):
 	def generateTraceableStr( *args, **kw ):
 		frameInfos = inspect.getouterframes( inspect.currentframe() )
 
-		_nFrame = 1
-		if '_nFrame' in kw:
-			_nFrame = kw[ '_nFrame' ]
+		_nFrame = kw.get( '_nFrame', 1 )
 
 		#frameInfos[0] contains the current frame and associated calling data, while frameInfos[1] is the frame that called this one - which is the frame we want to print data about
 		callingFrame, callingScript, callingLine, callingName, _a, _b = frameInfos[_nFrame]

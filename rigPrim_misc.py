@@ -25,9 +25,6 @@ class WeaponControlHierarchy(PrimaryRigPart):
 def controlChain( rigPart, joints, controlShape=DEFAULT_SHAPE_DESC, spaceSwitchTranslation=False, parents=(), rigOrphans=False, **kw ):
 	scale = kw[ 'scale' ]
 
-	worldPart = WorldPart.Create()
-	worldControl = worldPart.control
-
 	#discover parent nodes
 	namespace = ''
 	try:

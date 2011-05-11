@@ -339,7 +339,8 @@ class ManualPartCreationLayout(MelHSingleStretchLayout):
 		partTypeStr = self.UI_partType.getValue()
 		partType = SkeletonPart.GetNamedSubclass( partTypeStr )
 		sel = cmd.ls( sl=True )
-		newPart = partType( sel )
+
+		newPart = partType( rigPrimitives.buildSkeletonPartContainer( partType, {}, sel ) )
 		newPart.convert( {} )
 		self.sendEvent( 'manualPartCreated', newPart )
 	def on_selectionChange( self, *a ):
@@ -855,7 +856,7 @@ class RigPartLayout(MelForm):
 	def on_select( self, e=None ):
 		cmd.select( self.part.items )
 	def on_manualRig( self, e=None ):
-		rigPrimitives.finalizeAllParts()
+		self.part.finalize()
 		self.part.rig()
 		self.updateBuildRigButton()
 	def on_deleteRig( self, e=None ):
@@ -1324,7 +1325,7 @@ class ControlBuildingWindow(BaseMelWindow):
 	WINDOW_NAME = 'controlBuildingWindow'
 	WINDOW_TITLE = '%s: Control Builder' % SkeletonBuilderWindow.WINDOW_TITLE
 
-	DEFAULT_SIZE = 400, 350
+	DEFAULT_SIZE = 450, 350
 	DEFAULT_MENU = 'Help'
 	DEFAULT_MENU_IS_HELP = True
 

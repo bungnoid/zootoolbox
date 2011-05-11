@@ -106,9 +106,15 @@ class Hand(SkeletonPart):
 		defactoUpVector = rigUtils.getObjectBasisVectors( wrist )[ 2 ]
 		for chain in self.iterFingerChains():
 			upVector = defactoUpVector
+
+			#if there are three joints or more in teh chain, try to determine the normal to the plane they live on
 			if len( chain ) >= 3:
 				midJoint = chain[ len( chain ) / 2 ]
 				upVector = getPlaneNormalForObjects( chain[ 0 ], midJoint, chain[ -1 ], defactoUpVector )
+
+			#otherwise assume the user has aligned the base joint properly
+			else:
+				upVector = rigUtils.getObjectBasisVectors( chain[ 0 ] )[ BONE_ROTATE_AXIS ]
 
 			upVector = upVector * parityMult
 			for n, item in enumerate( chain[ :-1 ] ):

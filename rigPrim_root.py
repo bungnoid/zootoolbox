@@ -9,7 +9,6 @@ class Root(RigSubPart):
 
 	def _build( self, skeletonPart, buildHips=True, **kw ):
 		root = skeletonPart.base
-		scale = kw[ 'scale' ]
 
 		#deal with colours
 		colour = ColourDesc( 'blue' )
@@ -18,16 +17,13 @@ class Root(RigSubPart):
 
 
 		#hook up the scale from the main control
-		worldPart = WorldPart.Create()
-		worldControl = worldPart.control
-		connectAttr( '%s.scale' % worldControl, '%s.scale' % root )
-
+		connectAttr( '%s.scale' % self.getWorldControl(), '%s.scale' % root )
 		partParent, altRootControl = getParentAndRootControl( root )
 
 
 		#try to determine a sensible size for the root control - basically grab teh autosize of the root joint, and take the x-z plane values
 		size = control.getJointSize( [root], 0.5, SPACE_WORLD )
-		ringSize = Vector( (size[0], size[0]+size[2]/3.0, size[2]) )
+		ringSize = Vector( (size[0], size[0] + size[2] / 3.0, size[2]) )
 
 
 		#create the controls, and parent them
@@ -38,7 +34,9 @@ class Root(RigSubPart):
 
 
 		#delete the connections to rotation so we can put an orient constraint on the root joint to teh hips control
-		for ax in AXES: delete( '%s.r%s' % (root, ax), icn=True )
+		for ax in AXES:
+			delete( '%s.r%s' % (root, ax), icn=True )
+
 		orientConstraint( hipsControl, root, mo=True )
 
 		attrState( hipsControl, 't', *LOCK_HIDE )

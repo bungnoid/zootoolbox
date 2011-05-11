@@ -7,6 +7,7 @@ currently just contains a function to take skin weights from the current scene a
 from maya.cmds import *
 from filesystem import Path
 from api import mel
+from common import printWarningStr
 
 import skinWeights
 
@@ -136,6 +137,10 @@ def propagateWeightChangesToModel( meshes ):
 	curFile = Path( file( q=True, sn=True ) )
 	referencedMeshes = getRefFilepathDictForNodes( meshes )
 
+	if not curFile.name():
+		printWarningStr( "The current scene isn't saved - please save the current scene first before proceeding!" )
+		return
+
 	for refFilepath, refNodeMeshDict in referencedMeshes.iteritems():
 		referencesToUnload = []
 
@@ -163,22 +168,28 @@ def propagateWeightChangesToModel( meshes ):
 			referencesToUnload.append( mayaFilepathForRef )
 
 		#get a list of skin cluster nodes - its actually the skin cluster nodes we want to remove edits from...
-		skinClusterNodes = []
+		nodesToCleanRefEditsFrom = []
 		for m, ns in meshesToUpdateWeightsOn_withNS:
-			skinClusterNodes.append( mel.findRelatedSkinCluster( m ) )
+			nodesToCleanRefEditsFrom.append( mel.findRelatedSkinCluster( m ) )
 
 		#now we want to store out the weighting from the referenced meshes
 		weights = []
 		for mesh, meshNamespace in meshesToUpdateWeightsOn_withNS:
 			weights.append( storeWeightsById( mesh, meshNamespace ) )
 
+			#also lets remove any ref edits from the mesh and all of its shape nodes - this isn't strictly nessecary, but I can't think of a reason to make edits to these nodes outside of their native file
+			nodesToCleanRefEditsFrom.append( mesh )
+			nodesToCleanRefEditsFrom += listRelatives( mesh, s=True, pa=True ) or []
+
 		#remove the skinweights reference edits from the meshes in the current scene
 		for f in referencesToUnload:
 			file( f, unloadReference=True )
 
-		for s in skinClusterNodes:
-			referenceEdit( s, removeEdits=True, successfulEdits=True, failedEdits=True )
+		#remove ref edits from the shape node as well - this isn't strictly nessecary but there probably shouldn't be changes to the shape node anyway
+		for node in nodesToCleanRefEditsFrom:
+			referenceEdit( node, removeEdits=True, successfulEdits=True, failedEdits=True )
 
+		#re-load references
 		for f in referencesToUnload:
 			file( f, loadReference=True )
 
@@ -190,7 +201,16 @@ def propagateWeightChangesToModel( meshes ):
 		file( refFilepath, open=True, f=True )
 
 		for mesh, weightData in zip( meshesToUpdateWeightsOn, weights ):
+
+			#if there is no weight data to store - keep loopin...
+			if not weightData:
+				continue
+
 			skinCluster = mel.findRelatedSkinCluster( mesh )
+			if not skinCluster:
+				printWarningStr( "Couldn't find a skin cluster driving %s - skipping this mesh" % mesh )
+				continue
+
 			skinWeights.setSkinWeights( skinCluster, weightData )
 
 		#save the referenced scene now that we've applied the weights to it
@@ -205,12 +225,16 @@ def propagateWeightChangesToModel_confirm():
 	'''
 	simply wraps the propagateWeightChangesToModel function with a confirmation dialog
 	'''
-	sel = ls( sl=True )
-	if sel:
-		BUTTONS = OK, CANCEL = 'Ok', 'Cancel'
-		ret = confirmDialog( m='Are you sure you want to push skinning changes to the model?', t='Are you sure?', b=BUTTONS, db=CANCEL )
-		if ret == OK:
-			propagateWeightChangesToModel( sel )
+	allMeshNodes = ls( type='mesh' )
+	allSkinnedMeshes = [ mesh for mesh in allMeshNodes if mel.findRelatedSkinCluster( mesh ) ]
+	if not allSkinnedMeshes:
+		printWarningStr( "No skinned meshes can be found in the scene!  Aborting!" )
+		return
+
+	BUTTONS = OK, CANCEL = 'Ok', 'Cancel'
+	ret = confirmDialog( m='Are you sure you want to push skinning changes to the model?', t='Are you sure?', b=BUTTONS, db=CANCEL )
+	if ret == OK:
+		propagateWeightChangesToModel( allSkinnedMeshes )
 
 
 #end

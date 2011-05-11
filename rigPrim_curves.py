@@ -4,32 +4,38 @@ from spaceSwitching import build, NO_TRANSLATION, NO_ROTATION
 
 
 class SplineIK(PrimaryRigPart):
-	__version__ = 1
+	__version__ = 2
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'ArbitraryChain' ), )
 	PRIORITY = 11
 
 	@classmethod
 	def CanRigThisPart( cls, skeletonPart ):
 		return len( skeletonPart ) >= 3
-	def _build( self, skeletonPart, **kw ):
+	def _build( self, skeletonPart, allowFixedLength=True, constrainBetween=True, **kw ):
 		objs = skeletonPart.items
 
-		worldPart = WorldPart.Create()
-		worldControl = worldPart.control
-		partsNode = worldPart.parts
+		parentControl, rootControl = getParentAndRootControl( objs[0] )
 
-		fittedCurve, linearCurve, proxies, controls, halfIdx = buildControls( objs, worldControl, **kw )
+		fittedCurve, linearCurve, proxies, fixedLengthProxies, controls, splineIkHandle, halfIdx = buildControls( objs, parentControl, allowFixedLength=allowFixedLength, constrainBetween=constrainBetween, **kw )
 		buildDefaultSpaceSwitching( objs[0], controls[0] )
 		buildDefaultSpaceSwitching( objs[0], controls[-1] )
 
+		setAttr( '%s.v' % fixedLengthProxies[0], False )
 
-		parent( proxies, partsNode )
-		parent( fittedCurve, linearCurve, partsNode )
+		#group all the proxy joints together
+		miscGrp = asMObject( group( em=True ) )
+		rename( miscGrp, '%s_%d_miscGrp%s#' % (type( self ).__name__, self.getIdx(), self.getSuffix()) )
+
+		parent( proxies, miscGrp )
+		parent( fixedLengthProxies[0], miscGrp )
+		parent( fittedCurve, linearCurve, miscGrp )
+		parent( miscGrp, self.getPartsNode() )
+		parent( splineIkHandle, miscGrp )
 
 		return controls
 
 
-def buildControls( objs, controlParent=None, name='control', midName='midControl', **kw ):
+def buildControls( objs, controlParent=None, name='control', midName='midControl', allowFixedLength=True, constrainBetween=True, constrainBetweenMid=True, **kw ):
 	numObjs = numControls = len( objs )
 	if numObjs < 3:
 		raise RigPartError( "Need to specify more than 3 objects to use spline IK" )
@@ -37,6 +43,12 @@ def buildControls( objs, controlParent=None, name='control', midName='midControl
 	scale = kw.get( 'scale', 15 )
 	fittedCurve, linearCurve, proxies = buildCurveThroughObjs( objs, False )
 	fittedCurveShape = listRelatives( fittedCurve, s=True, pa=True )[0]
+
+
+	#hide the curves and lock them down
+	setAttr( '%s.v' % fittedCurve, False )
+	setAttr( '%s.v' % linearCurve, False )
+	attrState( (fittedCurve, linearCurve), ('t', 'r', 's'), *LOCK_HIDE )
 
 
 	#hook up a curve info node
@@ -63,7 +75,6 @@ def buildControls( objs, controlParent=None, name='control', midName='midControl
 
 	#now build the controls
 	controls = []
-	controlParent = controlParent
 	name, midName = '%s_%%d' % name, '%s_%%d' % midName
 	for n, obj in enumerate( objs ):
 		isHalfCtrl = n == halfIdx
@@ -78,35 +89,43 @@ def buildControls( objs, controlParent=None, name='control', midName='midControl
 
 
 	#setup the middle controls to be constrained between all controls
-	constraintMethod = pointConstraint
-	if numObjs >= 5:
-		midControlsA = controls[ 1:halfIdx ]
-		fWeightInc = 1.0 / ( len( midControlsA ) + 1 )
-		for n, ctrl in enumerate( midControlsA ):
-			ctrlParent = listRelatives( ctrl, p=True, pa=True )[0]
-			baseWeight = (n + 1) * fWeightInc
-			constraintMethod( controls[0], ctrlParent, w=1-baseWeight, mo=True )
-			constraintMethod( halfWayControl, ctrlParent, w=baseWeight, mo=True )
+	if constrainBetween:
+		constraintMethod = pointConstraint
+		if numObjs >= 5 and constrainBetweenMid:
+			lengths = [ betweenVector( controls[0], c ).get_magnitude() for c in controls[ 1:halfIdx+1 ] ]
+			lengthSum = sum( lengths )
 
-		midControlsB = controls[ halfIdx + 1:-1 ]
-		fWeightInc = 1.0 / ( len( midControlsB ) + 1 )
-		for n, ctrl in enumerate( midControlsB ):
-			ctrlParent = listRelatives( ctrl, p=True, pa=True )[0]
-			baseWeight = (n + 1) * fWeightInc
-			constraintMethod( halfWayControl, ctrlParent, w=1-baseWeight, mo=True )
-			constraintMethod( controls[-1], ctrlParent, w=baseWeight, mo=True )
+			midControlsA = controls[ 1:halfIdx ]
+			for length, ctrl in zip( lengths, midControlsA ):
+				ctrlParent = listRelatives( ctrl, p=True, pa=True )[0]
+				baseWeight = length / lengthSum
+				constraintMethod( controls[0], ctrlParent, w=1-baseWeight, mo=True )
+				constraintMethod( halfWayControl, ctrlParent, w=baseWeight, mo=True )
 
-		ctrlParent = listRelatives( halfWayControl, p=True, pa=True )[0]
-		baseWeight = halfWayKnotValue / float( knots[-1] )
-		constraintMethod( controls[0], ctrlParent, w=1-baseWeight, mo=True )
-		constraintMethod( controls[-1], ctrlParent, w=baseWeight, mo=True )
-	else:
-		midControls = controls[ 1:-1 ]
-		for n, ctrl in enumerate( midControls ):
-			ctrlParent = listRelatives( ctrl, p=True, pa=True )[0]
-			baseWeight = (n+1) / float( numControls-1 )
+			lengths = [ betweenVector( controls[0], c ).get_magnitude() for c in controls[ halfIdx:-1 ] ]
+			lengthSum = sum( lengths )
+
+			midControlsB = controls[ halfIdx + 1:-1 ]
+			for length, ctrl in zip( lengths, midControlsB ):
+				ctrlParent = listRelatives( ctrl, p=True, pa=True )[0]
+				baseWeight = length / lengthSum
+				constraintMethod( halfWayControl, ctrlParent, w=1-baseWeight, mo=True )
+				constraintMethod( controls[-1], ctrlParent, w=baseWeight, mo=True )
+
+			ctrlParent = listRelatives( halfWayControl, p=True, pa=True )[0]
+			baseWeight = halfWayKnotValue / float( knots[-1] )
 			constraintMethod( controls[0], ctrlParent, w=1-baseWeight, mo=True )
 			constraintMethod( controls[-1], ctrlParent, w=baseWeight, mo=True )
+		else:
+			lengths = [ betweenVector( controls[0], c ).get_magnitude() for c in controls[ 1: ] ]
+			lengthSum = sum( lengths )
+
+			midControls = controls[ 1:-1 ]
+			for length, ctrl in zip( lengths, midControls ):
+				ctrlParent = listRelatives( ctrl, p=True, pa=True )[0]
+				baseWeight = length / lengthSum
+				constraintMethod( controls[0], ctrlParent, w=1-baseWeight, mo=True )
+				constraintMethod( controls[-1], ctrlParent, w=baseWeight, mo=True )
 
 	for knot, j, proxy in zip( knots, objs, proxies ):
 		pointConstraint( proxy, j, mo=True )
@@ -119,7 +138,6 @@ def buildControls( objs, controlParent=None, name='control', midName='midControl
 
 		#were using (knot / unitComp) but it seems this is buggy - invalid knot values are returned for a straight curve...  so it seems assuming knot is valid works in all test cases I've tried...
 		setAttr( '%s.parameter' % mpath, knot )
-		delete( orientConstraint( objs[ n ], proxy ) )
 
 
 	#setup aim constraints to control twisting and orientation along the spline
@@ -154,8 +172,41 @@ def buildControls( objs, controlParent=None, name='control', midName='midControl
 	setAttr( '%s.inheritsTransform' % linearCurve, False )
 	setAttr( '%s.inheritsTransform' % fittedCurve, False )
 
+	#now that we've setup the stretchy controls, lets add a splineIK version to blend between
+	fixedLengthProxies = []
+	splineIkHandle = None
 
-	return fittedCurve, linearCurve, proxies, controls, halfIdx
+	if allowFixedLength:
+		for j in proxies:
+			fixedJ = createJoint( '%s_fixedLength' % j )
+			delete( parentConstraint( j, fixedJ ) )
+			if fixedLengthProxies:
+				parent( fixedJ, fixedLengthProxies[-1] )
+
+			fixedLengthProxies.append( fixedJ )
+
+		splineIkHandle = cmd.ikHandle( startJoint=fixedLengthProxies[0], endEffector=fixedLengthProxies[-1], curve=fittedCurveShape, createCurve=False, solver='ikSplineSolver' )[0]
+		addAttr( controls[0], ln='fixedLength', at='double', dv=0, min=0, max=1 )
+		setAttr( '%s.fixedLength' % controls[0], k=True )
+		rev = createNode( 'reverse' )
+		connectAttr( '%s.fixedLength' % controls[0], '%s.inputX' % rev, f=True )
+		for obj, fixedJ in zip( objs, fixedLengthProxies ):
+			constraint = pointConstraint( fixedJ, obj, w=0 )[0]
+			attrs = listAttr( constraint, ud=True )
+			connectAttr( '%s.outputX' % rev, '%s.%s' % (constraint, attrs[0]), f=True )
+			connectAttr( '%s.fixedLength' % controls[0], '%s.%s' % (constraint, attrs[1]), f=True )
+
+			#hide the joints
+			setAttr( '%s.v' % obj, False )
+			setAttr( '%s.v' % fixedJ, False )
+
+		attrState( fixedLengthProxies, ('t', 'r', 's'), *LOCK_HIDE )
+		attrState( fixedLengthProxies, 'v', *HIDE )
+
+	attrState( proxies, ('t', 'r', 's'), *LOCK_HIDE )
+	attrState( proxies, 'v', *HIDE )
+
+	return fittedCurve, linearCurve, proxies, fixedLengthProxies, controls, splineIkHandle, halfIdx
 
 
 def buildNumControls( objs, numControls=3, **kw ):

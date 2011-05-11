@@ -10,13 +10,8 @@ class Head(RigPart):
 	def _build( self, skeletonPart, translateControls=False, **kw ):
 		return self.doBuild( skeletonPart.head, translateControls=translateControls, **kw )
 	def doBuild( self, head, neckCount=1, translateControls=False, **kw ):
-		scale = kw[ 'scale' ]
-
+		scale = self.scale
 		partParent, rootControl = getParentAndRootControl( head )
-
-		worldPart = WorldPart.Create()
-		worldControl = worldPart.control
-		partsControl = worldPart.parts
 
 		colour = ColourDesc( 'blue' )
 		lightBlue = ColourDesc( 'lightblue' )
@@ -72,12 +67,12 @@ class Head(RigPart):
 		#build space switching
 		if neckControls:
 			spaceSwitching.build( headControl,
-				                  (neckControls[ 0 ], partParent, rootControl, worldControl),
+				                  (neckControls[ 0 ], partParent, rootControl, self.getWorldControl()),
 				                  space=headControlSpace, **spaceSwitching.NO_TRANSLATION )
 
 		for c in neckControls:
 			spaceSwitching.build( c,
-				                  (partParent, rootControl, worldControl),
+				                  (partParent, rootControl, self.getWorldControl()),
 				                  **spaceSwitching.NO_TRANSLATION )
 
 

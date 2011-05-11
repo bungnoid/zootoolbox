@@ -25,10 +25,9 @@ class Hand(RigPart):
 		colour = ColourDesc( 'orange' )
 
 		suffix = parity.asName()
-		parityMult = 1.0  #parity.asMultiplier()
+		#parityMult = parity.asMultiplier()
+		parityMult = 1.0 # no parity flip on controls
 
-		worldPart = WorldPart.Create()
-		partsControl = worldPart.parts
 		partParent, rootControl = getParentAndRootControl( bases[ 0 ] )
 
 
@@ -55,7 +54,7 @@ class Hand(RigPart):
 
 		#constrain the group to the wrist
 		parentConstraint( wrist, handGrp )
-		parent( handGrp, partsControl )
+		parent( handGrp, self.getPartsNode() )
 
 		attrState( (handSliders, poseCurve), ('t', 'r'), *LOCK_HIDE )
 

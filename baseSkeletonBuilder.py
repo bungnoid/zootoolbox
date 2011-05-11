@@ -4,6 +4,7 @@ from names import Parity, Name, camelCaseToNice
 from vectors import Vector, Colour
 from control import attrState, NORMAL, HIDE, LOCK_HIDE, NO_KEY
 from apiExtensions import asMObject, castToMObjects, cmpNodes
+from mayaDecorators import d_unifyUndo
 from maya.OpenMaya import MGlobal
 
 import names
@@ -27,6 +28,7 @@ mel = api.mel
 AXES = Axis.BASE_AXES
 
 eval = __builtins__[ 'eval' ]  #restore the eval function to point to python's eval
+mayaVar = float( mel.eval( 'getApplicationVersionAsFloat()' ) )
 
 
 TOOL_NAME = 'skeletonBuilder'
@@ -1100,7 +1102,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 			placers.append( placer )
 
 		return placers
-	@classmethod
+	#NOTE!!!  this method gets decorated below !!!
 	def Create( cls, *a, **kw ):
 		'''
 		this is the primary way to create a skeleton part.  build functions are
@@ -1178,6 +1180,11 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 			newPart.visualize()
 
 		return newPart
+	#in 2009 wrapping the Create with d_unifyUndo will crash maya...  :(
+	if mayaVar >= 2011:
+		Create = classmethod( d_unifyUndo( Create ) )
+	else:
+		Create = classmethod( d_unifyUndo( Create ) )
 	def rebuild( self, **newBuildKwargs ):
 		'''
 		rebuilds the part by storing all the positions of the existing members,
@@ -1379,6 +1386,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		return orphanChildren + childrenOfChildren
 	def selfAndOrphans( self ):
 		return list( self ) + self.getOrphanJoints()
+	@d_unifyUndo
 	def delete( self ):
 		if self.isRigged():
 			self.deleteRig()
@@ -1390,6 +1398,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 			delete( self.container )
 
 	### ALIGNMENT ###
+	@d_unifyUndo
 	@d_disableDrivingRelationships
 	@d_disconnectJointsFromSkinning
 	def align( self, _initialAlign=False ):
@@ -1397,6 +1406,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 	def _align( self, _initialAlign=False ):
 		for item in self.selfAndOrphans():
 			autoAlignItem( item )
+	@d_unifyUndo
 	@d_disableDrivingRelationships
 	@d_disconnectJointsFromSkinning
 	def freeze( self ):
@@ -1406,6 +1416,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		makeIdentity( self.items, a=True, t=True, r=True )
 
 	### VISUALIZATION ###
+	@d_unifyUndo
 	def visualize( self ):
 		'''
 		can be used to create visualization for item orientation or whatever else.
@@ -1414,6 +1425,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		machinery available.
 		'''
 		pass
+	@d_unifyUndo
 	def unvisualize( self ):
 		'''
 		removes any visualization on the part
@@ -1631,6 +1643,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		return True
 
 	### RIGGING ###
+	@d_unifyUndo
 	def rig( self, **kw ):
 		'''
 		constructs the rig for this part
@@ -1666,7 +1679,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		#make sure to break drivers before we rig
 		self.breakDriver()
 
-		#discover the rigging method - it should be defined in the
+		#discover the rigging method
 		rigType = self.GetRigMethod( rigMethodName )
 		if rigType is None:
 			print 'ERROR :: there is no such rig method with the name %s' % rigMethodName
@@ -1844,6 +1857,9 @@ def createJoint( name=None ):
 	simple wrapper to deal with joint creation - mainly provides a hook to control joint creation should that be needed
 	'''
 	if name:
+		if objExists( name ):
+			name = name +'#'
+
 		return createNode( 'joint', n=name )
 
 	return createNode( 'joint' )
@@ -1968,6 +1984,7 @@ def getPartsFromObjects( objs ):
 	return selectedParts
 
 
+@d_unifyUndo
 @api.d_maintainSceneSelection
 def realignSelectedParts():
 	'''
@@ -1980,6 +1997,7 @@ def realignSelectedParts():
 		part.align()
 
 
+@d_unifyUndo
 @api.d_maintainSceneSelection
 def realignAllParts():
 	'''
@@ -1994,33 +2012,7 @@ def realignAllParts():
 			continue
 
 
-def finalizeAllParts():
-
-	#do a pre-pass on the skin clusters to remove un-used influences - this can speed up the speed of the alignment code
-	#is directly impacted by the number of joints involved in the skin cluster
-	skinClusters = ls( typ='skinCluster' )
-	for s in skinClusters:
-		skinCluster( s, e=True, removeUnusedInfluence=True )
-
-	failedParts = []
-	for part in sortPartsByHierarchy( part for part in SkeletonPart.IterAllParts() ):
-
-		#don't bother finalizing parts that are disabled for rigging...
-		if part.isDisabled():
-			continue
-
-		if not part.compareAgainstHash():
-			try:
-				part.finalize()
-			except:
-				failedParts.append( part )
-				if filesystem.IS_WING_DEBUG: raise
-				print 'ERROR: %s failed to finalize properly!' % part
-				continue
-
-	return failedParts
-
-
+@d_unifyUndo
 @api.d_maintainSceneSelection
 def finalizeAllParts():
 
@@ -2045,11 +2037,13 @@ def finalizeAllParts():
 	return failedParts
 
 
+@d_unifyUndo
 def freezeAllParts():
 	for part in SkeletonPart.IterAllParts():
 		part.freeze()
 
 
+@d_unifyUndo
 def setupAutoMirror():
 	partsInMirrorRelationship = set()
 	for part in SkeletonPart.IterAllParts():
@@ -2104,6 +2098,7 @@ def getNamespaceFromReferencing( node ):
 	return ''
 
 
+@d_unifyUndo
 @api.d_showWaitCursor
 @api.d_maintainSceneSelection
 def buildAllVolumes():
@@ -2117,6 +2112,7 @@ def buildAllVolumes():
 		part.buildVolumes()
 
 
+@d_unifyUndo
 def removeAllVolumes():
 	for part in SkeletonPart.IterAllParts():
 		part.removeVolumes()
@@ -2325,26 +2321,33 @@ def volumesToSkinning():
 
 
 def getSkeletonBuilderJointCount():
+	'''
+	returns a 2-tuple containing the total skeleton builder joint count, and the total number of
+	joints that are involved in a skin cluster
+	'''
+
 	#get the root joint and get a list of all joints under it
-	joints = []
+	skeletonBuilderJoints = []
 	for rootPart in Root.IterAllParts():
-		joints += rootPart.items
-		joints += listRelatives( rootPart.items, ad=True, type='joint' ) or []
+		skeletonBuilderJoints += rootPart.items
+		skeletonBuilderJoints += listRelatives( rootPart.items, ad=True, type='joint' ) or []
 
 	#generate a list of joints involved in skinning
 	skinnedJoints = []
 	for mesh in ls( type='mesh' ):
 		skinCluster = mel.findRelatedSkinCluster( mesh )
 		if skinCluster:
-			#skinPercent -ib 0.001 -q -t %s "%s.vtx[*]"
-			#skinnedJoints = skinPercent( '%s.vtx[*]' % mesh, ib=0.001, q=True, t=skinCluster )
 			skinnedJoints += mel.eval( 'skinPercent -ib 0.001 -q -t %s "%s.vtx[*]"' % (skinCluster, mesh) )
 
 	#now get the intersection of the two lists - these are the joints on the character that are skinned
-	commonJoints = set( joints ).intersection( set( skinnedJoints ) )
-	print '\n'.join( commonJoints )
+	skinnedSkeletonBuilderJoints = set( skeletonBuilderJoints ).intersection( set( skinnedJoints ) )
 
-	return len( commonJoints )
+	return len( skeletonBuilderJoints ), len( skinnedSkeletonBuilderJoints )
+
+
+def displaySkeletonBuilderJointCount():
+	totalJoints, skinnedJoints = getSkeletonBuilderJointCount()
+	return '%d skinned / %d total' % (skinnedJoints, totalJoints)
 
 
 def setupSkeletonBuilderJointCountHUD():
@@ -2353,7 +2356,7 @@ def setupSkeletonBuilderJointCountHUD():
 
 	else:
 		jointbb = headsUpDisplay( nfb=0 )
-		headsUpDisplay( HUD_NAME, section=0, block=jointbb, blockSize="small", label="Joint Count:", labelFontSize="small", command=getSkeletonBuilderJointCount, event="SelectionChanged" )  #, nodeChanges="attributeChange"
+		headsUpDisplay( HUD_NAME, section=0, block=jointbb, blockSize="small", label="Joint Count:", labelFontSize="small", command=displaySkeletonBuilderJointCount, event="SelectionChanged" )  #, nodeChanges="attributeChange"
 
 
 #end

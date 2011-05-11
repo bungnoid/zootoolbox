@@ -17,6 +17,7 @@ setParent = cmd.setParent
 class XferAnimForm(MelForm):
 	MODE_SCENE = 0
 	MODE_FILE = 1
+
 	def __init__( self, parent ):
 		MelForm.__init__( self, parent )
 
