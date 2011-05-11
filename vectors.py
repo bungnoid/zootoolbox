@@ -40,8 +40,9 @@ class Vector(list):
 		return cls( a )
 
 	def __repr__( self ):
+		return '%s( %s )' % (type( self ).__name__, tuple( self ))
+	def __str__( self ):
 		return '<%s>' % ', '.join( '%0.3g' % v for v in self )
-	__str__ = __repr__
 	def setIndex( self, idx, value ):
 		self[ idx ] = value
 	def __nonzero__( self ):
@@ -1068,11 +1069,20 @@ class Matrix(list):
 	#the following methods return euler angles of a rotation matrix
 	def ToEulerXYZ( self, degrees=False ):
 		easy = self[0][2]
-		y = -asin( easy )
-		cosY = cos( y )
+		if easy == 1:
+			z = math.pi
+			y = -math.pi / 2.0
+			x = -z + atan2( -self[1][0], -self[2][0] )
+		elif easy == -1:
+			z = math.pi
+			y = math.pi / 2.0
+			x = z + atan2( self[1][0], self[2][0] )
+		else:
+			y = -asin( easy )
+			cosY = cos( y )
 
-		x = atan2( self[1][2] * cosY, self[2][2] * cosY )
-		z = atan2( self[0][1] * cosY, self[0][0] * cosY )
+			x = atan2( self[1][2] * cosY, self[2][2] * cosY )
+			z = atan2( self[0][1] * cosY, self[0][0] * cosY )
 
 		angles = x, y, z
 

@@ -254,22 +254,24 @@ def getWristToWorldRotation( wrist, performRotate=False ):
 	performRotate is True the object will be rotated to this alignment.  The rotation
 	values are returned as euler rotation values in degrees
 	'''
-	worldAxisVectors = [ Axis( n ).asVector() for n in range( 3 ) ]
-
 	worldMatrix, worldScale = Matrix( getAttr( '%s.worldMatrix' % wrist ) ).decompose()
 	bases = x, y, z = map( Vector, worldMatrix.crop( 3 ) )
 
 	newBases = []
+	allAxes = range( 3 )
 	for basis in bases:
-		dots = []
-		for n in range( 3 ):
-			#find the world axis that this basis vector is closest to
-			worldAxisVector = Axis( n ).asVector()
-			dot = basis.dot( worldAxisVector )
-			dots.append( (abs(dot), n if dot >=0 else n+3) )  #if the dot is negative, shift the axis index by 3 (which makes it negative)
+		largestAxisValue = -2  #values will never be smaller than this, so the code below will always get run
+		largestAxis = 0
 
-		dots.sort()
-		newBases.append( Axis( dots[-1][1] ).asVector() )
+		#find which world axis this basis vector best approximates - we want to world align the basis vectors
+		for n in range( 3 ):
+			absAxisValue = abs( basis[n] )
+			if absAxisValue > largestAxisValue:
+				largestAxisValue = absAxisValue
+				largestAxis = n+3 if basis[n] < 0 else n  #if the dot is negative, shift the axis index by 3 (which makes it negative)
+
+		#track the largestAxisValue too - we want to use it as a measure of closeness
+		newBases.append( Axis( largestAxis ).asVector() )
 
 	newBases = map( list, newBases )
 	matrixValues = newBases[0] + newBases[1] + newBases[2]
@@ -475,21 +477,27 @@ def getJointSize( joints, threshold=0.65, space=SPACE_OBJECT ):
 	return getJointSizeAndCentre( joints, threshold, space )[ 0 ]
 
 
-def ikSpringSolver( start, end, *a, **kw ):
+def ikSpringSolver( start, end, **kw ):
 	'''
 	creates an ik spring solver - this is wrapped simply because its not default
 	maya functionality, and there is potential setup work that needs to be done
 	to ensure its possible to create an ik chain using the spring solver
 	'''
-	cmd.loadPlugin( 'ikSpringSolver', quiet=True )
-	if not cmd.ls( typ='ikSpringSolver' ):
-		cmd.createNode( 'ikSpringSolver' )
 
+	api.mel.ikSpringSolver()
 	kw[ 'solver' ] = 'ikSpringSolver'
 
-	cmd.select( start, end, replace=True )
+	handle, effector = cmd.ikHandle( '%s.rotatePivot' % start, '%s.rotatePivot' % end, **kw )
 
-	return cmd.ikHandle( *a, **kw )
+	#now we want to ensure a sensible pole vector - so set that up
+	jointChain = getChain( start, end )
+	poleVectorAttrVal = xform( jointChain[1], q=True, ws=True, rp=True )
+	restPoleVector = betweenVector( jointChain[0], jointChain[1] )
+
+	setAttr( '%s.springRestPoleVector' % handle, *restPoleVector )
+	setAttr( '%s.poleVector' % handle, *poleVectorAttrVal )
+
+	return handle, effector
 
 
 def resetSkinCluster( skinCluster ):
@@ -584,6 +592,24 @@ def buildAnnotation( obj, text='' ):
 	cmd.parent( end, obj )
 
 	return start, end, shape
+
+
+def getChain( startNode, endNode ):
+	'''
+	returns a list of all the joints from the given start to the end inclusive
+	'''
+	chainNodes = [ endNode ]
+	for p in api.iterParents( endNode ):
+		if not p:
+			raise ValueError( "Chain terminated before reaching the end node!" )
+
+		chainNodes.append( p )
+		if apiExtensions.cmpNodes( p, startNode ):  #cmpNodes is more reliable than just string comparing - cmpNodes casts to MObjects and compares object handles
+			break
+
+	chainNodes.reverse()
+
+	return chainNodes
 
 
 def chainLength( startNode, endNode ):
@@ -685,18 +711,39 @@ def replaceConstraintTarget( constraint, newTarget, targetIndex=0 ):
 	'''
 	replaces the target at "targetIndex" with the new target
 	'''
-
-	constraint = str( constraint )
 	newTarget = apiExtensions.asMObject( str( newTarget ) )
 
 	for attr in attributeQuery( 'target', node=constraint, listChildren=True ):
 		for connection in listConnections( '%s.target[%s].%s' % (constraint, targetIndex, attr), p=True, type='transform', d=False ) or []:
 			toks = connection.split( '.' )
-			node = toks [ 0 ]
+			node = toks[ 0 ]
 
 			if not apiExtensions.cmpNodes( node, newTarget ):
 				toks[ 0 ] = str( newTarget )
 				connectAttr( '.'.join( toks ), '%s.target[%s].%s' % (constraint, targetIndex, attr), f=True )
+
+
+def replaceGivenConstraintTarget( constraint, targetToReplace, newTarget ):
+	'''
+	replaces targetToReplace transform on the given constraint with the newTarget transform
+	'''
+	targetToReplace = apiExtensions.asMObject( targetToReplace )
+	newTarget = apiExtensions.asMObject( newTarget )
+
+	#nothing to do if the nodes are the same...
+	if apiExtensions.cmpNodes( targetToReplace, newTarget ):
+		return
+
+	usedTargetIndices = getAttr( '%s.target' % constraint, multiIndices=True )
+	for idx in usedTargetIndices:
+		for attr in attributeQuery( 'target', node=constraint, listChildren=True ):
+			for connection in listConnections( '%s.target[%s].%s' % (constraint, idx, attr), p=True, type='transform', d=False ) or []:
+				toks = connection.split( '.' )
+				node = toks[ 0 ]
+
+				if apiExtensions.cmpNodes( node, targetToReplace ):
+					toks[ 0 ] = str( newTarget )
+					connectAttr( '.'.join( toks ), '%s.target[%s].%s' % (constraint, idx, attr), f=True )
 
 
 def setupBaseLimbTwister( joint, aimObject, upObject, aimAxis ):
@@ -766,6 +813,22 @@ float $normZ = %(aimNode)s.constraintVectorZ / $mag;
 		setInfinity( '%s.worldUpVector%s' % (aimNode, axisName), pri='oscillate', poi='oscillate' )
 
 
+def dumpNodeAttrs( node ):
+	'''
+	simple debug function - you can use this to dump out attributes for nodes, stick em in a text file and do a diff
+	can be useful for tracking down how various undocumented nodes mysteriously work
+	'''
+	attrs = listAttr( node )
+	for attr in attrs:
+		try:
+			print attr, getAttr( '%s.%s' % (node, attr) )
+		except RuntimeError:
+			print attr
+		except TypeError:
+			print attr
+
+
 del( control )
+
 
 #end
