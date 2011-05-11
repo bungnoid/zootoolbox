@@ -4,6 +4,7 @@ from api import melPrint
 from filesystem import removeDupes
 from maya.cmds import *
 from binarySearchTree import BinarySearchTree
+from mayaDecorators import d_unifyUndo
 
 import maya.cmds as cmd
 import api
@@ -134,6 +135,7 @@ def saveWeights( geos, filepath=None ):
 
 
 @api.d_progress(t='initializing...', status='initializing...', isInterruptable=True)
+@d_unifyUndo
 def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMult=None, swapParity=True, averageVerts=True, doPreview=False, meshNameRemapDict=None, jointNameRemapDict=None ):
 	'''
 	loads weights back on to a model given a file
@@ -368,6 +370,7 @@ from maya.OpenMayaAnim import MFnSkinCluster
 from maya.OpenMaya import MIntArray, MDagPathArray
 
 #@profileDecorators.d_profile
+@d_unifyUndo
 def setSkinWeights( skinCluster, vertJointWeightData ):
 	'''
 	vertJointWeightData is a list of 2-tuples containing the vertex component name, and a list of 2-tuples
@@ -416,7 +419,13 @@ def setSkinWeights( skinCluster, vertJointWeightData ):
 		#at this point using the api or mel to set the data is a moot point...  we have the strings already so just use mel
 		for joint, weight in jointsAndWeights:
 			if weight:
-				infIdx = jApiIndices[ joint ]
+				try:
+					infIdx = jApiIndices[ joint ]
+				except KeyError:
+					try:
+						infIdx = jApiIndices[ joint.split( '|' )[0] ]
+					except KeyError: continue
+
 				setAttr( weightFmtStr % infIdx, weight )
 
 
