@@ -2047,7 +2047,7 @@ def labelledUIClassFactory( baseCls ):
 			if labelWidth:
 				lbl.setWidth( labelWidth )
 
-			self.ui = ui = baseCls( self, parent, *a, **kw )
+			self.ui = ui = baseCls( self, *a, **kw )
 
 			self.setStretchWidget( ui )
 			self.layout()
@@ -2098,6 +2098,8 @@ def labelledUIClassFactory( baseCls ):
 			self.UI_lbl.setWidth()
 		def setLlabelWidth( self, width ):
 			self.UI_lbl.setWidth( width )
+		def getWidget( self ):
+			return self.ui
 
 	_tmp.__name__ = clsName
 	_tmp.__doc__ = baseCls.__doc__

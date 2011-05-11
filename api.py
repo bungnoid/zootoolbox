@@ -10,6 +10,7 @@ import __future__
 from cacheDecorators import *
 from filesystem import *
 from vectors import *
+from mayaDecorators import d_disableViews, d_noAutoKey, d_noUndo, d_progress, d_showWaitCursor
 
 import maya.OpenMaya as OpenMaya
 import maya.cmds as cmd
@@ -24,6 +25,8 @@ melEval = maya.mel.eval
 mayaVer = melEval( 'getApplicationVersionAsFloat()' )
 
 Callback = utils.Callback
+
+MATRIX_ROTATION_ORDER_CONVERSIONS_TO = Matrix.ToEulerXYZ, Matrix.ToEulerYZX, Matrix.ToEulerZXY, Matrix.ToEulerXZY, Matrix.ToEulerYXZ, Matrix.ToEulerZYX
 
 
 '''
@@ -119,23 +122,20 @@ def getRotateDelta__( srcJoint, jointControl ):
 	srcJoint should be the joint to which we want to align the rigged skeleton
 	tgtJoint is the joint on the rigged skeleton which is driven by the jointControl
 	'''
-	mat_j = getMDagPath( srcJoint ).inclusiveMatrix()
-	mat_c = getMDagPath( jointControl ).inclusiveMatrix()
+	mat_j = Matrix( getAttr( '%s.worldInverseMatrix' % srcJoint ) )  #getMDagPath( srcJoint ).inclusiveMatrix()
+	mat_c = Matrix( getAttr( '%s.worldMatrix' % jointControl ) )  #getMDagPath( jointControl ).inclusiveMatrix()
 
 	#generate the matrix describing offset between joint and the rig control
-	mat_o = mat_j.inverse() * mat_c
+	mat_o = mat_j * mat_c
 
 	#put into space of the control
-	rel_mat = mat_o * getMDagPath( jointControl ).exclusiveMatrixInverse()
+	rel_mat = mat_o * Matrix( getAttr( '%s.parentInverseMatrix' % jointControl ) )  #getMDagPath( jointControl ).exclusiveMatrixInverse()
 
 	#now figure out the euler rotations for the offset
-	tMat = OpenMaya.MTransformationMatrix( rel_mat )
-	asEuler = tMat.rotation().asEulerRotation()
-	asEuler = map(OpenMaya.MAngle, (asEuler.x, asEuler.y, asEuler.z))
-	asEuler = tuple( a.asDegrees() for a in asEuler )
+	ro = getAttr( '%s.ro' % jointControl )
+	asEuler = MATRIX_ROTATION_ORDER_CONVERSIONS_TO[ ro ]( rel_mat, True )
 
 	cmd.rotate( asEuler[ 0 ], asEuler[ 1 ], asEuler[ 2 ], jointControl, relative=True, os=True )
-	print asEuler[ 0 ], asEuler[ 1 ], asEuler[ 2 ]
 
 	return asEuler
 
@@ -318,7 +318,7 @@ class CmdQueue(list):
 		if echo:
 			m = melecho
 
-		fp = Path.Temp()
+		fp = Path( "%TEMP%/cmdQueue.mel" )
 		f = open( fp, 'w' )
 		f.writelines( '%s;\n' % l for l in self )
 		f.close()
@@ -814,22 +814,6 @@ def resolveMapping( mapping, **kw ):
 
 
 ######  DECORATORS  ######
-def d_showWaitCursor(f):
-	'''
-	turns the wait cursor on while the decorated method is executing, and off again once finished
-	'''
-	def func(*args, **kwargs):
-		cmd.waitCursor(state=True)
-		try:
-			retVal = f(*args, **kwargs)
-		except:
-			raise
-		finally:
-			cmd.waitCursor(state=False)
-
-		return retVal
-	return func
-
 
 def d_confirmAction( *a, **dec_kwargs ):
 	'''
@@ -849,88 +833,6 @@ def d_confirmAction( *a, **dec_kwargs ):
 			ans = cmd.confirmDialog(**dec_kwargs)
 			if ans == dec_kwargs.get('answer', 'OK'):
 				return f(*args, **kwargs)
-		return func
-	return dec
-
-
-def d_disableViews( f ):
-	'''
-	disables all viewports before, and re-enables them after
-	'''
-	def func(*args, **kwargs):
-		modelPanels = cmd.getPanel(vis=True)
-		emptySelConn = cmd.selectionConnection()
-
-		for panel in modelPanels:
-			if cmd.getPanel(to=panel) == 'modelPanel':
-				cmd.isolateSelect(panel, state=True)
-				cmd.modelEditor(panel, e=True, mlc=emptySelConn)
-
-		try:
-			ret = f(*args, **kwargs)
-		except:
-			raise
-		finally:
-			cmd.deleteUI(emptySelConn)
-
-		return ret
-	return func
-
-
-def d_noAutoKey( f ):
-	'''
-	forces autoKey off
-	'''
-	def func(*args, **kwargs):
-		initialState = cmd.autoKeyframe(q=True, state=True)
-		cmd.autoKeyframe(state=False)
-		try:
-			ret = f(*args, **kwargs)
-		except:
-			raise
-		finally:
-			cmd.autoKeyframe(state=initialState)
-
-		return ret
-	return func
-
-
-def d_noUndo( f ):
-	'''
-	forces undo off
-	'''
-	def func(*args, **kwargs):
-		initialState = cmd.undoInfo(q=True, state=True)
-		cmd.undoInfo(stateWithoutFlush=False)
-		try:
-			ret = f(*args, **kwargs)
-		except:
-			raise
-		finally:
-			cmd.undoInfo(stateWithoutFlush=initialState)
-
-		return ret
-	return func
-
-
-def d_progress( **dec_kwargs ):
-	'''
-	deals with progress window...  any kwargs given to the decorator on init are passed to the progressWindow init method
-	'''
-	def dec(f):
-		def func(*args, **kwargs):
-			try:
-				cmd.progressWindow(**dec_kwargs)
-			except: print 'error init-ing the progressWindow'
-
-			try: ret = f(*args, **kwargs)
-			except:
-				#end the progressWindow on any exception and re-raise...
-				raise
-			finally:
-				cmd.progressWindow(ep=True)
-
-			return ret
 		return func
 	return dec
 
