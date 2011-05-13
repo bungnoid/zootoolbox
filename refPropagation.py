@@ -105,26 +105,6 @@ def stripNamespaceFromNamePath( name, namespace ):
 	return '|'.join( cleanPathToks )
 
 
-def addNamespaceTokNamePath( name, namespace ):
-	'''
-	adds the given namespace to a name path.
-
-	example:
-	addNamespaceTokNamePath( 'some|name|path', 'ns' )
-
-	returns:
-	'ns:some|ns:name|ns:path'
-	'''
-	if namespace.endswith( ':' ):
-		namespace = namespace[ :-1 ]
-
-	namespacedToks = []
-	for pathTok in name.split( name, '|' ):
-		namespacedToks.append( '%s:%s' % (namespace, name) )
-
-	return '|'.join( namespacedToks )
-
-
 def propagateWeightChangesToModel( meshes ):
 	'''
 	Given a list of meshes to act on, this function will store the skin weights, remove any
