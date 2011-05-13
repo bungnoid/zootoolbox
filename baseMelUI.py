@@ -1030,7 +1030,11 @@ class MelButton(BaseMelWidget):
 	def getLabel( self ):
 		return self( q=True, l=True )
 	def setLabel( self, label ):
+		initialWidth = self.getWidth()
 		self( e=True, l=label )
+
+		#seems maya screws with the width of the widget when setting the label - yay!
+		self.setWidth( initialWidth )
 
 
 class MelIconButton(MelButton):
