@@ -1309,6 +1309,8 @@ class MelTextScrollList(BaseMelWidget):
 			self.append( i )
 	def getItems( self ):
 		return self( q=True, ai=True )
+	def getAllItems( self ):
+		return self( q=True, ai=True )
 	def setAppendCB( self, cb ):
 		self._appendCB = cb
 	def getSelectedItems( self ):
@@ -1366,46 +1368,66 @@ class MelTextScrollList(BaseMelWidget):
 		'''
 		moves selected items "up" <count> units
 		'''
+
+		#these are the selected items as they appear in the UI - we need to map them to "real" indices
 		selIdxs = self.getSelectedIdxs()
-		selIdxs.sort()
+		selItems = self.getSelectedItems()
+		items = self.getAllItems()
+		realIdxs = []
+		for selItem in selItems:
+			for n, item in enumerate( items ):
+				if selItem is item:
+					realIdxs.append( n )
+					break
 
-		count = min( count, selIdxs[ 0 ] )  #we can't move more units up than the smallest selected index
-		if selIdxs[ 0 ] > 0:
-			items = self.getItems()
-			itemsToMove = [ items[ idx ] for idx in selIdxs ]
-			for idx in reversed( selIdxs ):
-				item = items.pop( idx )
-				items.insert( idx-count, item )
+		count = min( count, realIdxs[ 0 ] )  #we can't move more units up than the smallest selected index
+		if not count:
+			return
 
-			self.setItems( items )
+		realIdxs.sort()
+		for idx in realIdxs:
+			item = items.pop( idx )
+			items.insert( idx-count, item )
 
-			#re-setup selection
-			self.clearSelection()
-			for idx in selIdxs:
-				self.selectByIdx( idx-count, False )
+		self.setItems( items )
+
+		#re-setup selection
+		self.clearSelection()
+		for item in selItems:
+			self.selectByValue( item, False )
 	def moveSelectedItemsDown( self, count=1 ):
 		'''
 		moves selected items "down" <count> units
 		'''
+
+		#these are the selected items as they appear in the UI - we need to map them to "real" indices
 		selIdxs = self.getSelectedIdxs()
-		selIdxs.sort()
+		selItems = self.getSelectedItems()
+		items = self.getAllItems()
+		realIdxs = []
+		for selItem in selItems:
+			for n, item in enumerate( items ):
+				if selItem is item:
+					realIdxs.append( n )
+					break
 
-		items = self.getItems()
+		realIdxs.sort()
 		maxIdx = len( items )-1
+		count = min( count, maxIdx - realIdxs[-1] )  #we can't move more units down than the largest selected index
+		if not count:
+			return
 
-		count = min( count, maxIdx - selIdxs[-1] )  #we can't move more units down than the largest selected index
-		if selIdxs[ -1 ] < maxIdx:
-			itemsToMove = [ items[ idx ] for idx in selIdxs ]
-			for idx in reversed( selIdxs ):
-				item = items.pop( idx )
-				items.insert( idx+count, item )
+		realIdxs.reverse()
+		for idx in realIdxs:
+			item = items.pop( idx )
+			items.insert( idx+count, item )
 
-			self.setItems( items )
+		self.setItems( items )
 
-			#re-setup selection
-			self.clearSelection()
-			for idx in selIdxs:
-				self.selectByIdx( idx+count, False )
+		#re-setup selection
+		self.clearSelection()
+		for item in selItems:
+			self.selectByValue( item, False )
 
 
 class MelObjectScrollList(MelTextScrollList):
@@ -1467,7 +1489,7 @@ class MelObjectScrollList(MelTextScrollList):
 		#update the UI
 		if updateUI:
 			self.update()
-	def clearilter( self ):
+	def clearFilter( self ):
 		self.setFilter( None )
 	def doesItemPassFilter( self, item ):
 		return self.doesItemStrPassFilter( self.itemAsStr( item ) )
@@ -1580,7 +1602,7 @@ class MelObjectScrollList(MelTextScrollList):
 		'''
 		removes and re-adds the items in the UI
 		'''
-		selIdxs = self.getSelectedIdxs()
+		selItems = self.getSelectedItems()
 
 		#remove all items from the list
 		self._visibleItems = []
@@ -1594,12 +1616,10 @@ class MelObjectScrollList(MelTextScrollList):
 				self( e=True, append=itemStr )
 
 		if maintainSelection:
-			try:
-				for idx in selIdxs:
-					self.selectByIdx( idx, False )
-
-			#the above might throw an exception if the updated list doesn't have the original items in it anymore
-			except: pass
+			for item in selItems:
+				for idx, visItem in enumerate( self._visibleItems ):
+					if item is visItem:
+						self.selectByIdx( idx, False )
 
 
 class MelSetMemebershipList(MelObjectScrollList):
