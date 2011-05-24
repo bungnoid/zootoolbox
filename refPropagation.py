@@ -8,6 +8,7 @@ from maya.cmds import *
 from filesystem import Path
 from api import mel
 from common import printWarningStr
+from referenceUtils import stripNamespaceFromNamePath
 
 import skinWeights
 
@@ -78,31 +79,6 @@ def storeWeightsById( mesh, namespaceToStrip=None ):
 		weightData.append( (vert, zip( jointList, weightList )) )
 
 	return weightData
-
-
-def stripNamespaceFromNamePath( name, namespace ):
-	'''
-	strips out the given namespace from a given name path.
-
-	example:
-	stripNamespaceFromNamePath( 'moar:ns:wow:some|moar:ns:wow:name|moar:ns:wow:path', 'ns' )
-
-	returns:
-	'wow:some|wow:name|wow:path'
-	'''
-	if namespace.endswith( ':' ):
-		namespace = namespace[ :-1 ]
-
-	cleanPathToks = []
-	for pathTok in name.split( '|' ):
-		namespaceToks = pathTok.split( ':' )
-		if namespace in namespaceToks:
-			idx = namespaceToks.index( namespace )
-			namespaceToks = namespaceToks[ idx+1: ]
-
-		cleanPathToks.append( ':'.join( namespaceToks ) )
-
-	return '|'.join( cleanPathToks )
 
 
 def propagateWeightChangesToModel( meshes ):

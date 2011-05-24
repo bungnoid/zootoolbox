@@ -1,23 +1,25 @@
 
+from maya.cmds import *
+from maya import OpenMaya
+
+from filesystem import Path, Preset, GLOBAL, LOCAL, removeDupes
 from names import *
 from vectors import *
-from filesystem import removeDupes, Path, Preset
+
+from api import mel
+from picker import resolveCmdStr
 from mappingUtils import *
+from common import printWarningStr, printErrorStr
+from mayaDecorators import d_noAutoKey, d_unifyUndo, d_disableViews, d_restoreTime
 
 import api
-
-import mayaVectors
-import triggered
-import maya.OpenMaya as OpenMaya
-
-from filesystem import Preset, GLOBAL, LOCAL
-import maya.cmds as cmd
+import maya
 
 
 TOOL_NAME = 'xferAnim'
 EXTENSION = 'postTraceScheme'
 
-eul = api.OpenMaya.MEulerRotation
+eul = OpenMaya.MEulerRotation
 
 AXES = "x", "y", "z"
 kROOS = "xyz", "yzx", "zxy", "xzy", "yxz", "zyx"
@@ -37,8 +39,8 @@ def bakeRotateDelta( src, ctrl, presetStr ):
 	'''
 	offset = api.getRotateDelta__( src, ctrl )
 
-	api.mel.zooSetPostTraceCmd( ctrl, presetStr % offset )
-	api.mel.zooAlign( "-src %s -tgt %s -postCmds 1" % (src, ctrl) )
+	mel.zooSetPostTraceCmd( ctrl, presetStr % offset )
+	mel.zooAlign( "-src %s -tgt %s -postCmds 1" % (src, ctrl) )
 
 	return offset
 
@@ -50,36 +52,36 @@ def bakeManualRotateDelta( src, ctrl, presetStr ):
 	you can manually align the control to the joint and then use this function to generate offset
 	rotations and bake a post trace cmd.
 	'''
-	srcInvMat = Matrix( cmd.getAttr( '%s.worldInverseMatrix' % src ) )
-	ctrlMat = Matrix( cmd.getAttr( '%s.worldMatrix' % ctrl ) )
+	srcInvMat = Matrix( getAttr( '%s.worldInverseMatrix' % src ) )
+	ctrlMat = Matrix( getAttr( '%s.worldMatrix' % ctrl ) )
 
 	#generate the offset matrix as
 	mat_o = ctrlMat * srcInvMat
 
 	#now figure out the euler rotations for the offset
-	ro = cmd.getAttr( '%s.ro' % ctrl )
+	ro = getAttr( '%s.ro' % ctrl )
 	rotDelta = api.MATRIX_ROTATION_ORDER_CONVERSIONS_TO[ ro ]( mat_o, True )
 
 	#now get the positional delta
-	posDelta = Vector( cmd.xform( src, q=True, ws=True, rp=True ) ) - Vector( cmd.xform( ctrl, q=True, ws=True, rp=True ) )
+	posDelta = Vector( xform( src, q=True, ws=True, rp=True ) ) - Vector( xform( ctrl, q=True, ws=True, rp=True ) )
 	posDelta *= -1
-	ctrlParentInvMat = Matrix( cmd.getAttr( '%s.parentInverseMatrix' % ctrl ) )
+	ctrlParentInvMat = Matrix( getAttr( '%s.parentInverseMatrix' % ctrl ) )
 	posDelta = posDelta * ctrlParentInvMat
 
 	#construct a list to use for the format str
 	formatArgs = tuple( rotDelta ) + tuple( posDelta )
 
 	#build the post trace cmd str
-	api.mel.zooSetPostTraceCmd( ctrl, presetStr % formatArgs )
+	mel.zooSetPostTraceCmd( ctrl, presetStr % formatArgs )
 
 	return rotDelta
 
 
 #this dict contains UI labels and a presets for offset commands...  when adding new ones make sure it contains exactly three format strings...
-CMD_PRESETS = CMD_DEFAULT, CMD_SRC_TGT, CMD_IK_FOOT, CMD_COPY = ( ('rotate -r -os %0.2f %0.2f %0.2f #; move -r -os %0.4f %0.4f %0.4f #; setKeyframe -at r -at t #;', bakeManualRotateDelta),
-                                                                  ('rotate -r -os %0.2f %0.2f %0.2f #; move -r -os %0.4f %0.4f %0.4f #; setKeyframe -at r -at t #;', bakeRotateDelta),
-                                                                  ('rotate -r -os %0.2f %0.2f %0.2f #; move -r -os %0.4f %0.4f %0.4f #; setKeyframe -at r -at t #; traceToe # %%opt0%% x z;', bakeRotateDelta),
-                                                                  ('float $f[] = `getAttr %%opt0%%.r`; setAttr #.rx $f[0]; setAttr #.ry $f[1]; setAttr #.rz $f[2]; setKeyframe -at r #;', None) )
+CMD_PRESETS = CMD_DEFAULT, CMD_SRC_TGT, CMD_IK_FOOT, CMD_COPY = ( ('rotate -r -os %0.2f %0.2f %0.2f #; move -r -os %0.4f %0.4f %0.4f #;', bakeManualRotateDelta),
+                                                                  ('rotate -r -os %0.2f %0.2f %0.2f #; move -r -os %0.4f %0.4f %0.4f #;', bakeRotateDelta),
+                                                                  ('rotate -r -os %0.2f %0.2f %0.2f #; move -r -os %0.4f %0.4f %0.4f #; traceToe # %%opt0%% x z;', bakeRotateDelta),
+                                                                  ('float $f[] = `getAttr %%opt0%%.r`; setAttr #.rx $f[0]; setAttr #.ry $f[1]; setAttr #.rz $f[2];', None) )
 
 
 def savePostTraceScheme( presetName ):
@@ -88,13 +90,13 @@ def savePostTraceScheme( presetName ):
 	'''
 
 	#grab a list of transforms with post trace commands on them
-	postTraceNodes = cmd.ls( "*.%s" % POST_TRACE_ATTR_NAME, r=True )
+	postTraceNodes = ls( "*.%s" % POST_TRACE_ATTR_NAME, r=True )
 
 	postTraceDict = {}
 	for n in postTraceNodes:
 		noNS = n.split( ':' )[ -1 ]  #strip the namespace
 		noNS = noNS.split( '.' )[ 0 ]  #strip the attribute
-		postTraceDict[ noNS ] = cmd.getAttr( n )
+		postTraceDict[ noNS ] = getAttr( n )
 
 	xportDict = api.writeExportDict( TOOL_NAME, 0 )
 
@@ -105,15 +107,15 @@ def savePostTraceScheme( presetName ):
 
 
 def clearPostTraceScheme():
-	postTraceNodes = cmd.ls( "*.%s" % POST_TRACE_ATTR_NAME, r=True )
+	postTraceNodes = ls( "*.%s" % POST_TRACE_ATTR_NAME, r=True )
 	for n in postTraceNodes:
 		#ideally delete the attribute
 		try:
-			cmd.deleteAttr( n )
+			deleteAttr( n )
 
 		#this can happen if the node is referenced - so just set it to an empty string...
 		except RuntimeError:
-			cmd.setAttr( n, '', typ='string' )
+			setAttr( n, '', typ='string' )
 
 
 def loadPostTraceSchemeFilepath( presetFile ):
@@ -134,10 +136,10 @@ def loadPostTraceSchemeFilepath( presetFile ):
 
 	for n, postTraceCmd in postTraceDict.iteritems():
 		n = n.split( '.' )[ 0 ]  #strip off the attribute
-		possibles = cmd.ls( '*%s' % n, r=True )
+		possibles = ls( '*%s' % n, r=True )
 		if possibles:
 			nInScene = possibles[0]
-			api.mel.zooSetPostTraceCmd( nInScene, postTraceCmd )
+			mel.zooSetPostTraceCmd( nInScene, postTraceCmd )
 
 
 def loadPostTraceScheme( presetName ):
@@ -159,13 +161,13 @@ def autoGeneratePostTraceScheme( mapping, presetName=None ):
 		if not tgt:
 			continue
 
-		t, r = cmd.getAttr( '%s.t' % tgt )[0], cmd.getAttr( '%s.r' % tgt )[0]
+		t, r = getAttr( '%s.t' % tgt )[0], getAttr( '%s.r' % tgt )[0]
 		print tgt, cmdFunc( src, tgt, cmdStr )
 
-		try: cmd.setAttr( '%s.t' % tgt, *t )
+		try: setAttr( '%s.t' % tgt, *t )
 		except RuntimeError: pass
 
-		try: cmd.setAttr( '%s.r' % tgt, *r )
+		try: setAttr( '%s.r' % tgt, *r )
 		except RuntimeError: pass
 
 	if presetName is not None:
@@ -181,226 +183,368 @@ def getMappingFromPreset( presetName ):
 	return p.read()
 
 
-def align( src=None, tgt=None, key=False, pivotOnly=False ):
-	'''
-	this is separated into a separate proc, because its less "user friendly" ie require less syntax to work
-	its better to call zooAlign in non speed intensive operations because the syntax for this command may change
-	if the scope of the script is expanded in future - ie I add more functionality
-	'''
-
-	if src is None or tgt is None:
-		sel = selected()
-		if src is None: src = sel[ 0 ]
-		if tgt is None: tgt = sel[ 1 ]
+def getPostTraceCmd( node ):
+	return getAttr( '%s.%s' % (node, POST_TRACE_ATTR_NAME) )
 
 
-	global AXES
-
-	pos = xform( src, q=True, ws=True, rp=True )
-	rot = xform( src, q=True, ws=True, ro=True )
-
-	#create a list of all the axes to look at - we will check all these axes to make sure they're not locked
-	#creating a constraint on a locked axis will give us an error
-	moveCmdKw = { 'a': True, 'ws': True, 'rpr': True }
-	rotateCmdKw = { 'a': True, 'ws': True }
-	rotateCmdAxisAccum = ''
-	performMove = False
-	performRotate = False
-
-	for ax in AXES:
-		if tgt.attr( 't'+ ax ).isSettable():
-			moveCmdKw[ ax ] = True
-			performMove = True
-		if tgt.attr( 'r'+ ax ).isSettable():
-			rotateCmdAxisAccum += ax
-			performRotate = True
-
-	if pivotOnly:
-		if performMove:
-			move( tgt.rp, tgt.sp, **moveCmdKw )
-	else:
-		#so if the rotation orders are different, we need to deal with that because the xform cmd doesn't
-		srcRo = src.ro.get()
-		tgtRo = tgt.ro.get()
-		if srcRo != tgtRo:
-			tgt.ro.set( srcRo )
-
-		if performMove:
-			move( tgt, pos, **moveCmdKw )
-		if performRotate:
-			rotateCmdKw[ 'rotate'+ rotateCmdAxisAccum.upper() ] = True
-			rotate( tgt, rot, **rotateCmdKw )
-
-		#now restore the original rotation order
-		if srcRo != tgtRo:
-			xform( tgt, p=True, roo=kROOS[ tgtRo ] )
-
-	if key:
-		setKeyframe( tgt, at=('t', 'r') )
+def executePostTraceCmd( node ):
+	cmdStr = getPostTraceCmd( node )
+	resolvedCmdStr = resolveCmdStr( cmdStr, node, [] )
+	mel.eval( resolvedCmdStr )
 
 
-def trace( srcs, tgts, keysOnly=True, keysOnlyRotate=True, matchRotationOrder=True, processPostCmds=True, sortByHeirarchy=True, start=None, end=None, skip=1 ):
-	api.mel.zooXferAnimUtils()
-	api.mel._zooXferTrace( srcs, tgts, 2 if keysOnly else 0, int( keysOnlyRotate ), int( matchRotationOrder ), int( processPostCmds ), int( sortByHeirarchy ), int( start ), int( end ), int( skip ) )
-
-
-"""
-TRACE_MODES = TRACE_ALL_FRAMES, TRACE_KEYFRAMES, TRACE_ALL_KEYFRAMES = range( 3 )
-
-def trace( srcs, tgts, traceMode=TRACE_KEYFRAMES, keysOnlyRotate=True, matchRotationOrder=True, processPostCmds=True, sortByHeirarchy=True, start=None, end=None ):
-	'''
-	given a list of source objects, and a list of targets, trace all source objects to the corresponding
-	objects in the target array
-
-	unlike the core functions for the transfer and add function, the trace
-	function takes an array of source objects and an array of target objects. this is because the proc
-	steps through all frames specified by the user. knowing all the objects in advance allows the proc
-	to trace each object on a single frame before advancing to the next. this saves having to step
-	through all frames once for each object
-	'''
-
+def trace( srcs, tgts, keysOnly=True, matchRotationOrder=True, processPostCmds=True, sortByHeirarchy=True, start=None, end=None, skip=1 ):
 	if start is None:
-		start = playbackOptions( q=True, min=True )
+		keys = keyframe( srcs, q=True )
+		keys.sort()
+		start = keys[0]
 
 	if end is None:
-		end = playbackOptions( q=True, max=True )
+		keys = keyframe( srcs, q=True )
+		keys.sort()
+		end = keys[-1]
 
-	#first, make sure the src and tgt lists contain only valid items
-	cleanSrcs = []
-	cleanTgts = []
-	for src, tgt in zip( srcs, tgts ):
-		if objExists( src ) and objExists( tgt ):
-			cleanSrcs.append( src )
-			cleanTgts.append( tgt )
+	api.mel.zooXferAnimUtils()
+	api.mel._zooXferTrace( srcs, tgts, 2 if keysOnly else 0, 0, int( matchRotationOrder ), int( processPostCmds ), int( sortByHeirarchy ), int( start ), int( end ), int( skip ) )
 
-	srcs = cleanSrcs
-	tgts = cleanTgts
 
-	if not srcs and not tgts:
-		print "xferAnim.trace()  no objects to trace"
+#def trace( srcs, tgts, keysOnly=True, matchRotationOrder=True, processPostCmds=True, sortByHeirarchy=True, start=None, end=None, skip=1 ):
+	#tracer = Tracer( keysOnly, matchRotationOrder, processPostCmds, sortByHeirarchy, start, end, skip )
+	#tracer.setSrcsAndTgts( srcs, tgts )
+	#tracer.trace()
 
-	timeList = keyframe( srcs, q=True, tc=True )
-	numSrcs = len( srcs )
-	numTgts = len( tgts )
 
-	#make sure the start time is smaller than the end time, and turn off autokey
-	start, end = sorted( [start, end] )
+def constructDummyParentConstraint( src, tgt ):
+	grp = group( em=True )
+	constraintNode = parentConstraint( src, grp )[0]
+	parent( constraintNode, w=True )
+	delete( grp )
 
-	#sort the targets properly - we want the targets sorted heirarchically - but we also need to sort the source objects the exact same way
-	if sortByHeirarchy:
-		sortByTgtHierarchy = [ (len( list( api.iterParents( t ) ) ), s, t) for s, t in zip( srcs, tgts ) ]
-		sortByTgtHierarchy.sort()
+	connectAttr( '%s.ro' % tgt, '%s.constraintRotateOrder' % constraintNode )
+	connectAttr( '%s.rotatePivotTranslate' % tgt, '%s.constraintRotateTranslate' % constraintNode )
+	connectAttr( '%s.rotatePivot' % tgt, '%s.constraintRotatePivot' % constraintNode )
+	connectAttr( '%s.parentInverseMatrix' % tgt, '%s.constraintParentInverseMatrix' % constraintNode )
 
-		srcs, tgts = [], []
-		for n, s, t in sortByTgtHierarchy:
-			srcs.append( s )
-			tgts.append( t )
+	return constraintNode
 
-	#if keys only is non-zero, the create an array with all key times
-	if traceMode:
-		timeList.sort()
-		timeList = removeDupes( timeList )
 
-	#if keys only is 2, this means trace only keys within a given time range - so crop the key time array to suit
-	if traceMode == TRACE_KEYFRAMES:
-		timeList = [ t for t in timeList if t >= start and t <= end ]
+def getParentCount( node ):
+	count = 1
+	nodeParent = node
+	while nodeParent:
+		nodeParent = listRelatives( nodeParent, p=True, pa=True )
+		if nodeParent is None:
+			break
 
-	#if its not keys only, build a list of each frame to trace
-	elif keysOnly == TRACE_ALL_FRAMES:
-		timeList = range( end - start + 1 )
+		count += 1
 
-	#if there are no keys in the key list, issue a warning
-	if not timeList:
-		print "no keys on source"
-		return
+	return count
 
-	#match the rotation orders of the objects.
-	if matchRotationOrder:
-		for src, tgt in zip( srcs, tgts ):
-			if isinstance( src, Transform ) and isinstance( tgt, Transform ):
-				tgt.ro.set( src.ro.get() )
 
-	#create an array with post cmd state
-	postCmds = []
-	for src, tgt in zip( srcs, tgts ):
-		cmd = mel.zooGetPostTraceCmd( tgt )
-		postCmds.append( mel.zooPopulateCmdStr( tgt, cmd, [src] ) )
+class TracePair(object):
+	SHORT_TRANSFORM_ATTRS = ('tx', 'ty', 'tz',
+	                         'rx', 'ry', 'rz')
 
-	for i, t in enumerate( timeList ):
-		currentTime( t )
-		for src, tgt, postCmd in zip( srcs, tgts, postCmds ):
-			#if we're doing keys only, make sure there is a key on the current frame of the src object before doing the trace
-			didTrace = False
-			if traceMode:
-				if keyframe( src, t=(t,), q=True, kc=True ):
-					traceTime( src, tgt, t, traceMode, keysOnlyRotate )
-					didTrace = True
+	def __init__( self, src, tgt ):
+		self._src = src
+		self._tgt = tgt
+		self._isTransform = objectType( src, isAType='transform' ) and objectType( tgt, isAType='transform' )
 
-			#otherwise, just do the trace
+		self._keyTimeData = {}
+		self._postTraceCmd = None
+		self._constraint = None
+		self._parentCount = getParentCount( tgt )
+		self._attrsWeightedTangentsDealtWith = []
+	def __repr__( self ):
+		return '%s( "%s", "%s" )' % (type( self ).__name__, self._src, self._tgt)
+	__str__ = __repr__
+	def isTransform( self ):
+		return self._isTransform
+	def getSrcTgt( self ):
+		return self._src, self._tgt
+	def getParentCount( self ):
+		return self._parentCount
+	def getKeyTimes( self ):
+		return self._keyTimeData.keys()
+	def dealWithWeightedTangents( self, tgtAttrpath ):
+		'''
+		this is annoying - so maya has two types of curves - weighted and non-weighted tangent curves, and they've not compatible.
+		so we need to see what the type of the curve we're querying and make sure the keys we trace have the same curve type.  this
+		is easier said than done - the tgt object may already have keys.  if it does, we can just convert the curve right now and be
+		done with it, but if it doesn't, then we need to convert the curve to weighted tangents after the first key is set, or mess
+		with the users preferences.  neither is pretty...  god maya sucks
+		'''
+		if keyframe( tgtAttrpath, q=True, kc=True ):
+			attr = tgtAttrpath[ tgtAttrpath.find( '.' ) + 1: ]
+			srcAttrpath = '%s.%s' % (self._src, attr)
+			srcWeightedTangentState = keyTangent( srcAttrpath, q=True, weightedTangents=True )[0]
+			tgtWeightedTangentState = keyTangent( tgtAttrpath, q=True, weightedTangents=True )[0]
+			if srcWeightedTangentState != tgtWeightedTangentState:
+				keyTangent( tgtAttrpath, e=True, weightedTangents=srcWeightedTangentState )
+
+			self._attrsWeightedTangentsDealtWith.append( tgtAttrpath )
+	def preTrace( self ):
+		if self._isTransform:
+			if self._constraint is None:
+				self._constraint = constructDummyParentConstraint( self._src, self._tgt )
+
+		#now grab any other keyable attributes
+		keyableAttrs = listAttr( self._src, keyable=True, scalar=True, shortNames=True ) or []
+		for attr in keyableAttrs:
+			tgtAttrpath = '%s.%s' % (self._tgt, attr)
+			if not objExists( tgtAttrpath ):
+				continue
+
+			#check to see if we need to deal with weighted tangents
+			srcAttrpath = '%s.%s' % (self._src, attr)
+			if tgtAttrpath not in self._attrsWeightedTangentsDealtWith:
+				self.dealWithWeightedTangents( tgtAttrpath )
+
+			#now get the list of keys for the attribute and store that as well
+			srcKeysTimes = keyframe( srcAttrpath, q=True )
+			if srcKeysTimes:
+				srcKeysInTangents = keyTangent( srcAttrpath, q=True, itt=True )
+				srcKeysOutTangents = keyTangent( srcAttrpath, q=True, ott=True )
+
+				srcKeysInX = keyTangent( srcAttrpath, q=True, ix=True )
+				srcKeysInY = keyTangent( srcAttrpath, q=True, iy=True )
+				srcKeysOutX = keyTangent( srcAttrpath, q=True, ox=True )
+				srcKeysOutY = keyTangent( srcAttrpath, q=True, oy=True )
+
+				#if the attr is a transform attr - set the srcAttrpath to the appropriate attribute on the constraint
+				if attr in self.SHORT_TRANSFORM_ATTRS:
+					srcAttrpath = '%s.c%s' % (self._constraint, attr)
+
+				for keyTime, keyItt, keyOtt, ix, iy, ox, oy in zip( srcKeysTimes, srcKeysInTangents, srcKeysOutTangents, srcKeysInX, srcKeysInY, srcKeysOutX, srcKeysOutY ):
+					self._keyTimeData.setdefault( keyTime, [] )
+					self._keyTimeData[ keyTime ].append( (srcAttrpath, tgtAttrpath, keyItt, keyOtt, ix, iy, ox, oy) )
+
+		#finally see if the node has a post trace cmd - if it does, track it
+		postTraceCmdAttrpath = '%s.xferPostTraceCmd' % self._tgt
+		if objExists( postTraceCmdAttrpath ):
+			cmdStr = getAttr( postTraceCmdAttrpath )
+			self._postTraceCmd = resolveCmdStr( cmdStr, self._tgt, [] )
+	def traceFrame( self, keyTime ):
+		if keyTime not in self._keyTimeData:
+			return
+
+		attrDataList = self._keyTimeData[ keyTime ]
+		for attrData in attrDataList:
+
+			#unpack the node data
+			srcAttrpath, tgtAttrpath, keyItt, keyOtt, ix, iy, ox, oy = attrData
+
+			#NOTE: setting itt and ott in the keyframe command doesn't work properly - if itt is spline and ott is stepped, maya sets them both to stepped...  win.
+			setKeyframe( tgtAttrpath, v=getAttr( srcAttrpath ) )
+
+			#check to see if we need to deal with weighted tangents
+			#NOTE: we need to do this BEFORE setting any tangent data!
+			if tgtAttrpath not in self._attrsWeightedTangentsDealtWith:
+				self.dealWithWeightedTangents( tgtAttrpath )
+
+			#need to special case this otherwise maya will screw up the stepped tangents on the out curve...  holy shit maya sucks  :(
+			if keyOtt == 'step':
+				keyTangent( tgtAttrpath, e=True, t=(keyTime,), itt=keyItt, ott=keyOtt )#, ix=ix, iy=iy )
 			else:
-				traceTime( src, tgt, t, keysOnly, keysOnlyRotate )
-				didTrace = True
+				keyTangent( tgtAttrpath, e=True, t=(keyTime,), itt=keyItt, ott=keyOtt )#, ix=ix, iy=iy, ox=ox, oy=oy )
 
-			#execute any post trace commands on the tgt object
-			if processPostCmds and didTrace:
-				if postCmd:
-					#if( catch(eval($cmd))) warning "the post trace command failed";
-					pass
+		#execute any post trace command for the tgt nodes on this keyframe
+		if self._postTraceCmd:
+			postTraceCmdStr = resolveCmdStr( self._postTraceCmd, self._tgt, [] )
+			if postTraceCmdStr:
+				maya.mel.eval( postTraceCmdStr )
 
-TRANSFORM_ATTRS = ('tx', 'ty', 'tz', 'rx', 'ry', 'rz')
-def traceTime( src, tgt, time, traceMode, keysOnlyRotate ):
-	'''
-	this proc snaps the target to the source object, and matches any attributes on the target to
-	corresponding attributes on the source if they exist. this proc is called for each object on each
-	frame in the target list by the zooXferTrace proc
+				#once the post trace cmd has been executed, make sure to re-key each attribute with a key on this frame
+				for attrData in attrDataList:
+					tgtAttrpath = attrData[1]
+					setKeyframe( tgtAttrpath )
+	def postTrace( self ):
+		if self._constraint:
+			delete( self._constraint )
+			self._constraint = None
 
-	keysOnlyRotate only creates keys on rotation channels if there is a key on the source rotation channel - if its on then
-	its possible that rotations won't be the same orientation
-	'''
-	global AXES, TRANSFORM_ATTRS, Transform
+		#run an euler filter on the rotation curves
+		if self._isTransform:
+			filterCurve( '%s.rx' % self._tgt, '%s.ry' % self._tgt, '%s.rz' % self._tgt, filter='euler' )
 
-	attrsToTrace = listAttr( src, shortNames=True, keyable=True, visible=True, scalar=True, multi=True )
 
-	for attr in attrsToTrace:
-		#skip transform attributes
-		if attr in TRANSFORM_ATTRS:
-			continue
+class Tracer(object):
+	def __init__( self, keysOnly=True, matchRotationOrder=True, processPostCmds=True, sortByHeirarchy=True, start=None, end=None, skip=1 ):
+		self._tracePairs = []
 
-		if tgt.hasAttr( attr ):
-			tgtAttr = tgt.attr( attr )
-			if tgtAttr.isSettable() and tgtAttr.isKeyable():
-				#if keysOnly is on, check to see if there is a key on the source attr
-				srcAttr = src.attr( attr )
-				if traceMode:
-					if keyframe( srcAttr, q=True, kc=True ):
-						setKeyframe( tgtAttr, v=srcAttr.get() )
+		self._keysOnly = keysOnly
+		self._matchRotationOrder = matchRotationOrder
+		self._processPostCmds = processPostCmds
 
-				#otherwise just set a key anyway
-				else:
-					setKeyframe( tgtAttr, v=srcAttr.get() )
+		self._start = start
+		self._end = end
+		self._skipFrames = skip
+	def setKeysOnly( self, state ):
+		self._keysOnly = state
+	def setMatchRotationOrder( self, state ):
+		self._matchRotationOrder = state
+	def setProcessPostCmds( self, state ):
+		self._processPostCmds = state
+	def setStart( self, frame ):
+		self._start = frame
+	def setEnd( self, frame ):
+		self._end = frame
+	def setSkip( self, count ):
+		self._skipFrames = cound
+	def _sortTransformNodes( self ):
+		'''
+		ensures all nodes in the _keysTransformAttrpathDict are sorted hierarchically
+		'''
 
-	if isinstance( src, Transform ) and isinstance( tgt, Transform ):
-		align( src, tgt )
+		parentCountDecoratedTracePairs = []
+		for tracePair in self._tracePairs:
+			parentCountDecoratedTracePairs.append( (tracePair.getParentCount(), tracePair) )
 
-		#so now go and set a keyframe for the transform attributes that are keyed on the source object for this frame
-		if traceMode:
-			for ax in AXES:
-				if keyframe( src.attr( 't'+ ax ), t=(time,), q=True, kc=True ):
-					setKeyframe( tgt.attr( 't'+ ax ) )
+		parentCountDecoratedTracePairs.sort()
+		tracePairs = [ tracePair for pCnt, tracePair in parentCountDecoratedTracePairs ]
 
-			if keysOnlyRotate:
-				for ax in AXES:
-					if keyframe( src.attr( 'r'+ ax ), t=(time,), q=True, kc=True ):
-						setKeyframe( tgt.attr( 'r'+ ax ) )
+		self._tracePairs = tracePairs
+	def appendPair( self, src, tgt ):
+		if not objExists( src ) or not objExists( tgt ):
+			printWarningStr( "Either the src or tgt nodes don't exist!" )
+			return
 
-			elif keyframe( src.r, t=(time,), q=True, kc=True ):
-				for ax in AXES:
-					setKeyframe( tgt.attr( 'r'+ ax ) )
+		self._tracePairs.append( TracePair( src, tgt ) )
+	def setSrcsAndTgts( self, srcList, tgtList ):
+		for src, tgt in zip( srcList, tgtList ):
+			self.appendPair( src, tgt )
+	def getKeyTimes( self ):
+		'''
+		returns a list of key times
+		'''
+		if self._keysOnly:
+			keyTimes = []
+			for tracePair in self._tracePairs:
+				keyTimes += tracePair.getKeyTimes()
 
-		#if traceMode is off, then just set keys on all transform attrs
+			keyTimes = list( set( keyTimes ) )  #this removes duplicates
+			keyTimes.sort()
+
+			return keyTimes
 		else:
-			setKeyframe( tgt.t, tgt.r )
-"""
+			start = self._start
+			if start is None:
+				start = playbackOptions( q=True, min=True )
+
+			end = self._end
+			if end is None:
+				end = playbackOptions( q=True, max=True )
+
+			keyTimes = range( start, end, self._skipFrames )
+	def getTransformNodePairs( self ):
+		transformNodePairs = []
+		for tracePair in self._tracePairs:
+			if tracePair.isTransform():
+				transformNodePairs.append( tracePair )
+
+		return transformNodePairs
+	@d_unifyUndo
+	@d_noAutoKey
+	#@d_disableViews
+	@d_restoreTime
+	def trace( self ):
+		if not self._tracePairs:
+			printWarningStr( "No objects to trace!" )
+			return
+
+		#wrap the following in a try so we can ensure cleanup gets called always
+		try:
+
+			#make sure the objects in the transform list are sorted properly
+			self._sortTransformNodes()
+
+			#run the pre-trace method on all tracePair instances
+			for tracePair in self._tracePairs:
+				tracePair.preTrace()
+
+			#early out if there are no keyframes
+			keyTimes = self.getKeyTimes()
+			if not keyTimes:
+				printWarningStr( "No keys to trace!" )
+				return
+
+			#match rotation orders if required
+			transformTracePairs = list( self.getTransformNodePairs() )
+			if self._matchRotationOrder:
+				for tracePair in transformTracePairs:
+					src, tgt = tracePair.getSrcTgt()
+					if getAttr( '%s.ro' % tgt, se=True ):
+						setAttr( '%s.ro' % tgt, getAttr( '%s.ro' % src ) )
+
+			#clear out existing animation for the duration of the trace on target nodes
+			for tracePair in self._tracePairs:
+				src, tgt = tracePair.getSrcTgt()
+				cutKey( tgt, t=(keyTimes[0], keyTimes[-1]), clear=True )
+
+			#execute the traceFrame method for each tracePair instance
+			for keyTime in keyTimes:
+				currentTime( keyTime )
+				for tracePair in self._tracePairs:
+					tracePair.traceFrame( keyTime )
+
+		#make sure the postTrace method gets executed once the trace finishes
+		finally:
+			for tracePair in self._tracePairs:
+				tracePair.postTrace()
+
+
+class AnimCurveCopier(object):
+	def __init__( self, srcAnimCurve, tgtAnimCurve ):
+		self._src = srcAnimCurve
+		self._tgt = tgtAnimCurve
+	def iterSrcTgtKeyIndices( self ):
+		src, tgt = self._src, self._tgt
+		srcIndices = getAttr( '%s.keyTimeValue' % src, multiIndices=True ) or []
+		tgtIndices = getAttr( '%s.keyTimeValue' % tgt, multiIndices=True ) or []
+
+		srcTimeValues = getAttr( '%s.keyTimeValue[*]' % src ) or []
+		tgtTimeValues = getAttr( '%s.keyTimeValue[*]' % tgt ) or []
+
+		zippedTgtData = zip( tgtIndices, tgtTimeValues )
+		for srcIdx, (srcTime, srcValue) in zip( srcIndices, srcTimeValues ):
+			for n, (tgtIdx, (tgtTime, tgtValue)) in enumerate( zippedTgtData ):
+				if srcTime == tgtTime:
+					yield (srcIdx, srcTime, srcValue), (tgtIdx, tgtTime, tgtValue)
+
+					zippedTgtData = zippedTgtData[ n: ]  #chop off the values before this one - we don't need to iterate over them again...
+					break
+	def copy( self, values=True, tangents=True, other=True ):
+		src, tgt = self._src, self._tgt
+
+		for srcData, tgtData in self.iterSrcTgtKeyIndices():
+			srcIdx, srcTime, srcValue = srcData
+			tgtIdx, tgtTime, tgtValue = tgtData
+
+			#if values:
+				#setAttr( '%s.keyTimeValue[%d]' % (tgt, tgtIdx), tgtTime, srcValue )
+
+			if tangents:
+				setAttr( '%s.keyTanLocked[%d]' % (tgt, tgtIdx), getAttr( '%s.keyTanLocked[%d]' % (tgt, tgtIdx) ) )
+				setAttr( '%s.keyWeightLocked[%d]' % (tgt, tgtIdx), getAttr( '%s.keyWeightLocked[%d]' % (tgt, tgtIdx) ) )
+				setAttr( '%s.keyTanInX[%d]' % (tgt, tgtIdx), getAttr( '%s.keyTanInX[%d]' % (tgt, tgtIdx) ) )
+				setAttr( '%s.keyTanInY[%d]' % (tgt, tgtIdx), getAttr( '%s.keyTanInY[%d]' % (tgt, tgtIdx) ) )
+				setAttr( '%s.keyTanOutX[%d]' % (tgt, tgtIdx), getAttr( '%s.keyTanOutX[%d]' % (tgt, tgtIdx) ) )
+				setAttr( '%s.keyTanOutY[%d]' % (tgt, tgtIdx), getAttr( '%s.keyTanOutY[%d]' % (tgt, tgtIdx) ) )
+				setAttr( '%s.keyTanInType[%d]' % (tgt, tgtIdx), getAttr( '%s.keyTanInType[%d]' % (tgt, tgtIdx) ) )
+				setAttr( '%s.keyTanOutType[%d]' % (tgt, tgtIdx), getAttr( '%s.keyTanOutType[%d]' % (tgt, tgtIdx) ) )
+
+			if other:
+				setAttr( '%s.keyBreakdown[%d]' % (tgt, tgtIdx), getAttr( '%s.keyBreakdown[%d]' % (tgt, tgtIdx) ) )
+				#setAttr( '%s.keyTickDrawSpecial[%d]' % (tgt, tgtIdx), getAttr( '%s.keyTickDrawSpecial[%d]' % (tgt, tgtIdx) ) )
+
+
+def test():
+	tracer = Tracer()
+	#tracer.setSrcsAndTgts( ['windrunner:armControl_R', 'windrunner:upperBodyControl', 'windrunner:clavicleControl_R', 'windrunner:model:bow_1_ctrl'], ['windrunner1:armControl_A_R', 'windrunner1:upperBodyControl', 'windrunner1:clavicleControl_R', 'windrunner1:model:bow_1_ctrl'] )
+	tracer.setSrcsAndTgts( ['windrunner:armControl_R'], ['windrunner1:armControl_A_R'] )
+	#tracer.setSrcsAndTgts( ['pSphere2', 'pCylinder1'], ['pSphere1', 'pCube1'] )
+	#tracer.setSrcsAndTgts( ['pSphere2'], ['pSphere1'] )
+	tracer.trace()
 
 
 #end

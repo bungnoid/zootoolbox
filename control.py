@@ -15,7 +15,6 @@ import colours
 import meshUtils
 import profileDecorators
 from apiExtensions import asMObject, MObject
-from maya.OpenMaya import MGlobal
 
 
 SPACE_WORLD = rigUtils.SPACE_WORLD

@@ -8,29 +8,10 @@ from baseMelUI import *
 from mayaDecorators import d_disableViews, d_noAutoKey, d_unifyUndo, d_restoreTime
 from common import printWarningStr
 from triggered import Trigger
-from rigUtils import findPolePosition
+from rigUtils import findPolePosition, alignFast
 
 _FK_CMD_NAME = 'switch to FK'.lower()
 _IK_CMD_NAME = 'switch to IK'.lower()
-
-ROT_ORDER_STRS = 'xyz', 'yzx', 'zxy', 'xzy', 'yxz', 'zyx'
-
-
-def alignFast( obj, dest ):
-	if getAttr( '%s.t' % obj, se=True ):
-		pos = xform( dest, q=True, ws=True, rp=True )
-		move( pos[0], pos[1], pos[2], obj, a=True, ws=True, rpr=True )
-
-	if getAttr( '%s.r' % obj, se=True ):
-
-		#rotation is a bit special because when querying the rotation we get back xyz world rotations - so we need to change the rotation order to xyz, set the global rotation then modify the rotation order while preserving orientation
-		initialRo = getAttr( '%s.ro' % obj )
-		setAttr( '%s.ro' % obj, 0 )
-
-		rot = xform( dest, q=True, ws=True, ro=True )
-		rotate( rot[0], rot[1], rot[2], obj, a=True, ws=True )
-
-		xform( obj, p=True, roo=ROT_ORDER_STRS[ initialRo ] )
 
 
 def cropValues( valueList, minVal=None, maxVal=None ):
@@ -79,7 +60,7 @@ def getControlsFromObjs( control ):
 	try:
 		part = rigPrimitives.RigPart.InitFromItem( control )
 
-		return part.getControl( 'control' ), part.getControl( 'ikHandle' ), part.getControl( 'poleControl' ), (part.getControl( 'fkUpper' ), part.getControl( 'fkMid' ), part.getControl( 'fkLower' ))
+		return part.getControl( 'control' ), part.getIkHandle(), part.getControl( 'poleControl' ), part.getFkControls()
 	except rigPrimitives.RigPartError: pass
 
 	#so if the control we've been given isn't a rig primitive, lets try to extract whatever information we can from right click commands - if any exist

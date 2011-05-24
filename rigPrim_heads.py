@@ -2,7 +2,7 @@
 from baseRigPrimitive import *
 
 
-class Head(RigPart):
+class Head(PrimaryRigPart):
 	__version__ = 0
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'Head' ), )
 	CONTROL_NAMES = 'control', 'gimbal', 'neck'

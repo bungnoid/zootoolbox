@@ -2,6 +2,7 @@ import maya.cmds as cmd
 import baseMelUI
 import mappingEditor
 import api
+import xferAnim
 import animLib
 
 
@@ -178,7 +179,7 @@ class XferAnimForm(MelForm):
 		matchRo = cmd.checkBox( self.UI_check2, q=True, v=True )
 		startTime = cmd.textField( self.UI_start, q=True, tx=True )
 		endTime = cmd.textField( self.UI_end, q=True, tx=True )
-		world = cmd.checkBox( self.UI_check3, q=True, v=True )  #this is also "process trace cmds"
+		world = processPostCmds = cmd.checkBox( self.UI_check3, q=True, v=True )  #this is also "process trace cmds"
 		nocreate = cmd.checkBox( self.UI_check4, q=True, v=True )
 
 		if startTime.isdigit():
@@ -217,10 +218,10 @@ class XferAnimForm(MelForm):
 		elif isCopy:
 			api.melecho.zooXferBatch( "-mode 1 -range %s %s -matchRo %d" % (startTime, endTime, matchRo), theSrcs, theTgts )
 		elif isTraced:
-			api.melecho.zooXferBatch( "-mode 2 -keys %d -postCmds %d -matchRo %d -sortByHeirarchy 0 -range %s %s" % (traceKeys, world, matchRo, startTime, endTime), theSrcs, theTgts )
+			xferAnim.trace( theSrcs, theTgts, traceKeys, matchRo, processPostCmds, True, startTime, endTime )
 
 
-class XferAnimEditor(baseMelUI.BaseMelWindow):
+class XferAnimWindow(baseMelUI.BaseMelWindow):
 	WINDOW_NAME = 'xferAnim'
 	WINDOW_TITLE = 'Xfer Anim'
 
@@ -248,6 +249,8 @@ class XferAnimEditor(baseMelUI.BaseMelWindow):
 		cmd.menuItem( l="Open Offset Editor", c=loadOffsetEditor )
 
 		self.show()
+
+XferAnimEditor = XferAnimWindow  #older name...
 
 
 def load():

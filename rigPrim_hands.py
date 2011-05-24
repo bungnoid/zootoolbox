@@ -5,7 +5,7 @@ HandSkeletonCls = SkeletonPart.GetNamedSubclass( 'Hand' )
 FINGER_IDX_NAMES = HandSkeletonCls.FINGER_IDX_NAMES or ()
 
 
-class Hand(RigPart):
+class Hand(PrimaryRigPart):
 	__version__ = 0
 	SKELETON_PRIM_ASSOC = ( HandSkeletonCls, )
 	CONTROL_NAMES = 'control', 'poses', 'qss'
@@ -54,7 +54,7 @@ class Hand(RigPart):
 
 		#constrain the group to the wrist
 		parentConstraint( wrist, handGrp )
-		parent( handGrp, self.getPartsNode() )
+		parent( handGrp, partParent )
 
 		attrState( (handSliders, poseCurve), ('t', 'r'), *LOCK_HIDE )
 

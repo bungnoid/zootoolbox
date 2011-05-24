@@ -2,6 +2,7 @@
 from baseMelUI import *
 
 from filesystem import Path, Callback
+from common import printWarningStr
 import api, presetsUI
 
 PRESET_ID_STR = 'zoo'
@@ -51,6 +52,10 @@ class FileListLayout(MelVSingleStretchLayout):
 		self._enableImport = True
 		self._enableReference = True
 
+		#this allows clients who subclass this class to set additional filter change callbacks - perhaps
+		#for things like saving the filter string in user preferences, or doing additional work...
+		self._filterChangeCB = None
+
 		hLayout = MelHSingleStretchLayout( self )
 		MelLabel( hLayout, l='Directory' )
 		self.UI_dir = MelTextField( hLayout, tx=directory, cc=self.on_dirChange )
@@ -82,8 +87,10 @@ class FileListLayout(MelVSingleStretchLayout):
 
 		self.setStretchWidget( self.UI_files )
 		self.layout()
-	def setDir( self, dir ):
-		self.UI_dir.setValue( str( dir ), True )
+	def __contains__( self, item ):
+		return item in self.UI_files
+	def setDir( self, dir, update=True ):
+		self.UI_dir.setValue( str( dir ), update )
 	def getDir( self ):
 		return Path( self.UI_dir.getValue() )
 	def getRecursive( self ):
@@ -114,12 +121,18 @@ class FileListLayout(MelVSingleStretchLayout):
 		return self.UI_filter.getValue()
 	def setFilter( self, filterStr, update=True ):
 		self.UI_filter.setValue( filterStr, update )
+	def setFilterChangeCB( self, cb ):
+		self._filterChangeCB = cb
 	def setSelectionChangeCB( self, cb ):
 		self.UI_files.setChangeCB( cb )
 	def getSelectedFiles( self ):
 		return self.UI_files.getSelectedItems()
-	def setSelectedFiles( self, files ):
-		return self.UI_files.selectItems( files )
+	def setSelectedFiles( self, files, executeChangeCB=False ):
+
+		#make sure all files are Path instances
+		files = map( Path, files )
+
+		self.UI_files.selectItems( files, executeChangeCB )
 	def getFiles( self ):
 		'''
 		returns the files being listed
@@ -229,6 +242,11 @@ class FileListLayout(MelVSingleStretchLayout):
 		cmd.fileBrowserDialog( mode=4, fileCommand=tempCB, an="Choose_Location" )
 	def on_filterChanged( self, *args ):
 		self.UI_files.setFilter( self.UI_filter.getValue() )
+		if self._filterChangeCB:
+			try:
+				self._filterChangeCB()
+			except:
+				printWarningStr( "The filter change callback %s failed!" % self._filterChangeCB )
 	def on_changeExtensionSet( self, *args ):
 		self._extensionsToDisplay = cmd.optionMenu( self.UI_filter, q=True, v=True ).split()
 		self.populateFiles()

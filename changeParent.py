@@ -17,8 +17,7 @@ def changeParent( parent=0, objs=None ):
 	objsToActOn = []
 	for obj in objs:
 		if objExists( '%s.parent' % obj ):
-			if getAttr( '%s.parent' % obj ) != parent:
-				objsToActOn.append( obj )
+			objsToActOn.append( obj )
 
 	objs = objsToActOn
 

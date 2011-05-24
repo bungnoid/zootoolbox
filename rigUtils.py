@@ -41,6 +41,25 @@ MAYA_ROTATION_ORDERS = ROO_XYZ, ROO_YZX, ROO_ZXY, ROO_XZY, ROO_YXZ, ROO_ZYX = ra
 MATRIX_ROTATION_ORDER_CONVERSIONS_FROM = Matrix.FromEulerXYZ, Matrix.FromEulerYZX, Matrix.FromEulerZXY, Matrix.FromEulerXZY, Matrix.FromEulerYXZ, Matrix.FromEulerZYX
 MATRIX_ROTATION_ORDER_CONVERSIONS_TO = Matrix.ToEulerXYZ, Matrix.ToEulerYZX, Matrix.ToEulerZXY, Matrix.ToEulerXZY, Matrix.ToEulerYXZ, Matrix.ToEulerZYX
 
+ROT_ORDER_STRS = 'xyz', 'yzx', 'zxy', 'xzy', 'yxz', 'zyx'
+
+
+def alignFast( objToAlign, dest ):
+	if getAttr( '%s.t' % objToAlign, se=True ):
+		pos = xform( dest, q=True, ws=True, rp=True )
+		move( pos[0], pos[1], pos[2], objToAlign, a=True, ws=True, rpr=True )
+
+	if getAttr( '%s.r' % objToAlign, se=True ):
+
+		#rotation is a bit special because when querying the rotation we get back xyz world rotations - so we need to change the rotation order to xyz, set the global rotation then modify the rotation order while preserving orientation
+		initialRo = getAttr( '%s.ro' % objToAlign )
+		setAttr( '%s.ro' % objToAlign, 0 )
+
+		rot = xform( dest, q=True, ws=True, ro=True )
+		rotate( rot[0], rot[1], rot[2], objToAlign, a=True, ws=True )
+
+		xform( objToAlign, p=True, roo=ROT_ORDER_STRS[ initialRo ] )
+
 
 def cleanDelete( node ):
 	'''
@@ -822,6 +841,10 @@ def dumpNodeAttrs( node ):
 	for attr in attrs:
 		try:
 			print attr, getAttr( '%s.%s' % (node, attr) )
+			if attributeQuery( attr, n=node, multi=True ):
+				indices = getAttr( '%s.%s' % (node, attr), multiIndices=True ) or []
+				for idx in indices:
+					print '\t%d %s' % (idx, getAttr( '%s.%s[%d]' % (node, attr, idx) ))
 		except RuntimeError:
 			print attr
 		except TypeError:

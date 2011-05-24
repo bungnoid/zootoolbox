@@ -213,7 +213,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		if partContainer is not None:
 			assert isRigPartContainer( partContainer ), "Must pass a valid rig part container! (received %s - a %s)" % (partContainer, nodeType( partContainer ))
 
-		self.container = partContainer
+		self._container = partContainer
 		self._skeletonPart = skeletonPart
 		self._worldPart = None
 		self._worldControl = None
@@ -223,9 +223,14 @@ class RigPart(filesystem.trackableClassFactory()):
 
 		if partContainer:
 			if skeletonPart is None:
-				self.getSkeletonPart()
+				try:
+					self.getSkeletonPart()
+
+				#this isn't fatal, although its not good
+				except RigPartError, x:
+					printWarningStr( str( x ) )
 	def __unicode__( self ):
-		return u"%s_%d( %r )" % (self.__class__.__name__, self.getIdx(), self.container)
+		return u"%s_%d( %r )" % (self.__class__.__name__, self.getIdx(), self._container)
 	__str__ = __unicode__
 	def __repr__( self ):
 		return repr( unicode( self ) )
@@ -233,16 +238,16 @@ class RigPart(filesystem.trackableClassFactory()):
 		'''
 		the hash for the container mobject uniquely identifies this rig control
 		'''
-		return hash( apiExtensions.asMObject( self.container ) )
+		return hash( apiExtensions.asMObject( self._container ) )
 	def __eq__( self, other ):
-		return self.container == other.container
+		return self._container == other.getContainer()
 	def __neq__( self, other ):
 		return not self == other
 	def __getitem__( self, idx ):
 		'''
 		returns the control at <idx>
 		'''
-		connected = listConnections( '%s._rigPrimitive.controls[%d]' % (self.container, idx), d=False )
+		connected = listConnections( '%s._rigPrimitive.controls[%d]' % (self._container, idx), d=False )
 		if connected:
 			assert len( connected ) == 1, "More than one control was found!!!"
 			return connected[ 0 ]
@@ -252,18 +257,25 @@ class RigPart(filesystem.trackableClassFactory()):
 		'''
 		returns the number of controls registered on the rig
 		'''
-		return getAttr( '%s._rigPrimitive.controls' % self.container, size=True )
+		return getAttr( '%s._rigPrimitive.controls' % self._container, size=True )
 	def __iter__( self ):
 		'''
 		iterates over all controls in the rig
 		'''
 		for n in range( len( self ) ):
 			yield self[ n ]
-	def nodes( self ):
+	def getContainer( self ):
+		return self._container
+	def setContainer( self, container ):
+		self._container = container
+	def getNodes( self ):
 		'''
 		returns ALL the nodes that make up this rig part
 		'''
-		return sets( self.container, q=True )
+		return sets( self._container, q=True )
+	nodes = getNodes
+	def isReferenced( self ):
+		return referenceQuery( self._container, inr=True )
 	@classmethod
 	def GetPartName( cls ):
 		'''
@@ -299,9 +311,11 @@ class RigPart(filesystem.trackableClassFactory()):
 
 		raise RigPartError( "Cannot find a rig container for %s" % item )
 	@classmethod
-	def IterAllParts( cls ):
+	def IterAllParts( cls, skipSubParts=True ):
 		'''
 		iterates over all RigParts in the current scene
+
+		NOTE: if skipSubParts is True will skip over parts that inherit from RigSubPart - these are assumed to be contained by another part
 		'''
 		for c in getRigPartContainers():
 			if objExists( '%s._rigPrimitive' % c ):
@@ -311,13 +325,19 @@ class RigPart(filesystem.trackableClassFactory()):
 				if thisCls is None:
 					raise SkeletonError( "No RigPart called %s" % thisClsName )
 
+				if skipSubParts and issubclass( thisCls, RigSubPart ):
+					continue
+
 				if issubclass( thisCls, cls ):
 					yield cls( c )
 	@classmethod
-	def IterAllPartsInOrder( cls ):
+	def IterAllPartsInOrder( cls, skipSubParts=False ):
 		for skeletonPart in SkeletonPart.IterAllPartsInOrder():
 			rigPart = skeletonPart.getRigPart()
 			if rigPart is None:
+				continue
+
+			if skipSubParts and isinstance( rigPart, RigSubPart ):
 				continue
 
 			yield rigPart
@@ -458,13 +478,13 @@ class RigPart(filesystem.trackableClassFactory()):
 
 
 		#stuff the part container into the world container - we want a clean top level in the outliner
-		theContainer = self.container
-		sets( theContainer, e=True, add=self._worldPart.container )
+		theContainer = self._container
+		sets( theContainer, e=True, add=self._worldPart.getContainer() )
 
 
 		#make sure the container "knows" the skeleton part - its not always obvious trawling through
 		#the nodes in teh container which items are the skeleton part
-		connectAttr( '%s.message' % skeletonPart.container, '%s._rigPrimitive.skeletonPart' % theContainer )
+		connectAttr( '%s.message' % skeletonPart.getContainer(), '%s._rigPrimitive.skeletonPart' % theContainer )
 
 
 		return self
@@ -520,7 +540,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		rig part, then it is contained.  Examples of this are things like the arm rig which builds upon the ikfk sub
 		primitive rig - the sub-primitive is contained within the arm rig
 		'''
-		cons = listConnections( '%s.message' % self.container, s=False, type='objectSet' )
+		cons = listConnections( '%s.message' % self._container, s=False, type='objectSet' )
 		if cons:
 			for con in cons:
 				if isRigPartContainer( con ):
@@ -532,7 +552,7 @@ class RigPart(filesystem.trackableClassFactory()):
 
 		return False
 	def getBuildKwargs( self ):
-		theDict = eval( getAttr( '%s._rigPrimitive.buildKwargs' % self.container ) )
+		theDict = eval( getAttr( '%s._rigPrimitive.buildKwargs' % self._container ) )
 		return theDict
 	def getIdx( self ):
 		'''
@@ -540,7 +560,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		with them
 		'''
 		if self._idx is None:
-			if self.container is None:
+			if self._container is None:
 				raise RigPartError( 'No index has been defined yet!' )
 			else:
 				buildKwargs = self.getBuildKwargs()
@@ -582,14 +602,23 @@ class RigPart(filesystem.trackableClassFactory()):
 		'''
 		returns the skeleton part this rig part is driving
 		'''
+
+		#have we cached the skeleton part already?  if so, early out!
 		if self._skeletonPart:
 			return self._skeletonPart
 
-		if self.container is None:
+		if self._container is None:
 			return None
 
-		connected = listConnections( '%s.skeletonPart' % self.container )[0]
-		self._skeletonPart = skeletonPart = SkeletonPart.InitFromItem( connected )
+		connected = listConnections( '%s.skeletonPart' % self._container )
+		if connected is None:
+			raise RigPartError( "There is no skeleton part associated with this rig part!  This can happen for a variety of reasons such as name changes on the skeleton in the model file (if you're using referencing), or a incomplete conversion from the old rig format..." )
+
+		if nodeType( connected[0] ) == 'reference':
+			raise RigPartError( "A reference node is connected to the skeletonPart attribute - this could mean the model reference isn't loaded, or a node name from the referenced file has changed - either way I can't determine the skeleton part used by this rig!" )
+
+		#cache the value so we can quickly return it on consequent calls
+		self._skeletonPart = skeletonPart = SkeletonPart.InitFromItem( connected[0] )
 
 		return skeletonPart
 	def getSkeletonPartParity( self ):
@@ -606,7 +635,7 @@ class RigPart(filesystem.trackableClassFactory()):
 		if idx < 0:
 			raise AttributeError( "No control with the name %s" % attrName )
 
-		connected = listConnections( '%s._rigPrimitive.controls[%d]' % (self.container, idx), d=False )
+		connected = listConnections( '%s._rigPrimitive.controls[%d]' % (self._container, idx), d=False )
 		if connected:
 			assert len( connected ) == 1, "More than one control was found!!!"
 			return connected[ 0 ]
@@ -623,7 +652,7 @@ class RigPart(filesystem.trackableClassFactory()):
 				continue
 
 			if objExists( node ):
-				if node != self.container:
+				if node != self._container:
 					continue
 
 				idx = int( c[ c.rfind( '[' )+1:-1 ] )
@@ -648,12 +677,28 @@ class RigPart(filesystem.trackableClassFactory()):
 
 		raise RigPartError( "The control %s isn't associated with this rig primitive %s" % (control, self) )
 	def delete( self ):
-		nodes = sets( self.container, q=True )
+		nodes = sets( self._container, q=True )
 		for node in nodes:
 			cleanDelete( node )
 
-		if objExists( self.container ):
-			delete( self.container )
+		if objExists( self._container ):
+			delete( self._container )
+
+		#if the skeleton part is referenced, clean all reference edits off skeleton part joints
+		skeletonPart = self.getSkeletonPart()
+		if skeletonPart.isReferenced():
+			skeletonPartJoints = skeletonPart.items
+
+			#now unload the reference
+			partReferenceFile = Path( referenceQuery( skeletonPart.getContainer(), filename=True ) )
+			file( partReferenceFile, unloadReference=True )
+
+			#remove edits from each joint in the skeleton part
+			for j in skeletonPartJoints:
+				referenceEdit( j, removeEdits=True, successfulEdits=True, failedEdits=True )
+
+			#reload the referenced file
+			file( partReferenceFile, loadReference=True )
 
 	### POSE MIRRORING/SWAPPING ###
 	def getOppositePart( self ):
@@ -689,6 +734,33 @@ class RigPart(filesystem.trackableClassFactory()):
 			oppositeControl = self.getOppositeControl( control )
 			pair = poseSym.ControlPair.Create( control, oppositeControl )
 			printInfoStr( 'setting up mirroring on %s %s' % (control, oppositeControl) )
+
+
+def getFilePartDict():
+	'''
+	returns a dictionary keyed by scene name containing a list of the parts contained in that scene
+	'''
+	scenePartDict = {}
+
+	#special case!  we want to skip parts that are of this exact type - in older rigs this class was a RigSubPart, not a super class for the biped limb classes
+	IkFkBaseCls = RigPart.GetNamedSubclass( 'IkFkBase' )
+
+	for rigPart in RigPart.IterAllParts():
+		if IkFkBaseCls:
+			if type( rigPart ) is IkFkBaseCls:
+				continue
+
+		isReferenced = rigPart.isReferenced()
+		if isReferenced:
+			rigScene = Path( referenceQuery( rigPart.getContainer(), filename=True ) )
+		else:
+			rigScene = Path( file( q=True, sn=True ) )
+
+		scenePartDict.setdefault( rigScene, [] )
+		partList = scenePartDict[ rigScene ]
+		partList.append( rigPart )
+
+	return scenePartDict
 
 
 def generateNiceControlName( control ):
@@ -816,6 +888,23 @@ def createLineOfActionMenu( controls, joints ):
 		                    "zooLineOfAction;\nzooLineOfAction_multi { %s } \"\";" % ', '.join( '"%%%d"'%idx for idx in spineConnects ) )
 
 
+class RigSubPart(RigPart):
+	'''
+	'''
+
+	#this attribute describes what skeleton parts the rig primitive is associated with.  If the attribute's value is None, then the rig primitive
+	#is considered a "hidden" primitive that has
+	SKELETON_PRIM_ASSOC = None
+
+
+class PrimaryRigPart(RigPart):
+	'''
+	all subclasses of this class are exposed as available rigging methods to the user
+	'''
+
+	AVAILABLE_IN_UI = True
+
+
 class WorldPart(RigPart):
 	'''
 	the world part can only be created once per scene.  if an existing world part instance is found
@@ -905,23 +994,6 @@ class WorldPart(RigPart):
 		pair.setFlips( 0 )
 
 
-class RigSubPart(RigPart):
-	'''
-	'''
-
-	#this attribute describes what skeleton parts the rig primitive is associated with.  If the attribute's value is None, then the rig primitive
-	#is considered a "hidden" primitive that has
-	SKELETON_PRIM_ASSOC = None
-
-
-class PrimaryRigPart(RigPart):
-	'''
-	all subclasses of this class are exposed as available rigging methods to the user
-	'''
-
-	AVAILABLE_IN_UI = True
-
-
 ### <CHEEKY!> ###
 '''
 these functions get added to the SkeletonPart class as a way of implementing functionality that relies on
@@ -937,13 +1009,13 @@ def _getRigContainer( self ):
 	the RigPart base class without causing circular import statements - there is a getRigPart
 	method that is implemented in the baseRigPrimitive script that gets added to this class
 	'''
-	rigContainerAttrpath = '%s.rigContainer' % self.container
+	rigContainerAttrpath = '%s.rigContainer' % self.getContainer()
 	if objExists( rigContainerAttrpath ):
 		cons = listConnections( rigContainerAttrpath, d=False )
 		if cons:
 			return cons[0]
 
-	cons = listConnections( '%s.message' % self.container, s=False, type='objectSet' )
+	cons = listConnections( '%s.message' % self.getContainer(), s=False, type='objectSet' )
 	if cons:
 		connectedRigParts = []
 		for con in cons:

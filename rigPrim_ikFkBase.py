@@ -6,6 +6,28 @@ ARM_NAMING_SCHEME = 'arm', 'bicep', 'elbow', 'wrist'
 LEG_NAMING_SCHEME = 'leg', 'thigh', 'knee', 'ankle'
 
 
+def setupIkFkVisibilityConditions( ikBlendAttrpath, ikControls, fkControls ):
+	ikControl = ikBlendAttrpath.split( '.' )[0]
+	visCondFk = createNode( 'condition' )
+	visCondFk = rename( visCondFk, '%s_fkVis#' % ikControl )
+
+	visCondIk = createNode( 'condition' )
+	visCondIk = rename( visCondIk, '%s_ikVis#' % ikControl )
+
+	connectAttr( ikBlendAttrpath, '%s.firstTerm' % visCondFk )
+	connectAttr( ikBlendAttrpath, '%s.firstTerm' % visCondIk )
+	setAttr( '%s.secondTerm' % visCondFk, 1 )
+	setAttr( '%s.secondTerm' % visCondIk, 0 )
+	setAttr( '%s.operation' % visCondFk, 3 )  #this is the >= operator
+	setAttr( '%s.operation' % visCondIk, 5 )  #this is the <= operator
+
+	for c in fkControls:
+		connectAttr( '%s.outColorR' % visCondFk, '%s.v' % c )
+
+	for c in ikControls:
+		connectAttr( '%s.outColorR' % visCondIk, '%s.v' % c )
+
+
 class IkFkBase(PrimaryRigPart):
 	'''
 	this is a subpart, not generally exposed directly to the user

@@ -94,6 +94,24 @@ class QuadrupedIkFkLeg(IkFkBase):
 		return legCtrl, self.poleControl, clavCtrl
 
 
+def duplicateChain( start, end ):
+	chainNodes = getChain( start, end )
+
+	dupeJoints = []
+	for j in chainNodes:
+		dupe = duplicate( j, rr=True )[0]
+		children = listRelatives( dupe, pa=True )
+		if children:
+			delete( children )
+
+		if dupeJoints:
+			parent( dupe, dupeJoints[-1] )
+
+		dupeJoints.append( dupe )
+
+	return dupeJoints
+
+
 class SatyrLeg(PrimaryRigPart):
 	__version__ = 0
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'SatyrLeg' ), )
@@ -101,31 +119,70 @@ class SatyrLeg(PrimaryRigPart):
 
 	DISPLAY_NAME = 'Satyr Leg Rig'
 
-	def _build( self, skeletonPart, stretchy=True, **kw ):
-		thigh, knee, ankle, toe = skeletonPart[:4]
+	def getFkJoints( self ):
+		part = self.getSkeletonPart()
 
-		idx = kw[ 'idx' ]
+		return part[ :4 ]
+	def getFkControls( self ):
+		allControls = list( self )
+
+		return allControls[ -4: ]
+	@d_unifyUndo
+	def switchToFk( self ):
+		fkJoints = self.getFkJoints()
+		fkControls = self.getFkControls()
+
+		for j, c in zip( fkJoints, fkControls ):
+			alignFast( c, j )
+
+		control = self.getControl( 'control' )
+		setAttr( '%s.ikBlend' % control, 0 )
+
+		select( fkControls[-1] )
+	@d_unifyUndo
+	def switchToIk( self ):
+		fkJoints = self.getFkJoints()
+		control = self.getControl( 'control' )
+		poleControl = self.getControl( 'poleControl' )
+		anklePoleControl = self.getControl( 'anklePoleControl' )
+
+		polePos = findPolePosition( fkJoints[2], fkJoints[1], fkJoints[0] )
+		move( polePos[0], polePos[1], polePos[2], poleControl, ws=True, a=True, rpr=True )
+
+		alignFast( control, fkJoints[-1] )
+		alignFast( anklePoleControl, fkJoints[-2] )
+
+		setAttr( '%s.ikBlend' % control, 1 )
+		select( control )
+	def _build( self, skeletonPart, stretchy=True, **kw ):
 		scale = kw[ 'scale' ]
 
-		parity = Parity( idx )
+		parity = self.getParity()
 		parityMult = parity.asMultiplier()
 
 		nameMod = kw.get( 'nameMod', 'front' )
-
 		nameSuffix = '_%s%s' % (nameMod.capitalize(), parity.asName())
 
-		colour = ColourDesc( 'red 0.7' ) if parity else ColourDesc( 'green 0.7' )
+		colour = self.getParityColour()
 
-		#first rotate the foot so its aligned to a world axis
-		footCtrlRot = getAnkleToWorldRotation( toe, 'z', False )
-		rotate( 0, footCtrlRot[1], 0, toe, ws=True, r=True )
+		originalJoints = originalThighJoint, originalKneeJoint, originalAnkleJoint, originalToeJoint = skeletonPart[:4]
+		getWristToWorldRotation( originalToeJoint, True )
+
+		#create a duplicate chain for the ik leg - later we create another chain for fk and constrain the original joints between them for ik/fk switching
+		ikJoints = ikThighJoint, ikKneeJoint, ikAnkleJoint, ikToeJoint = duplicateChain( originalThighJoint, originalToeJoint )
+
+		### IK CHAIN SETUP
 
 		#determine the root
-		partParent, rootControl = getParentAndRootControl( thigh )
+		partParent, rootControl = getParentAndRootControl( ikThighJoint )
 
-		ikHandle = cmd.ikHandle( fs=1, sj=thigh, ee=ankle, solver='ikRPsolver' )[ 0 ]
+		parent( ikThighJoint, partParent )
+		setAttr( '%s.v' % ikThighJoint, 0 )
+
+		ikHandle = cmd.ikHandle( fs=1, sj=ikThighJoint, ee=ikAnkleJoint, solver='ikRPsolver' )[ 0 ]
 		footCtrl = buildControl( 'Foot%s' % nameSuffix,
-		                         PlaceDesc( toe, PlaceDesc.WORLD ),
+		                         #PlaceDesc( ikToeJoint, PlaceDesc.WORLD ),
+		                         ikToeJoint,
 		                         PivotModeDesc.MID,
 			                     ShapeDesc( 'cube', axis=-AIM_AXIS if parity else AIM_AXIS ),
 			                     colour, scale=scale )
@@ -143,11 +200,11 @@ class SatyrLeg(PrimaryRigPart):
 			footRoll_inner = buildNullControl( 'footRoll_inner_null', placers[2], parent=footRock_back )
 			footRoll_outer = buildNullControl( 'footRoll_outer_null', placers[3], parent=footRoll_inner )
 		else:
-			footRock_fwd = buildNullControl( 'footRock_forward_null', toe, parent=footCtrlSpace )
-			footRock_back = buildNullControl( 'footRock_backward_null', toe, parent=footCtrlSpace )
-			footRoll_inner = buildNullControl( 'footRoll_inner_null', toe, parent=footCtrlSpace )
-			footRoll_outer = buildNullControl( 'footRoll_outer_null', toe, parent=footCtrlSpace )
-			toePos = xform( toe, q=True, ws=True, rp=True )
+			footRock_fwd = buildNullControl( 'footRock_forward_null', ikToeJoint, parent=footCtrlSpace )
+			footRock_back = buildNullControl( 'footRock_backward_null', ikToeJoint, parent=footCtrlSpace )
+			footRoll_inner = buildNullControl( 'footRoll_inner_null', ikToeJoint, parent=footCtrlSpace )
+			footRoll_outer = buildNullControl( 'footRoll_outer_null', ikToeJoint, parent=footCtrlSpace )
+			toePos = xform( ikToeJoint, q=True, ws=True, rp=True )
 			moveIncrement = scale / 2
 			move( 0, -toePos[1], moveIncrement, footRock_fwd, r=True, ws=True )
 			move( 0, -toePos[1], -moveIncrement, footRock_back, r=True, ws=True )
@@ -177,24 +234,24 @@ class SatyrLeg(PrimaryRigPart):
 		setDrivenKeyframe( '%s.rz' % footRoll_outer, cd='%s.bank' % footCtrl, dv=-10, v=-90 )
 
 		#setup the auto ankle
-		grpA = buildControl( 'ankle_auto_null', PlaceDesc( toe, ankle ), shapeDesc=SHAPE_NULL, constrain=False, parent=footCtrl )
-		grpB = buildAlignedNull( ankle, 'ankle_orientation_null', parent=grpA )
+		grpA = buildControl( 'ankle_auto_null', PlaceDesc( ikToeJoint, ikAnkleJoint ), shapeDesc=SHAPE_NULL, constrain=False, parent=footCtrl )
+		grpB = buildAlignedNull( ikAnkleJoint, 'ankle_orientation_null', parent=grpA )
 
-		orientConstraint( grpB, ankle )
+		orientConstraint( grpB, ikAnkleJoint )
 		for ax in AXES:
-			delete( '%s.t%s' % (toe, ax), icn=True )
+			delete( '%s.t%s' % (ikToeJoint, ax), icn=True )
 
 		cmd.parent( ikHandle, grpA )
 		cmd.parent( footCtrlSpace, self.getWorldControl() )
 
 		grpASpace = getNodeParent( grpA )
-		grpAAutoNull = buildAlignedNull( PlaceDesc( toe, ankle ), '%sauto_on_ankle_null%s' % (nameMod, nameSuffix), parent=footCtrl )
-		grpAAutoOffNull = buildAlignedNull( PlaceDesc( toe, ankle ), '%sauto_off_ankle_null%s' % (nameMod, nameSuffix), parent=footCtrl )
-		grpA_knee_aimVector = betweenVector( grpAAutoNull, knee )
+		grpAAutoNull = buildAlignedNull( PlaceDesc( ikToeJoint, ikAnkleJoint ), '%sauto_on_ankle_null%s' % (nameMod, nameSuffix), parent=footCtrl )
+		grpAAutoOffNull = buildAlignedNull( PlaceDesc( ikToeJoint, ikAnkleJoint ), '%sauto_off_ankle_null%s' % (nameMod, nameSuffix), parent=footCtrl )
+		grpA_knee_aimVector = betweenVector( grpAAutoNull, ikKneeJoint )
 		grpA_knee_aimAxis = getObjectAxisInDirection( grpAAutoNull, grpA_knee_aimVector )
 		grpA_knee_upAxis = getObjectAxisInDirection( grpAAutoNull, (1, 0, 0) )
 		grpA_knee_worldAxis = getObjectAxisInDirection( footCtrl, (1, 0, 0) )
-		aimConstraint( thigh, grpAAutoNull, mo=True, aim=grpA_knee_aimAxis.asVector(), u=grpA_knee_upAxis.asVector(), wu=grpA_knee_worldAxis.asVector(), wuo=footCtrl, wut='objectrotation' )
+		aimConstraint( ikThighJoint, grpAAutoNull, mo=True, aim=grpA_knee_aimAxis.asVector(), u=grpA_knee_upAxis.asVector(), wu=grpA_knee_worldAxis.asVector(), wuo=footCtrl, wut='objectrotation' )
 
 		autoAimConstraint = orientConstraint( grpAAutoNull, grpAAutoOffNull, grpASpace )[0]
 		addAttr( footCtrl, ln='autoAnkle', at='double', dv=1, min=0, max=1 )
@@ -205,19 +262,19 @@ class SatyrLeg(PrimaryRigPart):
 		connectAttrReverse( '%s.autoAnkle' % footCtrl, '%s.%s' % (autoAimConstraint, cAttrs[1]), f=True )
 
 		poleCtrl = buildControl( 'Pole%s' % nameSuffix,
-		                         PlaceDesc( knee, PlaceDesc.WORLD ), PivotModeDesc.MID,
+		                         PlaceDesc( ikKneeJoint, PlaceDesc.WORLD ), PivotModeDesc.MID,
 		                         shapeDesc=ShapeDesc( 'sphere', axis=-AIM_AXIS if parity else AIM_AXIS ),
 		                         colour=colour, constrain=False, scale=scale, parent=self.getPartsNode() )
 
 		poleCtrlSpace = getNodeParent( poleCtrl )
-		polePos = findPolePosition( ankle )
+		polePos = findPolePosition( ikAnkleJoint )
 		move( polePos[0], polePos[1], polePos[2], poleCtrlSpace, ws=True, rpr=True, a=True )
-		pointConstraint( thigh, footCtrl, poleCtrlSpace, mo=True )
+		pointConstraint( ikThighJoint, footCtrl, poleCtrlSpace, mo=True )
 
 		poleVectorConstraint( poleCtrl, ikHandle )
 
 		#build the ankle aim control - its acts kinda like a secondary pole vector
-		anklePoleControl = buildControl( 'Ankle%s' % nameSuffix, ankle, shapeDesc=ShapeDesc( 'sphere' ), colour=colour, scale=scale, constrain=False, parent=grpASpace )
+		anklePoleControl = buildControl( 'Ankle%s' % nameSuffix, ikAnkleJoint, shapeDesc=ShapeDesc( 'sphere' ), colour=colour, scale=scale, constrain=False, parent=grpASpace )
 
 		ankleAimVector = betweenVector( grpA, anklePoleControl )
 		ankleAimAxis = getObjectAxisInDirection( grpA, ankleAimVector )
@@ -225,16 +282,49 @@ class SatyrLeg(PrimaryRigPart):
 		ankleWorldUpAxis = getObjectAxisInDirection( anklePoleControl, (1, 0, 0) )
 		aimConstraint( anklePoleControl, grpA, aim=ankleAimAxis.asVector(), u=ankleUpAxis.asVector(), wu=ankleWorldUpAxis.asVector(), wuo=anklePoleControl, wut='objectrotation' )
 
+		### FK CHAIN SETUP
+		fkThighControl = buildControl( 'fkThigh%s' % nameSuffix, originalThighJoint, PivotModeDesc.MID, 'sphere', colour, False, scale=scale, parent=partParent )
+		fkKneeControl = buildControl( 'fkKnee%s' % nameSuffix, originalKneeJoint, PivotModeDesc.MID, 'sphere', colour, False, scale=scale, parent=fkThighControl )
+		fkAnkleControl = buildControl( 'fkAnkle%s' % nameSuffix, originalAnkleJoint, PivotModeDesc.MID, 'sphere', colour, False, scale=scale, parent=fkKneeControl )
+		fkToeControl = buildControl( 'fkToe%s' % nameSuffix, originalToeJoint, PivotModeDesc.MID, 'sphere', colour, False, scale=scale, parent=fkAnkleControl )
+		fkControls = fkThighControl, fkKneeControl, fkAnkleControl, fkToeControl
+
+		setItemRigControl( originalThighJoint, fkThighControl )
+		setItemRigControl( originalKneeJoint, fkKneeControl )
+		setItemRigControl( originalAnkleJoint, fkAnkleControl )
+
+		addAttr( footCtrl, ln='ikBlend', at='float', min=0, max=1, dv=1, keyable=True )
+		for ikJ, fkC, orgJ in zip( ikJoints, fkControls, originalJoints ):
+			constraintNode = parentConstraint( ikJ, orgJ, w=1, mo=True )[0]
+			constraintNode = parentConstraint( fkC, orgJ, w=0, mo=True )[0]
+			ikAttr, fkAttr = listAttr( constraintNode, ud=True )
+			connectAttr( '%s.ikBlend' % footCtrl, '%s.%s' % (constraintNode, ikAttr) )
+			connectAttrReverse( '%s.ikBlend' % footCtrl, '%s.%s' % (constraintNode, fkAttr) )
+
+		ikControls = footCtrl, poleCtrl, anklePoleControl
+		setupIkFkVisibilityConditions( '%s.ikBlend' % footCtrl, ikControls, fkControls )
+
+		#now we need to setup right mouse button menus for ik/fk switching
+		footTrigger = Trigger( footCtrl )
+		footTrigger.createMenu( 'switch to FK', '''python( "import rigPrimitives; rigPrimitives.RigPart.InitFromItem('#').switchToFk()" )''' )
+
+		for c in fkControls:
+			t = Trigger( c )
+			t.createMenu( 'switch to IK', '''python( "import rigPrimitives; rigPrimitives.RigPart.InitFromItem('#').switchToIk()" )''' )
+
+		#setup stretch as appropriate
 		if stretchy:
-			StretchRig.Create( self._skeletonPart, footCtrl, (thigh, knee, ankle, toe), '%s.ikBlend' % ikHandle, parity=parity, connectEndJoint=True )
+			StretchRig.Create( self._skeletonPart, footCtrl, (ikThighJoint, ikKneeJoint, ikAnkleJoint, ikToeJoint), '%s.ikBlend' % ikHandle, parity=parity, connectEndJoint=True )
 			for ax in CHANNELS:
-				delete( '%s.t%s' % (toe, ax), icn=True )
+				delete( '%s.t%s' % (ikToeJoint, ax), icn=True )
 
-			pointConstraint( footCtrl, toe )
+			pointConstraint( footCtrl, ikToeJoint )
 
-		buildDefaultSpaceSwitching( thigh, footCtrl, reverseHierarchy=True, space=footCtrlSpace )
+		buildDefaultSpaceSwitching( originalThighJoint, footCtrl, reverseHierarchy=True, space=footCtrlSpace )
+		buildDefaultSpaceSwitching( originalThighJoint, fkThighControl )
+		buildDefaultSpaceSwitching( originalToeJoint, fkToeControl, **spaceSwitching.NO_ROTATION )
 
-		return [ footCtrl, poleCtrl, anklePoleControl ]
+		return ikControls + fkControls
 
 
 #end

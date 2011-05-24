@@ -11,6 +11,7 @@ http://www.macaronikazoo.com/?page_id=311
 import re
 import maya
 import names
+import common
 import inspect
 import maya.cmds as cmd
 import filesystem
@@ -19,10 +20,6 @@ import filesystem
 from maya.OpenMaya import MGlobal
 
 mayaVer = int( maya.mel.eval( 'getApplicationVersionAsFloat' ) )
-
-displayInfo = MGlobal.displayInfo
-displayWarning = MGlobal.displayWarning
-displayError = MGlobal.displayError
 
 removeDupes = filesystem.removeDupes
 
@@ -218,10 +215,27 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 	def getChangeCB( self ):
 		return self.getCB( self.KWARG_CHANGE_CB_NAME )
 	def setCB( self, cbFlagName, cb ):
-		self.WIDGET_CMD( self, **{ 'e': True, cbFlagName: cb } )
-		self._cbDict[ cbFlagName ] = cb
+		if cb is None:
+			if cbFlagName in self._cbDict:
+				self._cbDict.pop( cbFlagName )
+		else:
+			self.WIDGET_CMD( self, **{ 'e': True, cbFlagName: cb } )
+			self._cbDict[ cbFlagName ] = cb
 	def getCB( self, cbFlagName ):
 		return self._cbDict.get( cbFlagName, None )
+	def _executeCB( self, cbFlagName=None ):
+		if cbFlagName is None:
+			cbFlagName = self.KWARG_CHANGE_CB_NAME
+
+		cb = self.getCB( cbFlagName )
+		if cb is None:
+			return
+
+		if callable( cb ):
+			try:
+				cb()
+			except Exception, x:
+				common.printErrorStr( "The %s callback failed" % cbFlagName )
 	def getFullName( self ):
 		'''
 		returns the fullname to the UI widget
@@ -253,9 +267,7 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 				try:
 					method( *methodArgs, **methodKwargs )
 				except:
-					import cgitb, sys
-					displayError( cgitb.text( sys.exc_info() ) )
-					displayWarning( 'Event Failed: %s, %s, %s' % (methodName, methodArgs, methodKwargs) )
+					common.printErrorStr( 'Event Failed: %s, %s, %s' % (methodName, methodArgs, methodKwargs) )
 		else:
 			self.parent.processEvent( methodName, methodArgs, methodKwargs )
 	def getVisibility( self ):
@@ -428,7 +440,7 @@ class BaseMelUI(filesystem.trackableClassFactory( unicode )):
 
 		#if the data stored in the docTag doesn't map to a subclass, then we'll have to guess at the best class...
 		if theCls is None:
-			#displayInfo( cmd.objectTypeUI( theStr ) )  ##NOTE: the typestr isn't ALWAYS the same name as the function used to interact with said control, so this debug line can be useful for spewing object type names...
+			#common.printInfoStr( cmd.objectTypeUI( theStr ) )  ##NOTE: the typestr isn't ALWAYS the same name as the function used to interact with said control, so this debug line can be useful for spewing object type names...
 
 			theCls = BaseMelUI  #at this point default to be an instance of the base widget class
 			candidates = list( BaseMelUI.IterWidgetClasses( uiCmd ) )
@@ -486,11 +498,11 @@ class BaseMelLayout(BaseMelUI):
 	def printUIHierarchy( self ):
 		def printChildren( children, depth ):
 			for child in children:
-				displayInfo( '%s%s' % ('  ' * depth, child) )
+				common.printInfoStr( '%s%s' % ('  ' * depth, child) )
 				if isinstance( child, BaseMelLayout ):
 					printChildren( child.getChildren(), depth+1 )
 
-		displayInfo( self )
+		common.printInfoStr( self )
 		printChildren( self.getChildren(), 1 )
 	def clear( self ):
 		'''
@@ -810,14 +822,14 @@ class MelTabLayout(BaseMelLayout):
 	def __init__( self, parent, *a, **kw ):
 		BaseMelLayout.__init__( self, parent, *a, **kw )
 
-		kw = {}
-		kw.setdefault( 'childResizable', kw.pop( 'cr', True ) )
-		kw.setdefault( 'selectCommand', kw.pop( 'sc', self.on_select ) )
-		kw.setdefault( 'changeCommand', kw.pop( 'cc', self.on_change ) )
-		kw.setdefault( 'preSelectCommand', kw.pop( 'psc', self.on_preSelect ) )
-		kw.setdefault( 'doubleClickCommand', kw.pop( 'dcc', self.on_doubleClick ) )
+		ccCB = kw.get( 'changeCommand', kw.get( 'cc', None ) )
+		self.setChangeCB( ccCB )
 
-		self( e=True, **kw )
+		pscCB = kw.get( 'preSelectCommand', kw.get( 'psc', None ) )
+		self.setPreSelectCB( pscCB )
+
+		dccCB = kw.get( 'doubleClickCommand', kw.get( 'dcc', None ) )
+		self.setDoubleClickCB( dccCB )
 	def numTabs( self ):
 		return self( q=True, numberOfChildren=True )
 	__len__ = numTabs
@@ -830,33 +842,19 @@ class MelTabLayout(BaseMelLayout):
 	def setSelectedTab( self, child, executeChangeCB=True ):
 		self( e=True, selectTab=child )
 		if executeChangeCB:
-			self.on_change()
+			self._executeCB( 'selectCommand' )
 	def getSelectedTabIdx( self ):
 		return self( q=True, selectTabIndex=True )-1  #indices are 1-based...  fuuuuuuu alias!
 	def setSelectedTabIdx( self, idx, executeChangeCB=True ):
 		self( e=True, selectTabIndex=idx+1 )  #indices are 1-based...  fuuuuuuu alias!
 		if executeChangeCB:
-			self.on_change()
-	def on_select( self ):
-		'''
-		automatically hooked up if instantiated using this class - subclass to override
-		'''
-		pass
-	def on_change( self ):
-		'''
-		automatically hooked up if instantiated using this class - subclass to override
-		'''
-		pass
-	def on_preSelect( self ):
-		'''
-		automatically hooked up if instantiated using this class - subclass to override
-		'''
-		pass
-	def on_doubleClick( self ):
-		'''
-		automatically hooked up if instantiated using this class - subclass to override
-		'''
-		pass
+			self._executeCB( 'selectCommand' )
+	def setChangeCB( self, cb ):
+		self.setCB( 'selectCommand', cb )
+	def setPreSelectCB( self, cb ):
+		self.setCB( 'preSelectCommand', cb )
+	def setDoubleClickCB( self, cb ):
+		self.setCB( 'doubleClickCommand', cb )
 
 
 class MelPaneLayout(BaseMelLayout):
@@ -938,24 +936,23 @@ class MelPaneLayout(BaseMelLayout):
 class MelFrameLayout(BaseMelLayout):
 	WIDGET_CMD = cmd.frameLayout
 
-	_expandCB = None
-
 	def setCollapseCB( self, cb ):
 		BaseMelLayout.setChangeCB( self, cb )
 	def getCollapseCB( self ):
 		return BaseMelLayout.getChangeCB( self )
 	def setExpandCB( self, cb ):
-		self( e=True, expandCommand=cb )
-		self._expandCB = cb
+		self.setCB( 'expandCommand', cb )
 	def getExpandCB( self ):
-		return self._expandCB
+		return self.getCB( 'expandCommand' )
 	def getCollapse( self ):
 		return self( q=True, collapse=True )
 	def setCollapse( self, state, executeChangeCB=True ):
 		self( e=True, collapse=state )
 		if executeChangeCB:
 			if state:
-				self.getCollapseCB()()
+				collapseCB = self.getCollapseCB()
+				if callable( collapseCB ):
+					collapseCB()
 			else:
 				expandCB = self.getExpandCB()
 				if callable( expandCB ):
@@ -968,13 +965,11 @@ class BaseMelWidget(BaseMelUI):
 			kw = { 'e': True, self.KWARG_VALUE_NAME: value }
 			self.WIDGET_CMD( self, **kw )
 		except TypeError, x:
-			displayError( 'running setValue method using %s command' % self.WIDGET_CMD )
+			common.printErrorStr( 'Running setValue method using %s command' % self.WIDGET_CMD )
 			raise
 
 		if executeChangeCB:
-			changeCB = self.getChangeCB()
-			if callable( changeCB ):
-				changeCB()
+			self._executeCB()
 	def getValue( self ):
 		kw = { 'q': True, self.KWARG_VALUE_NAME: True }
 		return self.WIDGET_CMD( self, **kw )
@@ -1121,9 +1116,7 @@ class MelNameField(MelTextField):
 		self( e=True, o=obj )
 
 		if executeChangeCB:
-			changeCB = self.getChangeCB()
-			if callable( changeCB ):
-				changeCB()
+			self._executeCB()
 	setObj = setValue
 	def clear( self ):
 		self.setValue( None )
@@ -1299,10 +1292,6 @@ class MelTextScrollList(BaseMelWidget):
 		return value in self.getItems()
 	def __len__( self ):
 		return self( q=True, numberOfItems=True )
-	def _runCB( self ):
-		cb = self.getChangeCB()
-		if callable( cb ):
-			cb()
 	def setItems( self, items ):
 		self.clear()
 		for i in items:
@@ -1320,14 +1309,16 @@ class MelTextScrollList(BaseMelWidget):
 	def selectByIdx( self, idx, executeChangeCB=False ):
 		self( e=True, selectIndexedItem=idx+1 )  #indices are 1-based in mel land - fuuuuuuu alias!!!
 		if executeChangeCB:
-			self._runCB()
+			self._executeCB()
 	def attemptToSelect( self, idx, executeChangeCB=False ):
 		'''
 		attempts to select the item at index idx - if the specific index doesn't exist,
 		it tries to select the closest item to the given index
 		'''
 		if len( self ) == 0:
-			if executeChangeCB: self._runCB()
+			if executeChangeCB:
+				self._executeCB()
+
 			return
 
 		if idx >= len( self ):
@@ -1340,9 +1331,7 @@ class MelTextScrollList(BaseMelWidget):
 	def selectByValue( self, value, executeChangeCB=False ):
 		self( e=True, selectItem=value )
 		if executeChangeCB:
-			cb = self.getChangeCB()
-			if callable( cb ):
-				cb()
+			self._executeCB()
 	def append( self, item ):
 		self( e=True, append=item )
 	def appendItems( self, items ):
@@ -1361,9 +1350,7 @@ class MelTextScrollList(BaseMelWidget):
 	def clearSelection( self, executeChangeCB=False ):
 		self( e=True, deselectAll=True )
 		if executeChangeCB:
-			cb = self.getChangeCB()
-			if callable( cb ):
-				cb()
+			self._executeCB()
 	def moveSelectedItemsUp( self, count=1 ):
 		'''
 		moves selected items "up" <count> units
@@ -1535,9 +1522,7 @@ class MelObjectScrollList(MelTextScrollList):
 					self( e=True, sii=idx+1 )  #mel indices are 1-based...
 
 		if executeChangeCB:
-			cb = self.getChangeCB()
-			if callable( cb ):
-				cb()
+			self._executeCB()
 	def selectItems( self, items, executeChangeCB=False ):
 		'''
 		provides an efficient way of selecting many items at once
@@ -1552,9 +1537,7 @@ class MelObjectScrollList(MelTextScrollList):
 				self( e=True, sii=idx+1 )
 
 		if executeChangeCB:
-			cb = self.getChangeCB()
-			if callable( cb ):
-				cb()
+			self._executeCB()
 	def append( self, item, executeAppendCB=True ):
 		self._items.append( item )
 
@@ -1912,9 +1895,7 @@ class MelOptionMenu(_MelBaseMenu):
 	def selectByIdx( self, idx, executeChangeCB=True ):
 		self( e=True, select=idx+1 )  #indices are 1-based in mel land - fuuuuuuu alias!!!
 		if executeChangeCB:
-			cb = self.getChangeCB()
-			if callable( cb ):
-				cb()
+			self._executeCB()
 	def selectByValue( self, value, executeChangeCB=True ):
 		idx = self.getItems().index( value )
 		self.selectByIdx( idx, executeChangeCB )
@@ -2411,7 +2392,7 @@ class PyFuncLayout(MelColumnLayout):
 
 		MelButton( self, l='Execute %s' % names.camelCaseToNice( func.__name__ ), c=self.execute )
 	def changeCB( self, argName ):
-		displayInfo( '%s arg changed!' % argName )
+		common.printInfoStr( '%s arg changed!' % argName )
 	def getArgDict( self ):
 		argDict = {}
 		for argName, ui in self.argUIDict.iteritems():

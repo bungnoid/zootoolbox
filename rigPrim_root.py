@@ -2,7 +2,7 @@
 from baseRigPrimitive import *
 
 
-class Root(RigSubPart):
+class Root(PrimaryRigPart):
 	__version__ = 0
 	SKELETON_PRIM_ASSOC = ( skeletonBuilder.Root, )
 	CONTROL_NAMES = 'control', 'gimbal', 'hips'

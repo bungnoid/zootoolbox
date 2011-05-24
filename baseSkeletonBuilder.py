@@ -6,6 +6,7 @@ from control import attrState, NORMAL, HIDE, LOCK_HIDE, NO_KEY
 from apiExtensions import asMObject, castToMObjects, cmpNodes
 from mayaDecorators import d_unifyUndo
 from maya.OpenMaya import MGlobal
+from referenceUtils import ReferencedNode
 
 import names
 import filesystem
@@ -577,6 +578,43 @@ def d_disableDrivingRelationships( f ):
 	return new
 
 
+def d_performInSkeletonPartScene( f ):
+	def new( self, *a, **kw ):
+		assert isinstance( self, SkeletonPart )
+
+		#if the part isn't referenced - nothing to do!  execute the function as usual
+		if not self.isReferenced():
+			return f( self, *a, **kw )
+
+		partContainerFilepath = filesystem.Path( referenceQuery( self.getContainer(), filename=True ) )
+		curScene = filesystem.Path( file( q=True, sn=True ) )
+		if not curScene.exists:
+			raise TypeError( "This scene isn't saved!  Please save this scene somewhere before executing the decorated method!" )
+
+		initialContainer = ReferencedNode( self.getContainer() )
+		self.setContainer( initialContainer.getUnreferencedNode() )
+		if not curScene.getWritable():
+			curScene.edit()
+
+		file( save=True, f=True )
+		file( partContainerFilepath, open=True, f=True )
+
+		try:
+			return f( self, *a, **kw )
+		finally:
+			self.setContainer( initialContainer.getNode() )
+			if not partContainerFilepath.getWritable():
+				partContainerFilepath.edit()
+
+			file( save=True, f=True )
+			file( curScene, open=True, f=True )
+
+	new.__name__ = f.__name__
+	new.__doc__ = f.__doc__
+
+	return new
+
+
 class SkeletonPart(filesystem.trackableClassFactory()):
 	__version__ = 0
 
@@ -609,16 +647,17 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		if partContainer is not None:
 			assert isSkeletonPartContainer( partContainer ), "Must pass a valid skeleton part container! (received %s - a %s)" % (partContainer, nodeType( partContainer ))
 
-		self.container = partContainer
+		self._container = partContainer
+		self._items = None
 	def __unicode__( self ):
-		return u"%s( %r )" % (self.__class__.__name__, self.container)
+		return u"%s( %r )" % (self.__class__.__name__, self._container)
 	__str__ = __unicode__
 	def __repr__( self ):
 		return repr( unicode( self ) )
 	def __hash__( self ):
-		return hash( self.container )
+		return hash( self._container )
 	def __eq__( self, other ):
-		return self.container == other.container
+		return self._container == other.getContainer()
 	def __neq__( self, other ):
 		return not self == other
 	def __getitem__( self, idx ):
@@ -640,15 +679,19 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		return len( self.getItems() )
 	def __iter__( self ):
 		return iter( self.getItems() )
+	def getContainer( self ):
+		return self._container
+	def setContainer( self, container ):
+		self._container = container
+		self._items = None
 	def getItems( self ):
-		try:
+		if self._items is not None:
 			return self._items[:]
-		except AttributeError: pass
 
 		self._items = items = []
-		idxs = getAttr( '%s._skeletonPrimitive.items' % self.container, multiIndices=True ) or []
+		idxs = getAttr( '%s._skeletonPrimitive.items' % self._container, multiIndices=True ) or []
 		for idx in idxs:
-			cons = listConnections( '%s._skeletonPrimitive.items[%d]' % (self.container, idx), d=False )
+			cons = listConnections( '%s._skeletonPrimitive.items[%d]' % (self._container, idx), d=False )
 			if cons:
 				assert len( cons ) == 1, "More than one joint was found!!!"
 				items.append( cons[ 0 ] )
@@ -660,7 +703,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 	@property
 	def version( self ):
 		try:
-			return getAttr( '%s._skeletonPrimitive.version' % self.container )
+			return getAttr( '%s._skeletonPrimitive.version' % self._container )
 		except: return None
 	def isDisabled( self ):
 		'''
@@ -670,7 +713,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 
 		return 'disable' in rigKwargs
 	def getPlacers( self ):
-		placerAttrpath = '%s._skeletonPrimitive.placers' % self.container
+		placerAttrpath = '%s._skeletonPrimitive.placers' % self._container
 		if not objExists( placerAttrpath ):
 			return []
 
@@ -735,6 +778,8 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		self.buildPlacers()
 	def hasParity( self ):
 		return self.HAS_PARITY
+	def isReferenced( self ):
+		return referenceQuery( self._container, inr=True )
 	@classmethod
 	def ParityMultiplier( cls, idx ):
 		return Parity( idx ).asMultiplier()
@@ -922,7 +967,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 			kw[ argName ] = default
 
 		#now update the default kwargs with the actual kwargs
-		argStr = getAttr( '%s._skeletonPrimitive.buildKwargs' % self.container )
+		argStr = getAttr( '%s._skeletonPrimitive.buildKwargs' % self._container )
 		kw.update( eval( argStr ) )
 
 		return kw
@@ -930,13 +975,13 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		'''
 		returns the kwarg dict that was used to create this particular part
 		'''
-		setAttr( '%s._skeletonPrimitive.buildKwargs' % self.container, str( kwargs ), type='string' )
+		setAttr( '%s._skeletonPrimitive.buildKwargs' % self._container, str( kwargs ), type='string' )
 	def getRigKwargs( self ):
 		'''
 		returns the kwarg dict that should be used to create the rig for this part
 		'''
 		try:
-			argStr = getAttr( '%s._skeletonPrimitive.rigKwargs' % self.container )
+			argStr = getAttr( '%s._skeletonPrimitive.rigKwargs' % self._container )
 		except:
 			return {}
 
@@ -947,7 +992,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 
 		return kw
 	def setRigKwargs( self, kwargs ):
-		setAttr( '%s._skeletonPrimitive.rigKwargs' % self.container, str( kwargs ), type='string' )
+		setAttr( '%s._skeletonPrimitive.rigKwargs' % self._container, str( kwargs ), type='string' )
 	def updateRigKwargs( self, **kw ):
 		currentKwargs = self.getRigKwargs()
 		currentKwargs.update( kw )
@@ -1067,7 +1112,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		if not placers:
 			return
 
-		container = self.container
+		container = self._container
 
 		idx = self.getIdx()
 		idxStr = self.GetIdxStr( idx )
@@ -1394,8 +1439,8 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		for node in self.items:
 			rigUtils.cleanDelete( node )
 
-		if objExists( self.container ):
-			delete( self.container )
+		if objExists( self._container ):
+			delete( self._container )
 
 	### ALIGNMENT ###
 	@d_unifyUndo
@@ -1552,6 +1597,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 		iParent = getNodeParent( item )
 
 		return iParent, tHashAccum, tChanValues, joChanValues
+	@d_performInSkeletonPartScene
 	def finalize( self ):
 		'''
 		performs some finalization on the skeleton - ensures everything is aligned,
@@ -1651,9 +1697,9 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 
 		#check the skeleton part to see if it already has a rig
 		rigContainerAttrname = 'rigContainer'
-		rigContainerAttrpath = '%s.%s' % (self.container, rigContainerAttrname)
+		rigContainerAttrpath = '%s.%s' % (self._container, rigContainerAttrname)
 		if not objExists( rigContainerAttrpath ):
-			addAttr( self.container, ln=rigContainerAttrname, at='message' )
+			addAttr( self._container, ln=rigContainerAttrname, at='message' )
 
 		#check to see if there is already a rig built
 		if listConnections( rigContainerAttrpath, d=False ):
@@ -1691,7 +1737,7 @@ class SkeletonPart(filesystem.trackableClassFactory()):
 			MGlobal.displayError( "Failed to create the rig for part %s" % self )
 			return
 
-		connectAttr( '%s.message' % theRig.container, '%s.rigContainer' % self.container, f=True )
+		connectAttr( '%s.message' % theRig.getContainer(), '%s.rigContainer' % self._container, f=True )
 	def isRigged( self ):
 		'''
 		returns whether this skeleton part is rigged or not
