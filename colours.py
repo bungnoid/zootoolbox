@@ -39,8 +39,9 @@ def getObjShader( obj ):
 	'''
 	returns the shader currently assigned to the given object
 	'''
-	shapes = listRelatives( obj, s=True ) or []
-	if not shapes: return None
+	shapes = listRelatives( obj, s=True, pa=True ) or []
+	if not shapes:
+		return None
 
 	cons = listConnections( shapes, s=False, type='shadingEngine' ) or []
 	for c in cons:

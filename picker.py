@@ -1,12 +1,14 @@
 
 from __future__ import with_statement
 
+from maya import mel
 from maya.cmds import *
 from baseMelUI import *
 from vectors import Vector, Colour
 from common import printErrorStr, printWarningStr
 from mayaDecorators import d_unifyUndo
-from apiExtensions import asMObject
+from apiExtensions import asMObject, sortByHierarchy
+from triggered import resolveCmdStr, Trigger
 
 import re
 import names
@@ -96,62 +98,6 @@ def getTopPickerSet():
 		sets( pickerNode, e=True, text=TOOL_NAME )
 
 		return pickerNode
-
-
-def resolveCmdStr( cmdStr, obj, connects, optionals=[] ):
-	'''
-	NOTE: both triggered and xferAnim use this function to resolve command strings as well
-	'''
-	INVALID = '<invalid connect>'
-	cmdStr = str( cmdStr )
-
-	#resolve # tokens - these represent self
-	cmdStr = cmdStr.replace( '#', str( obj ) )
-
-	#resolve ranged connect array tokens:  @<start>,<end> - these represent what is essentially a list slice - although they're end value inclusive unlike python slices...
-	compile = re.compile
-	arrayRE = compile( '(@)([0-9]+),(-*[0-9]+)' )
-	def arraySubRep( matchobj ):
-		char,start,end = matchobj.groups()
-		start = int( start )
-		end = int( end ) + 1
-		if end == 0:
-			end = None
-
-		try:
-			return '{ "%s" }' % '","'.join( connects[ start:end ] )
-		except IndexError:
-			return "<invalid range: %s,%s>" % (start, end)
-
-	cmdStr = arrayRE.sub( arraySubRep, cmdStr )
-
-	#resolve all connect array tokens:  @ - these are represent a mel array for the entire connects array excluding self
-	allConnectsArray = '{ "%s" }' % '","'.join( [con for con in connects[1:] if con != INVALID] )
-	cmdStr = cmdStr.replace( '@', allConnectsArray )
-
-	#resolve all single connect tokens:  %<x> - these represent single connects
-	connectRE = compile('(%)(-*[0-9]+)')
-	def connectRep( matchobj ):
-		char, idx = matchobj.groups()
-		try:
-			return connects[ int(idx) ]
-		except IndexError:
-			return INVALID
-
-	cmdStr = connectRE.sub( connectRep, cmdStr )
-
-	#finally resolve any optional arg list tokens:  %opt<x>%
-	optionalRE = compile( '(\%opt)(-*[0-9]+)(\%)' )
-	def optionalRep( matchobj ):
-		charA, idx, charB = matchobj.groups()
-		try:
-			return optionals[ int(idx) ]
-		except IndexError:
-			return '<invalid optional>'
-
-	cmdStr = optionalRE.sub( optionalRep, cmdStr )
-
-	return cmdStr
 
 
 class Button(object):
@@ -552,17 +498,41 @@ class Character(object):
 		doing a "breakout" on a button will basically take each object in the button and
 		create a new button for it in the given direction
 		'''
-		pos, size = button.getPosSize()
+		buttonPos, buttonSize = button.getPosSize()
 		colour = button.getColour()
 
 		posIncrement = Vector( direction ).normalize()
-		posIncrement[0] *= size[0] + padding
-		posIncrement[1] *= size[1] + padding
+		posIncrement[0] *= buttonSize[0] + padding
+		posIncrement[1] *= buttonSize[1] + padding
 
 		newButtons = []
-		for obj in button.getObjs():
-			pos += posIncrement
-			button = self.createButton( pos, size, colour, objs=[ obj ] )
+		objs = button.getObjs()
+
+		#figure out which axis to use to sort the objects - basically figure out which axis has the highest delta between smallest and largest
+		posObjs = [ (Vector( xform( obj, q=True, ws=True, rp=True ) ), obj) for obj in objs ]
+		bestDelta, bestSorting = 0, []
+		for n in range( 3 ):
+			sortedByN = [ (objPos[n], obj) for objPos, obj in posObjs ]
+			sortedByN.sort()
+			delta = abs( sortedByN[-1][0] - sortedByN[0][0] )
+			if delta > bestDelta:
+				bestDelta, bestSorting = delta, sortedByN
+
+		#now we've figured out which axis is the most appropriate axis and have the best sorting, build the buttons
+		objs = [ obj for objPosN, obj in bestSorting ]
+
+		#if the direction is positive (which is down the screen in the picker), then we want to breakout the buttons in ascending hierarchical fashion
+		ascending = True
+		if direction[0] < 0 or direction[1] < 0:
+			ascending = False
+
+		if ascending:
+			objs.reverse()
+
+		for obj in objs:
+			buttonPos += posIncrement
+			button = self.createButton( buttonPos, buttonSize, objs=[ obj ] )
+			button.setAutoColour( colour )
 			newButtons.append( button )
 
 		return newButtons
@@ -762,21 +732,47 @@ class ButtonUI(MelIconButton):
 	def buildMenu( self, *a ):
 		menu = self.POP_menu
 
+		isEditorOpen = EditorWindow.Exists()
+
 		menu.clear()
-		MelMenuItem( menu, l='ADD selection to button', c=self.on_add )
-		MelMenuItem( menu, l='REPLACE button with selection', c=self.on_replace )
-		MelMenuItem( menu, l='REMOVE selection from button', c=self.on_remove )
-		MelMenuItemDiv( menu )
-		MelMenuItem( menu, l='mirror duplicate button', c=self.on_mirrorDupe )
-		MelMenuItem( menu, l='move to mirror position', c=self.on_mirrorThis )
-		MelMenuItemDiv( menu )
-		MelMenuItem( menu, l='edit this button', c=self.on_edit )
-		MelMenuItem( menu, l='select highlighted buttons', c=self.on_selectHighlighted )
-		MelMenuItemDiv( menu )
-		MelMenuItem( menu, l='breakout north', c=self.on_breakoutN )
-		MelMenuItem( menu, l='breakout south', c=self.on_breakoutS )
-		MelMenuItemDiv( menu )
-		MelMenuItem( menu, l='DELETE button', c=self.on_delete )
+		editButtonKwargs = { 'l': 'edit this button',
+		                     'c': self.on_edit,
+		                     'ann': 'opens the button editor which allows you to edit properties of this button - colour, size, position etc...' }
+		if isEditorOpen:
+			MelMenuItem( menu, l='ADD selection to button', c=self.on_add, ann='adds the selected scene objects to this button' )
+			MelMenuItem( menu, l='REPLACE button with selection', c=self.on_replace, ann="replaces this button's objects with the selected scene objects" )
+			MelMenuItem( menu, l='REMOVE selection from button', c=self.on_remove, ann='removes the selected scene objects from this button' )
+			MelMenuItemDiv( menu )
+			MelMenuItem( menu, l='mirror duplicate button', c=self.on_mirrorDupe )
+			MelMenuItem( menu, l='move to mirror position', c=self.on_mirrorThis )
+			MelMenuItemDiv( menu )
+			MelMenuItem( menu, **editButtonKwargs )
+			MelMenuItem( menu, l='select highlighted buttons', c=self.on_selectHighlighted, ann='selects all buttons that are highlighted (ie are %s)' % Colour.ColourToName( Button.COLOUR_COMPLETE ) )
+			MelMenuItemDiv( menu )
+			MelMenuItem( menu, l='breakout UP', c=self.on_breakoutUp, ann='for each object in this button, creates a button above this one' )
+			MelMenuItem( menu, l='breakout DOWN', c=self.on_breakoutDown, ann='for each object in this button, creates a button below this one' )
+			MelMenuItem( menu, l='<-- breakout LEFT', c=self.on_breakoutLeft, ann='for each object in this button, creates a button to the left of this one' )
+			MelMenuItem( menu, l='breakout RIGHT -->', c=self.on_breakoutRight, ann='for each object in this button, creates a button to the right of this one' )
+			MelMenuItemDiv( menu )
+			MelMenuItem( menu, l='DELETE this button', c=self.on_delete, ann='deletes the button being right clicked on' )
+			MelMenuItem( menu, l='DELETE selected buttons', c=self.on_deleteSelected, ann='deletes all selected buttons.  NOTE: this is not necessarily the highlighted buttons - look in the button editor for the list of buttons that are selected' )
+		else:
+			class Callback(object):
+				def __init__( self, func, *a ):
+					self.f = func
+					self.a = a
+				def __call__( self, *a ):
+					return self.f( *self.a )
+
+			buttonObjs = self.button.getObjs()
+			if len( buttonObjs ) == 1:
+				objTrigger = Trigger( buttonObjs[0] )
+				for slot, menuName, menuCmd in objTrigger.iterMenus( True ):
+					MelMenuItem( menu, l=menuName, c=Callback( mel.eval, menuCmd ) )
+
+				MelMenuItemDiv( menu )
+
+			MelMenuItem( menu, **editButtonKwargs )
 	def updateHighlightState( self ):
 		selectedState = self.button.selectedState()
 		if self.state == selectedState:
@@ -878,15 +874,21 @@ class ButtonUI(MelIconButton):
 		self.sendEvent( 'on_showEditor' )
 	def on_selectHighlighted( self, *a ):
 		self.sendEvent( 'selectHighlightedButtons' )
-	def on_breakoutN( self, *a ):
+	def on_breakoutUp( self, *a ):
 		self.sendEvent( 'breakoutButton', self, (0, -1) )
-	def on_breakoutS( self, *a ):
+	def on_breakoutDown( self, *a ):
 		self.sendEvent( 'breakoutButton', self, (0, 1) )
+	def on_breakoutLeft( self, *a ):
+		self.sendEvent( 'breakoutButton', self, (-1, 0) )
+	def on_breakoutRight( self, *a ):
+		self.sendEvent( 'breakoutButton', self, (1, 0) )
 	def on_delete( self, *a ):
 		self.delete()
 		self.button.delete()
 		self.sendEvent( 'refreshImage' )
 		self.sendEvent( 'updateButtonList' )
+	def on_deleteSelected( self, *a ):
+		self.sendEvent( 'deleteSelectedButtons' )
 
 
 class MelPicture(BaseMelWidget):
@@ -1011,6 +1013,14 @@ class CharacterUI(MelHLayout):
 	def delete( self ):
 		self.character.delete()
 		MelHLayout.delete( self )
+	def deleteSelectedButtons( self ):
+		selectedButtonUIs = self.getSelectedButtonUIs()
+		for buttonUI in selectedButtonUIs:
+			buttonUI.button.delete()
+			buttonUI.delete()
+
+		self.refreshImage()
+		self.updateButtonList()
 
 	### EVENT HANDLERS ###
 	def on_close( self, *a ):
@@ -1465,7 +1475,7 @@ class EditorWindow(BaseMelWindow):
 		self.UI_editor = EditorLayout( self, pickerUI )
 
 		#kill the window when the scene changes
-		self.setSceneChangeCB( self.on_sceneChange )
+		self.setSceneChangeCB( self.on_sceneChange, kws=True )
 	def update( self ):
 		self.UI_editor.update()
 	def updateButtonList( self ):

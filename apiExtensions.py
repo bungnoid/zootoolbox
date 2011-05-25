@@ -634,6 +634,24 @@ def iterTopNodes( nodes ):
 				yield node
 
 
+def iterParents( obj ):
+	parent = cmd.listRelatives( obj, p=True, pa=True )
+	while parent is not None:
+		yield parent[ 0 ]
+		parent = cmd.listRelatives( parent[ 0 ], p=True, pa=True )
+
+
+def sortByHierarchy( objs ):
+	sortedObjs = []
+	for o in objs:
+		pCount = len( list( iterParents( o ) ) )
+		sortedObjs.append( (pCount, o) )
+
+	sortedObjs.sort()
+
+	return [ o[ 1 ] for o in sortedObjs ]
+
+
 def stripTrailingDigits( name ):
 	trailingDigits = []
 	if name[ -1 ].isdigit():
