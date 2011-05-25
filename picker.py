@@ -156,7 +156,7 @@ class Button(object):
 				addAttr( node, **addAttrKw )
 
 	def __init__( self, node ):
-		self._node = asMObject( node )
+		self.__node = asMObject( node )
 	def __repr__( self ):
 		return "%s( '%s' )" % (type( self ).__name__, self.getNode())
 	__str__ = __repr__
@@ -175,9 +175,9 @@ class Button(object):
 	def __ne__( self, other ):
 		return not self.__eq__( other )
 	def __hash__( self ):
-		return hash( self._node )
+		return hash( self.getNode() )
 	def getNode( self ):
-		return unicode( self._node )
+		return unicode( self.__node )
 	def getCharacter( self ):
 		cons = listConnections( self.getNode(), type='objectSet', s=False )
 		if cons:
@@ -268,13 +268,13 @@ class Button(object):
 
 		#rename the node to reflect the label
 		if val and isValidMayaNodeName( val ):
-			rename( self._node, val )
+			rename( self.getNode(), val )
 		else:
 			objs = self.getObjs()
 			if objs:
-				rename( self._node, '%s_picker' % objs[0] )
+				rename( self.getNode(), '%s_picker' % objs[0] )
 			else:
-				rename( self._node, 'picker' )
+				rename( self.getNode(), 'picker' )
 	def setObjs( self, val ):
 		if isinstance( val, basestring ):
 			val = [ val ]
@@ -358,7 +358,7 @@ class Button(object):
 		pos = self.getPos()
 		self.setPos( pos + offset )
 	def exists( self ):
-		return objExists( self._node )
+		return objExists( self.getNode() )
 	def isEmpty( self ):
 		return not bool( self.getObjs() )
 	def executeCmd( self ):
@@ -441,16 +441,16 @@ class Character(object):
 		return self
 
 	def __init__( self, node ):
-		self._node = asMObject( node )
+		self.__node = asMObject( node )
 	def __repr__( self ):
 		return "%s( '%s' )" % (type( self ).__name__, self.getNode())
 	__str__ = __repr__
 	def __eq__( self, other ):
-		return self._node == other._node
+		return self.getNode() == other.getNode()
 	def __ne__( self, other ):
 		return not self.__eq__( other )
 	def getNode( self ):
-		return unicode( self._node )
+		return unicode( self.__node )
 	def getButtons( self ):
 		buttonNodes = sets( self.getNode(), q=True ) or []
 
@@ -467,9 +467,9 @@ class Character(object):
 		return getAttr( '%s.filepath' % self.getNode() )
 	def setName( self, val ):
 		setAttr( '%s.name' % self.getNode(), str( val ), type='string' )
-		lockNode( self._node, lock=False )
+		lockNode( self.getNode(), lock=False )
 		rename( self.getNode(), val )
-		lockNode( self._node, lock=True )
+		lockNode( self.getNode(), lock=True )
 	def setBgImage( self, val ):
 		setAttr( '%s.bgImage' % self.getNode(), val, type='string' )
 	def setBgColour( self, val ):
@@ -540,7 +540,7 @@ class Character(object):
 		for button in self.getButtons():
 			button.select( ADDITIVE, False )
 	def isEmpty( self ):
-		if objExists( self._node ):
+		if objExists( self.getNode() ):
 			return not self.getButtons()
 
 		return False
@@ -1475,7 +1475,7 @@ class EditorWindow(BaseMelWindow):
 		self.UI_editor = EditorLayout( self, pickerUI )
 
 		#kill the window when the scene changes
-		self.setSceneChangeCB( self.on_sceneChange, kws=True )
+		self.setSceneChangeCB( self.on_sceneChange )
 	def update( self ):
 		self.UI_editor.update()
 	def updateButtonList( self ):

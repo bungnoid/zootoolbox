@@ -79,6 +79,9 @@ def partialPathName( self ):
 	'''
 	returns the partial name of the node
 	'''
+	if self.isNull():
+		return unicode()
+
 	if isinstance( self, MObjectHandle ):
 		self = self.object()
 
