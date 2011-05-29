@@ -101,7 +101,7 @@ def interfaceTypeFactory( metaclassSuper=type ):
 				cls._METHODS_TO_IMPLEMENT = methodsToImplement = []
 				cls._INTERFACE_CLASS = newCls
 				for name, obj in attrs.items():
-					if type( obj ) is _FUNC_TYPE:
+					if type( obj ) is cls._FUNC_TYPE:
 						methodsToImplement.append( name )
 
 			#otherwise it is a subclass that should be implementing the interface
@@ -113,7 +113,7 @@ def interfaceTypeFactory( metaclassSuper=type ):
 						#method, then the method hasn't been implemented.  Its done this way because
 						#the newCls may be inheriting from multiple classes, one of which satisfies
 						#the interface - so we can't just look up the methodName in the attrs dict
-						if getattr( newCls, methodName, None ) is getattr( cls._INTERFACE_CLASS, methodName ):
+						if getattr( newCls, methodName, None ).im_func is getattr( cls._INTERFACE_CLASS, methodName ).im_func:
 							raise TypeError( "The class %s doesn't implement the required method %s!" % (name, methodName) )
 
 			return newCls
