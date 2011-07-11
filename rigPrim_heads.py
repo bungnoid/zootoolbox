@@ -94,8 +94,9 @@ class Head(PrimaryRigPart):
 		if not translateControls:
 			attrState( (headControl, headGimbal), 't', *LOCK_HIDE )
 
+		controls = [ headControl, headGimbal ] + neckControls
 
-		return [ headControl, headGimbal ] + neckControls
+		return controls, ()
 
 
 #end

@@ -8,7 +8,8 @@ FINGER_IDX_NAMES = HandSkeletonCls.FINGER_IDX_NAMES or ()
 class Hand(PrimaryRigPart):
 	__version__ = 0
 	SKELETON_PRIM_ASSOC = ( HandSkeletonCls, )
-	CONTROL_NAMES = 'control', 'poses', 'qss'
+	CONTROL_NAMES = 'control', 'poses'
+	NAMED_NODE_NAMES = ( 'qss', )
 
 	ADD_CONTROLS_TO_QSS = False
 
@@ -63,7 +64,7 @@ class Hand(PrimaryRigPart):
 
 
 		#now start building the controls
-		allCtrls = [ handSliders, poseCurve, handQss ]
+		allCtrls = [ handSliders, poseCurve ]
 		allSpaces = []
 		allConstraints = []
 		baseControls = []
@@ -175,9 +176,9 @@ class Hand(PrimaryRigPart):
 			slider_bend.append( driverAttr )
 
 
-		#reorder the finger sliders
-		attrOrder = slider_curl + slider_bend
-		mel.zooReorderAttrs( str( handSliders ), attrOrder )
+		##reorder the finger sliders
+		#attrOrder = [ attrpath.split( '.' )[1] for attrpath in slider_curl + slider_bend ]
+		#reorderAttrs( handSliders, attrOrder )
 
 
 		#add toggle finger control vis
@@ -187,7 +188,7 @@ class Hand(PrimaryRigPart):
 			                           'string $objs[] = `sets -q %%%d`;\nint $vis = !getAttr( $objs[0] +".v" );\nfor( $o in $objs ) setAttr( $o +".v", $vis );' % qssIdx )
 
 
-		return allCtrls
+		return allCtrls, [handQss]
 
 
 #end

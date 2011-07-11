@@ -14,7 +14,7 @@ class StretchRig(RigSubPart):
 	'''
 
 	__version__ = 0
-	CONTROL_NAMES = 'autoLengthBlender', 'ikfkBlender', 'lengthMods', 'lengthClamp'
+	NAMED_NODE_NAMES = 'autoLengthBlender', 'ikfkBlender', 'lengthMods', 'lengthClamp'
 	ADD_CONTROLS_TO_QSS = False
 
 	def _build( self, skeletonPart, control, joints, ikFkBlendAttrpath=None, axis=BONE_AIM_AXIS, parity=Parity.LEFT, elbowPos=1, connectEndJoint=False, **kw ):
@@ -157,7 +157,10 @@ class StretchRig(RigSubPart):
 				connectAttr( '%s.outputX' % elbowPos, '%s.input2X' % fractionNodes[2], f=True )
 				connectAttr( '%s.elbowPos' % control, '%s.input2X' % fractionNodes[1], f=True )
 
-		return autoLengthBlender, fkikBlender, lengthMods, lengthClamp
+		controls = ()
+		namedNodes = autoLengthBlender, fkikBlender, lengthMods, lengthClamp
+
+		return controls, namedNodes
 
 
 #end

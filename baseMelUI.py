@@ -15,7 +15,7 @@ import common
 import inspect
 import maya.cmds as cmd
 import filesystem
-
+import typeFactories
 
 from maya.OpenMaya import MGlobal
 
@@ -23,7 +23,13 @@ mayaVer = int( maya.mel.eval( 'getApplicationVersionAsFloat' ) )
 
 removeDupes = filesystem.removeDupes
 
-_DEBUG = False
+_DEBUG = True
+
+#try to import wing...
+try:
+	import wingdbstub
+except:
+	_DEBUG = False
 
 
 class MelUIError(Exception): pass
@@ -78,7 +84,7 @@ TYPE_NAMES_TO_CMDS = { u'staticText': cmd.text,
 WIDGETS_WITHOUT_DOC_TAG_SUPPORT = [ cmd.popupMenu ]
 
 
-class BaseMelUI(filesystem.trackableClassFactory( unicode )):
+class BaseMelUI(typeFactories.trackableClassFactory( unicode )):
 	'''
 	This is a wrapper class for a mel widget to make it behave a little more like an object.  It
 	inherits from str because thats essentially what a mel widget is - a name coupled with a mel

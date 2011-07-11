@@ -63,14 +63,13 @@ class FkSpine(PrimaryRigPart):
 			attrState( controllers, 't', *LOCK_HIDE )
 
 
-		return controllers
+		return controllers, ()
 
 
 class IKFKSpine(PrimaryRigPart):
 	__version__ = 0
 	PRIORITY = 10  #make this a lower priority than the simple FK spine rig
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'Spine' ), )
-	CONTROL_NAMES = SplineIK.CONTROL_NAMES
 
 	@classmethod
 	def CanRigThisPart( cls, skeletonPart ):
@@ -91,7 +90,7 @@ class IKFKSpine(PrimaryRigPart):
 		if fixedLengthProxies:
 			parent( fixedLengthProxies[0], self.getPartsNode() )
 
-		return controls
+		return controls, ()
 
 
 #end

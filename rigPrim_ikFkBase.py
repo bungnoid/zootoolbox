@@ -1,9 +1,29 @@
 
+from typeFactories import interfaceTypeFactory
 from baseRigPrimitive import *
 from apiExtensions import cmpNodes
 
 ARM_NAMING_SCHEME = 'arm', 'bicep', 'elbow', 'wrist'
 LEG_NAMING_SCHEME = 'leg', 'thigh', 'knee', 'ankle'
+
+
+class SwitchableMixin(object):
+	'''
+	NOTE: we can't make this an interface class because rig part classes already have a pre-defined
+	metaclass...  :(
+	'''
+	def __notimplemented( self ):
+		raise NotImplemented( "This baseclass method hasn't been implemented on the %s class" % type( self ).__name__ )
+	def switchToFk( self, key=False ):
+		'''
+		should implement the logic to switch this chain from IK to FK
+		'''
+		self.__notimplemented()
+	def switchToIk( self, key=False, _isBatchMode=False ):
+		'''
+		should implement the logic to switch this chain from FK to IK
+		'''
+		self.__notimplemented()
 
 
 def setupIkFkVisibilityConditions( ikBlendAttrpath, ikControls, fkControls ):
@@ -28,12 +48,12 @@ def setupIkFkVisibilityConditions( ikBlendAttrpath, ikControls, fkControls ):
 		connectAttr( '%s.outColorR' % visCondIk, '%s.v' % c )
 
 
-class IkFkBase(PrimaryRigPart):
+class IkFkBase(PrimaryRigPart, SwitchableMixin):
 	'''
-	this is a subpart, not generally exposed directly to the user
+	super class functionality for biped limb rigs - legs, arms and even some quadruped rigs inherit
+	from this class
 	'''
-	__version__ = 4
-	CONTROL_NAMES = 'control', 'fkUpper', 'fkMid', 'fkLower', 'poleControl', 'ikSpace', 'fkSpace', 'ikHandle', 'endOrient', 'poleTrigger'
+	NAMED_NODE_NAMES = 'ikSpace', 'fkSpace', 'ikHandle', 'endOrient', 'poleTrigger'
 
 	def buildBase( self, nameScheme=ARM_NAMING_SCHEME, alignEnd=False ):
 		self.nameScheme = nameScheme
@@ -180,6 +200,63 @@ class IkFkBase(PrimaryRigPart):
 		parent( allPurposeObj, self.getWorldControl() )
 
 		return allPurposeObj
+	def getFkControls( self ):
+		return self.getControl( 'fkUpper' ), self.getControl( 'fkMid' ), self.getControl( 'fkLower' )
+	def getIkControls( self ):
+		return self.getControl( 'control' ), self.getControl( 'poleControl' ), self.getControl( 'ikHandle' )
+	@d_unifyUndo
+	def switchToFk( self, key=False ):
+		control, poleControl, handle = self.getIkControls()
+		attrName = 'ikBlend'
+		onValue = 1
+		offValue = 0
+		joints = self.getFkControls()
+
+		if handle is None or not objExists( handle ):
+			printWarningStr( "no ikHandle specified" )
+			return
+
+		#make sure ik is on before querying rotations
+		setAttr( '%s.%s' % (control, attrName), onValue )
+		rots = []
+		for j in joints:
+			rot = getAttr( "%s.r" % j )[0]
+			rots.append( rot )
+
+		#now turn ik off and set rotations for the joints
+		setAttr( '%s.%s' % (control, attrName), offValue )
+		for j, rot in zip( joints, rots ):
+			for ax, r in zip( ('x', 'y', 'z'), rot ):
+				if getAttr( '%s.r%s' % (j, ax), se=True ):
+					setAttr( '%s.r%s' % (j, ax), r )
+
+		alignFast( joints[2], handle )
+		if key:
+			setKeyframe( joints )
+			setKeyframe( '%s.%s' % (control, attrName) )
+	@d_unifyUndo
+	def switchToIk( self, key=False, _isBatchMode=False ):
+		control, poleControl, handle = self.getIkControls()
+		attrName = 'ikBlend'
+		onValue = 1
+		joints = self.getFkControls()
+
+		if handle is None or not objExists( handle ):
+			printWarningStr( "no ikHandle specified" )
+			return
+
+		alignFast( control, joints[2] )
+		if poleControl:
+			if objExists( poleControl ):
+				pos = findPolePosition( joints[2], joints[1], joints[0] )
+				move( pos[0], pos[1], pos[2], poleControl, a=True, ws=True, rpr=True )
+				setKeyframe( poleControl )
+
+		setAttr( '%s.%s' % (control, attrName), onValue )
+		if key:
+			setKeyframe( control, at=('t', 'r') )
+			if not _isBatchMode:
+				setKeyframe( control, at=attrName )
 
 
 #end

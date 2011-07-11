@@ -883,10 +883,7 @@ class RiggingLayout(MelForm):
 
 		buildRigLayout = MelHLayout( buttonParent )
 		self.UI_reference = MelCheckBox( buildRigLayout, label='reference model' )
-		self.UI_reference.setValue( True )
-
-		self.UI_deletePlacers = MelCheckBox( buildRigLayout, label='delete placer nodes' )
-		self.UI_deletePlacers.setValue( True )
+		self.UI_reference.setValue( False )
 
 		buildRigLayout.layout()
 
@@ -921,9 +918,7 @@ class RiggingLayout(MelForm):
 				api.doConfirm( t='Scene not saved!', m="Looks like your current scene isn't saved\n\nPlease save it first so I know where to save the rig.  thanks!", b=('OK',), db='OK' )
 				return
 
-		deletePlacers = self.UI_deletePlacers.getValue()
-
-		rigPrimitives.buildRigForModel( referenceModel=referenceModel, deletePlacers=deletePlacers )
+		rigPrimitives.buildRigForModel( referenceModel=referenceModel, deletePlacers=False )
 
 		#if the model is being referenced run populate to update the rig part instances - container names will have changed because they're now referenced
 		if referenceModel:
@@ -986,6 +981,7 @@ class CreateEditRigTabLayout(MelTabLayout):
 
 		self.setSceneChangeCB( self.on_sceneOpen )
 		#rigPrimitives.skeletonBuilderConversion.convertOldParts()
+		self.setChangeCB( self.on_change )
 
 	### EVENT HANDLERS ###
 	def on_change( self ):
@@ -1049,8 +1045,8 @@ class SkeletonBuilderWindow(BaseMelWindow):
 		menu.clear()
 
 		MelMenuItem( menu, l='Skeleton Part Code Explorer', c=lambda *a: PartExplorerWindow() )
-		#MelMenuItemDiv( menu )
-		#MelMenuItem( menu, l='Reboot Tool', c=self.on_reboot )
+		MelMenuItemDiv( menu )
+		MelMenuItem( menu, l='Reboot Tool', c=self.on_reboot )
 
 	### EVENT HANDLERS ###
 	def on_markUserAligned( self, *a ):
@@ -1061,8 +1057,10 @@ class SkeletonBuilderWindow(BaseMelWindow):
 			rigPrimitives.setAlignSkipState( j, False )
 	def on_reboot( self, *a ):
 		self.close()
-		import reloadMayaTools
-		reloadMayaTools.flushMaya()
+
+		import mayaDependencies
+		mayaDependencies.flush()
+
 		import skeletonBuilderUI
 		skeletonBuilderUI.SkeletonBuilderWindow()
 	def on_loadMirrorTool( self, *a ):

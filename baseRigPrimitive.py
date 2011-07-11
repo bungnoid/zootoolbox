@@ -1,5 +1,6 @@
 
 import filesystem
+import typeFactories
 
 from maya.cmds import *
 from maya import cmds as cmd
@@ -115,7 +116,7 @@ def buildContainer( typeClass, kwDict, nodes, controls, namedNodes=() ):
 
 	#build the container, and add the special attribute to it to
 	theContainer = sets( em=True, n='%s_%s' % (typeClass.__name__, kwDict.get( 'idx', 'NOIDX' )), text='rigPrimitive' )
-	theInstance.container = theContainer
+	theInstance.setContainer( theContainer )
 
 	addAttr( theContainer, ln='_rigPrimitive', attributeType='compound', numberOfChildren=7 )
 	addAttr( theContainer, ln='typeName', dt='string', parent='_rigPrimitive' )
@@ -158,7 +159,8 @@ def buildContainer( typeClass, kwDict, nodes, controls, namedNodes=() ):
 				sets( node, e=True, add=theContainer )
 
 
-	#hook up all the controls
+	#and now hook up all the controls
+	controlNames = typeClass.CONTROL_NAMES or []  #CONTROL_NAMES can validly be None, so in this case just call it an empty list
 	for idx, control in enumerate( controls ):
 		if control is None:
 			continue
@@ -179,7 +181,7 @@ def buildContainer( typeClass, kwDict, nodes, controls, namedNodes=() ):
 	return theInstance
 
 
-class RigPart(filesystem.trackableClassFactory()):
+class RigPart(typeFactories.trackableClassFactory()):
 	'''
 	base rig part class.  deals with rig part creation.
 
@@ -192,7 +194,7 @@ class RigPart(filesystem.trackableClassFactory()):
 	__version__ = 0
 	PRIORITY = 0
 	CONTROL_NAMES = None
-	NAMED_NODES = None
+	NAMED_NODE_NAMES = None
 	AVAILABLE_IN_UI = False  #determines whether this part should appear in the UI or not...
 	ADD_CONTROLS_TO_QSS = True
 
@@ -434,20 +436,22 @@ class RigPart(filesystem.trackableClassFactory()):
 
 
 		#run the build function
-		newNodes, controls = getNodesCreatedBy( self._build, skeletonPart, **kw )
+		newNodes, (controls, namedNodes) = getNodesCreatedBy( self._build, skeletonPart, **kw )
 		realControls = [ c for c in controls if c is not None ]  #its possible for a build function to return None in the control list because it wants to preserve the length of the control list returned - so construct a list of controls that actually exist
+		realNamedNodes = [ c for c in namedNodes if c is not None ]
 		if addControlsToQss:
 			for c in realControls:
 				sets( c, add=self._qss )
 
 
 		#check to see if there is a layer for the rig controls and add controls to it
-		if objExists( 'rig_controls' ) and nodeType( 'rig_controls' ) == 'displayLayer':
-			rigLayer = 'rig_controls'
-		else:
-			rigLayer = createDisplayLayer( name='rig_controls', empty=True )
+		if controls:
+			if objExists( 'rig_controls' ) and nodeType( 'rig_controls' ) == 'displayLayer':
+				rigLayer = 'rig_controls'
+			else:
+				rigLayer = createDisplayLayer( name='rig_controls', empty=True )
 
-		editDisplayLayerMembers( rigLayer, controls, noRecurse=True )
+			editDisplayLayerMembers( rigLayer, controls, noRecurse=True )
 
 
 		#make sure there are no intermediate shapes
@@ -458,7 +462,7 @@ class RigPart(filesystem.trackableClassFactory()):
 
 
 		#build the container and initialize the rigPrimtive
-		buildContainer( self, kw, newNodes, controls )
+		buildContainer( self, kw, newNodes, controls, namedNodes )
 
 
 		#add shared shapes to all controls, and remove shared shapes that are empty
@@ -579,8 +583,8 @@ class RigPart(filesystem.trackableClassFactory()):
 		if self._worldPart is None:
 			self._worldPart = worldPart = WorldPart.Create()
 			self._worldControl = worldPart.getControl( 'control' )
-			self._partsNode = worldPart.getControl( 'parts' )
-			self._qss = worldPart.getControl( 'qss' )
+			self._partsNode = worldPart.getNamedNode( 'parts' )
+			self._qss = worldPart.getNamedNode( 'qss' )
 
 		return self._worldPart
 	def getWorldControl( self ):
@@ -676,6 +680,24 @@ class RigPart(filesystem.trackableClassFactory()):
 			return None
 
 		raise RigPartError( "The control %s isn't associated with this rig primitive %s" % (control, self) )
+	def getNamedNode( self, nodeName ):
+		'''
+		returns the "named node" called <nodeName>.  Node "names" are defined by the NAMED_NODE_NAMES class
+		variable.  This list is asked for the index of <nodeName> and the node at that index is returned
+		'''
+		if self.NAMED_NODE_NAMES is None:
+			raise AttributeError( "The %s rig primitive has no named nodes" % self.__class__.__name__ )
+
+		idx = list( self.NAMED_NODE_NAMES ).index( nodeName )
+		if idx < 0:
+			raise AttributeError( "No node with the name %s" % nodeName )
+
+		connected = listConnections( '%s._rigPrimitive.namedNodes[%d]' % (self._container, idx), d=False )
+		if connected:
+			assert len( connected ) == 1, "More than one node was found!!!"
+			return connected[ 0 ]
+
+		return None
 	def delete( self ):
 		nodes = sets( self._container, q=True )
 		for node in nodes:
@@ -912,7 +934,8 @@ class WorldPart(RigPart):
 	'''
 
 	__version__ = 0
-	CONTROL_NAMES = [ 'control', 'parts', 'masterQss', 'qss', 'exportRelative' ]
+	CONTROL_NAMES = 'control', 'exportRelative'
+	NAMED_NODE_NAMES = 'parts', 'masterQss', 'qss'
 
 	WORLD_OBJ_MENUS = [ ('toggle rig vis', """{\nstring $childs[] = `listRelatives -pa -type transform #`;\nint $vis = !`getAttr ( $childs[0]+\".v\" )`;\nfor($a in $childs) if( `objExists ( $a+\".v\" )`) if( `getAttr -se ( $a+\".v\" )`) setAttr ( $a+\".v\" ) $vis;\n}"""),
 	                    ('draw all lines of action', """string $menuObjs[] = `zooGetObjsWithMenus`;\nfor( $m in $menuObjs ) {\n\tint $cmds[] = `zooObjMenuListCmds $m`;\n\tfor( $c in $cmds ) {\n\t\tstring $name = `zooGetObjMenuCmdName $m $c`;\n\t\tif( `match \"draw line of action\" $name` != \"\" ) eval(`zooPopulateCmdStr $m (zooGetObjMenuCmdStr($m,$c)) {}`);\n\t\t}\n\t}"""),
@@ -929,8 +952,8 @@ class WorldPart(RigPart):
 			kw.setdefault( 'scale', skeletonPart.getBuildScale() )
 			break
 
-		worldNodes, controls = getNodesCreatedBy( cls._build, **kw )
-		worldPart = buildContainer( WorldPart, { 'idx': 0 }, worldNodes, controls )
+		worldNodes, (controls, namedNodes) = getNodesCreatedBy( cls._build, **kw )
+		worldPart = buildContainer( WorldPart, { 'idx': 0 }, worldNodes, controls, namedNodes )
 
 		#check to see if there is a layer for the rig controls and add controls to it
 		if objExists( 'rig_controls' ) and nodeType( 'rig_controls' ) == 'displayLayer':
@@ -985,7 +1008,10 @@ class WorldPart(RigPart):
 		attrState( parts, [ 't', 'r', 's', 'v' ], *LOCK_HIDE )
 
 
-		return world, parts, masterQss, qss, exportRelative
+		controls = world, exportRelative
+		namedNodes = parts, masterQss, qss
+
+		return controls, namedNodes
 	def getSkeletonPart( self ):
 		#the world part has no skeleton part...
 		return None

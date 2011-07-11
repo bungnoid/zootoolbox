@@ -10,6 +10,7 @@ from referenceUtils import ReferencedNode
 
 import names
 import filesystem
+import typeFactories
 import inspect
 import meshUtils
 import maya.cmds as cmd
@@ -615,7 +616,7 @@ def d_performInSkeletonPartScene( f ):
 	return new
 
 
-class SkeletonPart(filesystem.trackableClassFactory()):
+class SkeletonPart(typeFactories.trackableClassFactory()):
 	__version__ = 0
 
 	#parity is "sided-ness" of the part.  Ie if the part can exist on the left OR right side of the skeleton, the part has parity.  the spine

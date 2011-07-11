@@ -6,7 +6,7 @@ from rigPrim_stretchy import StretchRig
 class IkFkArm(IkFkBase):
 	__version__ = 3 + IkFkBase.__version__  #factor in the version of the ikfk sub rig part
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'Arm' ), )
-	CONTROL_NAMES = 'control', 'fkBicep', 'fkElbow', 'fkWrist', 'poleControl', 'clavicle', 'allPurpose', 'poleTrigger'
+	CONTROL_NAMES = 'control', 'fkBicep', 'fkElbow', 'fkWrist', 'poleControl', 'clavicle', 'allPurpose'
 
 	def getFkControls( self ):
 		return self.getControl( 'fkBicep' ), self.getControl( 'fkElbow' ), self.getControl( 'fkWrist' )
@@ -56,13 +56,16 @@ class IkFkArm(IkFkBase):
 		if stretchy:
 			StretchRig.Create( self.getSkeletonPart(), self.control, fkControls, '%s.ikBlend' % ikHandle, parity=self.getParity() )
 
-		return self.control, driverBicep, driverElbow, driverWrist, elbowControl, clavControl, allPurposeObj, self.lineNode
+		controls = self.control, driverBicep, driverElbow, driverWrist, elbowControl, clavControl, allPurposeObj
+		namedNodes = self.ikSpace, self.fkSpace, self.ikHandle, self.endOrient, self.lineNode
+
+		return controls, namedNodes
 
 
 class IkFkLeg(IkFkBase):
 	__version__ = 2 + IkFkBase.__version__  #factor in the version of the ikfk sub rig part
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'Leg' ), )
-	CONTROL_NAMES = 'control', 'fkThigh', 'fkKnee', 'fkAnkle', 'poleControl', 'allPurpose', 'poleTrigger'
+	CONTROL_NAMES = 'control', 'fkThigh', 'fkKnee', 'fkAnkle', 'poleControl', 'allPurpose'
 
 	def getFkControls( self ):
 		return self.getControl( 'fkThigh' ), self.getControl( 'fkKnee' ), self.getControl( 'fkAnkle' )
@@ -219,7 +222,10 @@ class IkFkLeg(IkFkBase):
 				renameAttr( '%s.elbowPos' % legControl, 'kneePos' )
 
 
-		return legControl, driverThigh, driverKnee, driverAnkle, kneeControl, allPurposeObj, self.lineNode
+		controls = legControl, driverThigh, driverKnee, driverAnkle, kneeControl, allPurposeObj
+		namedNodes = self.ikSpace, self.fkSpace, self.ikHandle, self.endOrient, self.lineNode
+
+		return controls, namedNodes
 
 
 #end

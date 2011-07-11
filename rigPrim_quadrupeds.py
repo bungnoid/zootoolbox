@@ -91,7 +91,9 @@ class QuadrupedIkFkLeg(IkFkBase):
 			setAttr( '%s.v' % c, False )
 			setAttr( '%s.v' % c, lock=True )
 
-		return legCtrl, self.poleControl, clavCtrl
+		controls = legCtrl, self.poleControl, clavCtrl
+
+		return controls, ()
 
 
 def duplicateChain( start, end ):
@@ -112,10 +114,11 @@ def duplicateChain( start, end ):
 	return dupeJoints
 
 
-class SatyrLeg(PrimaryRigPart):
+class SatyrLeg(PrimaryRigPart, SwitchableMixin):
 	__version__ = 0
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'SatyrLeg' ), )
 	CONTROL_NAMES = 'control', 'poleControl', 'anklePoleControl'
+	NAMED_NODE_NAMES = 'ikSpace', 'fkSpace', 'ikHandle', 'poleTrigger'
 
 	DISPLAY_NAME = 'Satyr Leg Rig'
 
@@ -324,7 +327,10 @@ class SatyrLeg(PrimaryRigPart):
 		buildDefaultSpaceSwitching( originalThighJoint, fkThighControl )
 		buildDefaultSpaceSwitching( originalToeJoint, fkToeControl, **spaceSwitching.NO_ROTATION )
 
-		return ikControls + fkControls
+		controls = ikControls + fkControls
+		namedNodes = None, None, ikHandle, None
+
+		return controls, namedNodes
 
 
 #end

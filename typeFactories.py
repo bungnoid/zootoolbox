@@ -121,4 +121,23 @@ def interfaceTypeFactory( metaclassSuper=type ):
 	return _AbstractType
 
 
+def trackableClassFactory( superClass=object ):
+	'''
+	returns a class that tracks subclasses.  for example, if you had classB(classA)
+	ad you wanted to track subclasses, you could do this:
+
+	class classB(trackableClassFactory( classA )):
+		...
+
+	a classmethod called GetSubclasses is created in the returned class for
+	querying the list of subclasses
+
+	NOTE: this is a convenience function for versions of python that don't support
+	the metaclass class constructor keyword.  Python 2.6 and before need you to
+	use the __metaclass__ magic class attribute to define a metaclass
+	'''
+	class TrackableClass(superClass): __metaclass__ = trackableTypeFactory()
+	return TrackableClass
+
+
 #end

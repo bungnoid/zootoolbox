@@ -11,7 +11,7 @@ class ControlHierarchy(PrimaryRigPart):
 
 	def _build( self, part, controlShape=DEFAULT_SHAPE_DESC, spaceSwitchTranslation=False, parents=(), rigOrphans=False, **kw ):
 		joints = list( part ) + (part.getOrphanJoints() if rigOrphans else [])
-		return controlChain( self, joints, controlShape, spaceSwitchTranslation, parents, rigOrphans, **kw )
+		return controlChain( self, joints, controlShape, spaceSwitchTranslation, parents, rigOrphans, **kw ), ()
 
 
 class WeaponControlHierarchy(PrimaryRigPart):
@@ -19,7 +19,7 @@ class WeaponControlHierarchy(PrimaryRigPart):
 	SKELETON_PRIM_ASSOC = ( SkeletonPart.GetNamedSubclass( 'WeaponRoot' ), )
 
 	def _build( self, part, controlShape=DEFAULT_SHAPE_DESC, spaceSwitchTranslation=True, parents=(), **kw ):
-		return controlChain( self, part.selfAndOrphans(), controlShape, spaceSwitchTranslation, parents, True, **kw )
+		return controlChain( self, part.selfAndOrphans(), controlShape, spaceSwitchTranslation, parents, True, **kw ), ()
 
 
 def controlChain( rigPart, joints, controlShape=DEFAULT_SHAPE_DESC, spaceSwitchTranslation=False, parents=(), rigOrphans=False, **kw ):
@@ -54,15 +54,12 @@ def controlChain( rigPart, joints, controlShape=DEFAULT_SHAPE_DESC, spaceSwitchT
 		if not spaceSwitchTranslation:
 			attrState( ctrl, 't', *LOCK_HIDE )
 
-
 	#setup space switching
 	buildKwargs = {} if spaceSwitchTranslation else spaceSwitching.NO_TRANSLATION
 	for n, (ctrl, j) in enumerate( zip( ctrls, joints ) ):
 		buildDefaultSpaceSwitching( j, ctrl, parents, reverseHierarchy=False, **buildKwargs )
 
-
 	createLineOfActionMenu( joints, ctrls )
-
 
 	return ctrls
 
