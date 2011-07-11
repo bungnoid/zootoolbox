@@ -40,9 +40,10 @@ def cleanPath( pathString ):
 	will clean out all nasty crap that gets into pathnames from various sources.
 	maya will often put double, sometimes triple slashes, different slash types etc
 	'''
-	path = str( pathString ).strip().replace( OTHER_SEPARATOR, PATH_SEPARATOR )
+	pathString = os.path.expanduser( str( pathString ) )
+	path = pathString.strip().replace( OTHER_SEPARATOR, PATH_SEPARATOR )
 	isUNC = path.startswith( UNC_PREFIX )
-	while path.find( UNC_PREFIX ) != -1:
+	while UNC_PREFIX in path:
 		path = path.replace( UNC_PREFIX, PATH_SEPARATOR )
 
 	if isUNC:
@@ -61,7 +62,7 @@ def resolveAndSplit( path, envDict=None, raiseOnMissing=False ):
 	if envDict is None:
 		envDict = os.environ
 
-	path = str( path )
+	path = os.path.expanduser( str( path ) )
 
 	#first resolve any env variables
 	if '%' in path:  #performing this check is faster than doing the regex
