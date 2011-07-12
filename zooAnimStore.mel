@@ -1,8 +1,0 @@
-
-
-global proc zooAnimStore() {
-	python( "import animLibUI; animLibUI.load()" );
-	}
-
-
-//end

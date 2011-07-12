@@ -1,29 +1,20 @@
 //
 // xfer animation
 //
-// Created by Hamish McKenzie zootoolbox@googlegroups.com
+// Created by Hamish McKenzie mel@macaronikazoo.com
 // Created : 10 May 2003
 //
 // Description:
-// This script will transfer animation from one group ob objects to another.  Its basically
-// just a batch copy and paste, with a few additionals.  It takes a bunch of source objects,
-// and tries to match them with a list of target objects.  The object mapping may be
-// changed, if the script either gets it wrong, or you just want it done in a different
-// order.
+// This script will transfer animation from one group ob objects to another.  It takes a
+// bunch of source objects, and tries to match them with a list of target objects.  The
+// object mapping may be changed, if the script either gets it wrong, or you just want
+// it done in a different order.
 //
 // Usage:
 //  simply run the command:
 //	zooXferAnim;
 //
-// this script (zooXferAnim) only contains the code to drive the UI.  The code to drive the
-// actual transfer of animation is contained in the zooXferAnimUtils script.  If you want to
-// use zooXferAnim commands in other scripts, refer to zooXferAnimUtils
-//
 // macaroniKazoo
-
-
-zooXferAnimUtils;
-eval("source zooAnimFile;");
 
 
 global proc zooXferAnim() {
