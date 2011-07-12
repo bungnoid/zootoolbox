@@ -15,6 +15,7 @@ PRINT_TREE_ARGS = '/t', '/tree'
 PRINT_DEPENDENTS = '/d', '/dependents'
 PRINT_DEPENDENCIES = '/i', '/imports'
 PRINT_TESTS_ARGS = '/s', '/tests'
+PACKAGE_SCRIPTS = '/p', '/package'
 
 def printHelp():
 	print """Prints a list of scripts dependent on the given script/s.  ie: prints
@@ -28,7 +29,8 @@ USAGE: pydeps <flags> someScript.py
 	prints downstream dependents (scripts that import this one) [depth]:   %s
 	prints import dependencies [depth]:                                    %s
 	prints out the tests that exercise the given scripts                   %s
-""" % (' '.join( UPDATE_ARGS ), ' '.join( REBUILD_ARGS ), ' '.join( PRINT_TREE_ARGS ), ' '.join( PRINT_DEPENDENTS ), ' '.join( PRINT_DEPENDENCIES ), ' '.join( PRINT_TESTS_ARGS ))
+	packages up the given scripts and all import dependencies into a zip   %s
+""" % (' '.join( UPDATE_ARGS ), ' '.join( REBUILD_ARGS ), ' '.join( PRINT_TREE_ARGS ), ' '.join( PRINT_DEPENDENTS ), ' '.join( PRINT_DEPENDENCIES ), ' '.join( PRINT_TESTS_ARGS ), ' '.join( PACKAGE_SCRIPTS ))
 
 
 def logWarning( *a ):
@@ -120,6 +122,12 @@ def main():
 			printTests = True
 			args.remove( arg )
 
+	package = False
+	for arg in PACKAGE_SCRIPTS:
+		if arg in args:
+			package = True
+			args.remove( arg )
+
 	files = []
 	for f in args:
 		if not os.path.isabs( f ):
@@ -142,14 +150,14 @@ def main():
 
 	for n, f in enumerate( files ):
 		if printTree:
-			print >> Good, '-- DEPENDENCY TREE (DEPTH %s) FOR %s' % (printTreeDepth if printTreeDepth else 'deep', f)
+			logHighlight( '-- DEPENDENCY TREE (DEPTH %s) FOR %s' % (printTreeDepth if printTreeDepth else 'deep', f) )
 			dependencies.printDepTree( f, depTree, printTreeDepth )
 			print
 
 		if printDependents:
 			pf, sf = depTree.findDependents( f )
 			deps = pf
-			print >> Good, '-- %d DEPENDENTS THAT IMPORT %s' % (len( deps ), f)
+			logHighlight( '-- %d DEPENDENTS THAT IMPORT %s' % (len( deps ), f) )
 
 			if printDependentsDepth > 1:
 				deps = pf | sf
@@ -160,22 +168,22 @@ def main():
 			print
 
 		if printDependencies:
-			deps = depTree.findDependencies( f, printDependenciesDepth )
+			deps = depTree.findDependencies( f, printDependenciesDepth, False )
 			if deps:
-				print >> Good, '-- %d IMPORT DEPENDENCIES FOR %s' % (len( deps ), f)
+				logHighlight( '-- %d IMPORT DEPENDENCIES FOR %s' % (len( deps ), f) )
 				for ff in deps:
 					print ff
 			else:
-				print >> Good, '-- %d NO IMPORT DEPENDENCIES'
+				logHighlight( '-- NO IMPORT DEPENDENCIES FOR %s' % f )
 
 			print
 
 		if printTests:
 			tests = dependencies.getScriptTests( f, depTree )
 			if not tests:
-				print >> Good, '-- THERE ARE NO TESTS FOR %s' % f
+				logHighlight( '-- THERE ARE NO TESTS FOR %s' % f )
 			else:
-				print >> Good, '-- THE FOLLOWING TESTS PROBABLY EXERCISE %s' % f
+				logHighlight( '-- THE FOLLOWING TESTS PROBABLY EXERCISE %s' % f )
 				for ff in tests:
 					print ff
 
@@ -186,8 +194,15 @@ def main():
 		setConsoleColour( FG_WHITE )
 
 		if n:
-			print >> Good, '---------------------'
+			logHighlight( '---------------------' )
 			print
+
+	if package:
+		packageFilepath = dependencies.packageScripts( files[:], files[0], depTree )
+		if packageFilepath is None:
+			logWarning( '-- NO IMPORT DEPENDENCIES - no package file was written' )
+		else:
+			logHighlight( '-- PACKAGE WRITTEN TO %s' % packageFilepath )
 
 
 main()

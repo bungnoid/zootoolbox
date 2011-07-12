@@ -206,52 +206,6 @@ class DependencyTree(DependencyNode):
 	_CACHE_PATH = Path( '~/_py_dep_cache' )
 
 	@classmethod
-	def GetFiles( cls, dirsToWalk=(), dirsToExclude=(), skipLib=True ):
-		if not dirsToWalk:
-			dirsToWalk = sys.path[:]
-
-		dirsToWalk = map( Path, dirsToWalk )
-		dirsToExclude = map( Path, dirsToExclude )
-		if skipLib:
-			dirsToExclude += _LIB_PATHS
-
-		files = []
-		for d in dirsToWalk:
-			skipDir = False
-			for dd in dirsToExclude:
-				if d.isUnder( dd ):
-					skipDir = True
-					break
-
-			if skipDir:
-				continue
-
-			for dirPath, dirNames, fileNames in os.walk( d ):
-				dirPath = Path( dirPath )
-
-				skipDir = False
-				for d in dirsToExclude:
-					if dirPath.isUnder( d ):
-						skipDir = True
-						break
-
-				if skipDir:
-					continue
-
-				for f in fileNames:
-					f = dirPath / f
-					if f.hasExtension( 'py' ):
-						files.append( f )
-
-					#if the cmd script looks like its a python cmd script, then add it to the list - the DepFinder class knows how to deal with these files
-					elif f.hasExtension( 'cmd' ):
-						with file( f ) as fopen:
-							line = fopen.readline().strip()
-							if '@setlocal ' in line and '& python' in line:
-								files.append( f )
-
-		return files
-	@classmethod
 	def _convertDictDataTo( cls, theDict, keyCastMethod ):
 		def convToDict( theDict ):
 			for key in theDict.keys():
@@ -272,11 +226,19 @@ class DependencyTree(DependencyNode):
 	def FromSimpleDict( cls, theDict ):
 		cls._convertDictDataTo( theDict, Path )
 
-	def __new__( cls, dirsToWalk=(), dirsToExclude=(), extraSearchPaths=(), rebuildCache=False ):
+	def __new__( cls, dirsToWalk=(), dirsToExclude=(), extraSearchPaths=(), rebuildCache=False, skipLib=True ):
 		'''
 		constructs a new dependencyTree dictionary or loads an existing one from a disk cache, and
 		strips out files that no longer exist
 		'''
+		if not dirsToWalk:
+			dirsToWalk = sys.path[:]
+
+		dirsToWalk = map( Path, dirsToWalk )
+		dirsToExclude = map( Path, dirsToExclude )
+		if skipLib:
+			dirsToExclude += _LIB_PATHS
+
 		cache = Path( cls._CACHE_PATH )
 
 		self = None
@@ -304,14 +266,51 @@ class DependencyTree(DependencyNode):
 			self._crcs = {}
 			self._stats = {}
 
-		self._dirs = map( str, dirsToWalk )
-		self._dirsExclude = map( str, dirsToExclude )
-		self._extraPaths = map( str, extraSearchPaths )
+		self._dirs = dirsToWalk
+		self._dirsExclude = dirsToExclude
+		self._extraPaths = extraSearchPaths
 		self.freshenDependencies()
 
 		return self
-	def __init__( self, dirsToWalk=(), dirsToExclude=(), extraSearchPaths=(), rebuildCache=False ):
+	def __init__( self, dirsToWalk=(), dirsToExclude=(), extraSearchPaths=(), rebuildCache=False, skipLib=True ):
 		dict.__init__( self )
+	def getFiles( self ):
+		files = []
+		for d in self._dirs:
+			skipDir = False
+			for dd in self._dirsExclude:
+				if d.isUnder( dd ):
+					skipDir = True
+					break
+
+			if skipDir:
+				continue
+
+			for dirPath, dirNames, fileNames in os.walk( d ):
+				dirPath = Path( dirPath )
+
+				skipDir = False
+				for d in self._dirsExclude:
+					if dirPath.isUnder( d ):
+						skipDir = True
+						break
+
+				if skipDir:
+					continue
+
+				for f in fileNames:
+					f = dirPath / f
+					if f.hasExtension( 'py' ):
+						files.append( f )
+
+					#if the cmd script looks like its a python cmd script, then add it to the list - the DepFinder class knows how to deal with these files
+					elif f.hasExtension( 'cmd' ):
+						with file( f ) as fopen:
+							line = fopen.readline().strip()
+							if '@setlocal ' in line and '& python' in line:
+								files.append( f )
+
+		return files
 	def freshenDependencies( self ):
 		'''
 		freshens the dependency tree with new files - deleted files are cleaned out of
@@ -320,7 +319,7 @@ class DependencyTree(DependencyNode):
 		padding = 15
 
 		start = time.clock()
-		files = self.GetFiles( self._dirs, self._dirsExclude )
+		files = self.getFiles()
 
 		extraSearchPaths = self._extraPaths
 		stats = self._stats
@@ -412,7 +411,7 @@ class DependencyTree(DependencyNode):
 			while gatherSecondaryDependencies( self ): pass
 
 		return primaryAffected, secondaryAffected
-	def findDependencies( self, scriptPath, depth=None ):
+	def findDependencies( self, scriptPath, depth=None, includeFilesFromExcludedDirs=True ):
 		'''
 		returns a list of dependencies for scriptPath
 		'''
@@ -440,6 +439,21 @@ class DependencyTree(DependencyNode):
 					getDeps( ss, depth+1 )
 
 		getDeps( scriptPath )
+
+		#if we're not including files from excluded directories, go through the list of deps and remove files that are under any of the exlude dirs
+		if not includeFilesFromExcludedDirs:
+			depsWithoutExcludedFiles = []
+			for dep in deps:
+				shouldFileBeIncluded = True
+				for excludeDir in self._dirsExclude:
+					if dep.isUnder( excludeDir ):
+						shouldFileBeIncluded = False
+						break
+
+				if shouldFileBeIncluded:
+					depsWithoutExcludedFiles.append( dep )
+
+			deps = depsWithoutExcludedFiles
 
 		return list( sorted( deps ) )
 	def writeCache( self ):
@@ -499,6 +513,61 @@ def printDepTree( scriptPath, dependencyTree, depth=None ):
 
 def generateDepTree( rebuildCache=False ):
 	return DependencyTree( rebuildCache=rebuildCache )
+
+
+def getModuleNameForScript( scriptFilepath ):
+	'''
+	will attempt to transform the name of the given script into the shortest possible path relative
+	to the python search paths defined in sys.path.
+
+	For example, just say you have a package called "foo"
+	this package contains the script: "bar.py"
+
+	given the full path to bar.py this function will return:
+	"foo/bar.py"
+	'''
+	scriptFilepath = Path( scriptFilepath )
+
+	sysPaths = map( Path, sys.path )
+	bestFitPath = None
+	for p in sysPaths:
+		if scriptFilepath.isUnder( p ) or len( p ) > len( bestFitPath ):
+			if bestFitPath is None:
+				bestFitPath = p
+
+	if bestFitPath is None:
+		raise ValueError( "Cannot find a path under any of the paths in sys.path!" )
+
+	shortestPath = scriptFilepath - bestFitPath
+
+	return shortestPath
+
+
+def packageScripts( scriptFilesToPackage, destPackageFilepath, dependencyTree ):
+	'''
+	will package all given files and import dependencies into a single zip file
+	'''
+	destPackageFilepath = Path( destPackageFilepath ).setExtension( 'zip' )
+	if destPackageFilepath.exists:
+		destPackageFilepath.delete()
+
+	filesToPackage = scriptFilesToPackage[:]
+	for f in scriptFilesToPackage:
+		filesToPackage += dependencyTree.findDependencies( f, None, False )
+
+	if not filesToPackage:
+		return None
+
+	#remove any duplicate files...
+	filesToPackage = removeDupes( filesToPackage )
+
+	#now build the zip file
+	import zipfile
+	with zipfile.ZipFile( str( destPackageFilepath ), 'w' ) as thePackage:
+		for f in filesToPackage:
+			thePackage.write( str( f ), str( getModuleNameForScript( f ) ) )
+
+	return destPackageFilepath
 
 
 def getScriptTests( scriptFilepath, depTree=None ):
