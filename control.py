@@ -15,6 +15,7 @@ import colours
 import meshUtils
 import profileDecorators
 from apiExtensions import asMObject, MObject
+from common import printErrorStr
 
 
 SPACE_WORLD = rigUtils.SPACE_WORLD
@@ -26,14 +27,27 @@ CONTROL_DIRECTORY = None
 
 if CONTROL_DIRECTORY is None:
 	#try to determine the directory that contains the control macros
-	for f in Path( __file__ ).up().files( recursive=True ):
-		if f.hasExtension( 'shape' ):
-			if f.name().startswith( 'control' ):
-				CONTROL_DIRECTORY = f.up()
-				break
+	dirsToSearch = [ Path( __file__ ).up() ] + sys.path + os.environ[ 'MAYA_SCRIPT_PATH' ].split( os.pathsep )
+	dirsToSearch = map( Path, dirsToSearch )
+	dirsToSearch = removeDupes( dirsToSearch )
+
+	for dirToSearch in dirsToSearch:
+		if not dirToSearch.isDir():
+			continue
+
+		foundControlDir = False
+		for f in dirToSearch.files( recursive=True ):
+			if f.hasExtension( 'shape' ):
+				if f.name().startswith( 'control' ):
+					CONTROL_DIRECTORY = f.up()
+					foundControlDir = True
+					break
+
+		if foundControlDir:
+			break
 
 if CONTROL_DIRECTORY is None:
-	MGlobal.displayError( "WARNING: Cannot determine the directory that contains the .control files - please open '%s' and set the CONTROL_DIRECTORY variable appropriately" % __file__ )
+	printErrorStr( "Cannot determine the directory that contains the *.control files - please open '%s' and set the CONTROL_DIRECTORY variable appropriately" % Path( __file__ ) )
 
 AX_X, AX_Y, AX_Z, AX_X_NEG, AX_Y_NEG, AX_Z_NEG = map( Axis, range( 6 ) )
 DEFAULT_AXIS = AX_X

@@ -198,24 +198,9 @@ class BaseMelUI(typeFactories.trackableClassFactory( unicode )):
 
 		return new
 	def __init__( self, parent, *a, **kw ):
-		super( BaseMelUI, self ).__init__( parent, *a, **kw )
+		pass
 	def __call__( self, *a, **kw ):
 		return self.WIDGET_CMD( unicode( self ), *a, **kw )
-	"""def __eq__( self, other ):
-		'''
-		compares to widgets or widget names and returns whether they both refer to the same widget
-		'''
-		return str( self ) == str( other )
-
-		#if isinstance( other, BaseMelUI ):
-			#return self.getFullName() == other.getFullName()
-
-		#if isinstance( other, basestring ):
-			#return self.getFullName().endswith( other )
-
-		#raise TypeError( "Cannot compare these types!" )
-	def __ne__( self, other ):
-		return not self.__eq__( other )"""
 	def setChangeCB( self, cb ):
 		self.setCB( self.KWARG_CHANGE_CB_NAME, cb )
 	def getChangeCB( self ):
