@@ -1,5 +1,5 @@
 '''
-provides console colouring for NT
+provides console colouring - currently only NT is supported
 '''
 
 STD_OUTPUT_HANDLE = -11
@@ -31,7 +31,7 @@ try:
 
 		eg. setConsoleColour(BRIGHT | FG_GREEN)
 		'''
-		std_out_handle = ctypes.windll.kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+		std_out_handle = ctypes.windll.kernel32.GetStdHandle( STD_OUTPUT_HANDLE )
 		ctypes.windll.kernel32.SetConsoleTextAttribute( std_out_handle, colour )
 except:
 	def setConsoleColour( colour ):
@@ -48,7 +48,7 @@ class ColouredWriter:
 
 
 def logInColour( msg, colour ):
-	print >> ColouredWriter(colour), msg
+	print >> ColouredWriter( colour ), msg
 
 
 '''
@@ -59,6 +59,14 @@ Warn = ColouredWriter( BRIGHT | FG_YELLOW )
 Error = ColouredWriter( BRIGHT | FG_RED )
 Good = ColouredWriter( BRIGHT | FG_GREEN )
 BigError = ColouredWriter( BRIGHT | FG_RED | BG_RED )
+
+
+def logAsWarning( msg ):
+	print >> Warn, msg
+
+
+def logAsError( msg ):
+	print >> Error, msg
 
 
 #end
