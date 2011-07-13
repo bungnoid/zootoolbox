@@ -140,9 +140,6 @@ class Path(str):
 	__CASE_MATTERS = os.name != 'nt'
 
 	@classmethod
-	def DoP4( cls ):
-		return False
-	@classmethod
 	def SetCaseMatter( cls, state ):
 		cls.__CASE_MATTERS = state
 	@classmethod

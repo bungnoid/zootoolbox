@@ -1,3 +1,6 @@
+
+from __future__ import with_statement
+
 import os
 import re
 import sys
@@ -5,11 +8,26 @@ import time
 import marshal
 import datetime
 import subprocess
+import tempfile
 
 import path
 
 from path import *
 from misc import iterBy
+
+### !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+### IMPORTANT: perforce is disabled by default - to enable call enablePerforce()
+### !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+def getDefaultWorkingDir():
+	'''
+	perforce can be setup to use p4config files - if a user has done this, then setting the working
+	directory properly becomes critically important.  This function gets called before spawning the
+	p4 processes to set the working directory.  Implement the appropriate logic here for your
+	particular environment
+	'''
+	return None
 
 
 class FinishedP4Operation(Exception): pass
@@ -20,7 +38,7 @@ class P4Exception(Exception): pass
 
 
 def _p4fast( *args ):
-	p = subprocess.Popen( 'p4 -G '+ ' '.join( args ), shell=True, stdout=subprocess.PIPE )
+	p = subprocess.Popen( 'p4 -G '+ ' '.join( args ), cwd=getDefaultWorkingDir(), shell=True, stdout=subprocess.PIPE )
 
 	results = []
 	try:
@@ -122,7 +140,7 @@ class P4Output(dict):
 INFO_PREFIX_RE = re.compile( '^info([0-9]*): ' )
 
 def _p4run( *args ):
-	if not P4File.USE_P4:
+	if not isPerforceEnabled():
 		return False
 
 	global INFO_PREFIX_RE
@@ -130,46 +148,17 @@ def _p4run( *args ):
 		args = ('-s',) + args
 
 	cmdStr = 'p4 '+ ' '.join( map( str, args ) )
-	try:
-		p4Proc = subprocess.Popen( cmdStr, shell=True, stdout=subprocess.PIPE )
-	except OSError:
-		P4File.USE_P4 = False
-		return False
+	with tempfile.TemporaryFile() as tmpFile:
+		try:
+			p4Proc = subprocess.Popen( cmdStr, cwd=getDefaultWorkingDir(), shell=True, stdout=tmpFile.fileno() )
+		except OSError:
+			P4File.USE_P4 = False
+			return False
 
-	startTime = time.clock()
-	stdoutAccum = []
-	hasTimedOut = False
-	while True:
-		ret = p4Proc.poll()
-		newStdout = p4Proc.stdout.readlines()
-		stdoutAccum += newStdout
+		p4Proc.wait()
+		tmpFile.seek( 0 )
 
-		#if the proc has terminated, deal with returning appropriate data
-		if ret is not None:
-			if hasTimedOut:
-				if callable( P4_RETURNED_CALLBACK ):
-					try: P4_RETURNED_CALLBACK( *args )
-					except: pass
-
-			cleanLines = [ INFO_PREFIX_RE.sub( '', line ) for line in stdoutAccum ]
-
-			return cleanLines
-
-		#if there has been new output, the proc is still alive so reset counters
-		if newStdout:
-			startTime = time.clock()
-
-		#make sure we haven't timed out
-		curTime = time.clock()
-		if curTime - startTime > P4File.TIMEOUT_PERIOD:
-			hasTimedOut = True
-			if callable( P4_LENGTHY_CALLBACK ):
-				try:
-					P4_LENGTHY_CALLBACK( p4Proc, *args )
-				except BreakException:
-					return False
-				except:
-					return False
+		return [ INFO_PREFIX_RE.sub( '', line ) for line in tmpFile.readlines() ]
 
 
 def p4run( *args, **kwargs ):
@@ -188,6 +177,8 @@ def p4Info():
 		return P4INFO
 
 	P4INFO = p4run( 'info', keysColonDelimited=True )
+	if not P4INFO:
+		disablePerforce()
 
 	return P4INFO
 
@@ -269,6 +260,7 @@ class P4Change(dict):
 
 		p4Proc = subprocess.Popen( 'p4 -s change -i', shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
 		stdout, stderr = p4Proc.communicate( contents )
+		p4Proc.wait()
 		stdout = [ INFO_PREFIX_RE.sub( '', line ) for line in stdout.split( '\n' ) ]
 
 		output = P4Output( stdout )
@@ -413,7 +405,7 @@ class P4File(Path):
 	provides a more convenient way of interfacing with perforce.  NOTE: where appropriate all actions
 	are added to the changelist with the description DEFAULT_CHANGE
 	'''
-	USE_P4 = True
+	USE_P4 = False
 
 	#the default change description for instances
 	DEFAULT_CHANGE = DEFAULT_CHANGE
@@ -557,7 +549,10 @@ class P4File(Path):
 		if not self.USE_P4:
 			return False
 
-		args = [ 'add', '-c', self.getOrCreateChange() ]
+		try:
+			args = [ 'add', '-c', self.getOrCreateChange() ]
+		except:
+			return False
 
 		#if the type has been specified, add it to the add args
 		if type is not None:
@@ -571,10 +566,24 @@ class P4File(Path):
 
 		return True
 	def edit( self, f=None ):
-		if not self.USE_P4:
+		f = self.getFile( f )
+		if not isPerforceEnabled():
+
+			#if p4 is disabled but the file is read-only, set it to be writeable...
+			if not f.getWritable():
+				f.setWritable()
+
 			return False
 
-		ret = p4run( 'edit', '-c', self.getOrCreateChange(), self.getFile( f ) )
+		#if the file is already writeable, assume its checked out already
+		if f.getWritable():
+			return True
+
+		try:
+			ret = p4run( 'edit', '-c', self.getOrCreateChange(), self.getFile( f ) )
+		except:
+			return False
+
 		if ret.errors:
 			return False
 
@@ -757,9 +766,6 @@ path.P4File = P4File  #insert the class into the path script...  HACKY!
 
 ###--- Add Perforce Integration To Path Class ---###
 
-def DoP4( cls ):
-	return P4File.USE_P4
-
 def asP4( self ):
 	'''
 	returns self as a P4File instance - the instance is cached so repeated calls to this
@@ -797,14 +803,6 @@ def asDepot( self ):
 	'''
 	return self.asP4().toDepotPath()
 
-Path.DoP4 = classmethod( DoP4 )
-Path.asP4 = asP4
-Path.edit = edit
-Path.editoradd = edit
-Path.add = add
-Path.revert = revert
-Path.asDepot = asDepot
-
 
 #now wrap existing methods on the Path class - like write, delete, copy etc so that they work nicely with perforce
 pathWrite = Path.write
@@ -815,7 +813,7 @@ def _p4write( filepath, contentsStr, doP4=True ):
 	'''
 
 	assert isinstance( filepath, Path )
-	if doP4 and P4File.DoP4():
+	if doP4 and isPerforceEnabled():
 
 		hasBeenHandled = False
 
@@ -838,13 +836,11 @@ def _p4write( filepath, contentsStr, doP4=True ):
 
 	return pathWrite( filepath, contentsStr )
 
-Path.write = _p4write
-
 
 pathPickle = Path.pickle
 def _p4Pickle( filepath, toPickle, doP4=True ):
 	assert isinstance( filepath, Path )
-	if doP4 and P4File.DoP4():
+	if doP4 and isPerforceEnabled():
 
 		hasBeenHandled = False
 
@@ -867,12 +863,10 @@ def _p4Pickle( filepath, toPickle, doP4=True ):
 
 	return pathPickle( filepath, toPickle )
 
-Path.pickle = _p4Pickle
-
 
 pathDelete = Path.delete
 def _p4Delete( filepath, doP4=True ):
-	if doP4 and P4File.DoP4():
+	if doP4 and isPerforceEnabled():
 		try:
 			asP4 = P4File( filepath )
 			if asP4.managed():
@@ -892,8 +886,6 @@ def _p4Delete( filepath, doP4=True ):
 
 	return pathDelete( filepath )
 
-Path.delete = _p4Delete
-
 
 pathRename = Path.rename
 def _p4Rename( filepath, newName, nameIsLeaf=False, doP4=True ):
@@ -909,7 +901,7 @@ def _p4Rename( filepath, newName, nameIsLeaf=False, doP4=True ):
 
 	if filepath.isfile():
 		tgtExists = newPath.exists
-		if doP4 and P4File.DoP4():
+		if doP4 and isPerforceEnabled():
 			reAdd = False
 			change = None
 			asP4 = P4File( filepath )
@@ -943,8 +935,6 @@ def _p4Rename( filepath, newName, nameIsLeaf=False, doP4=True ):
 
 	return pathRename( filepath, newName, nameIsLeaf )
 
-Path.rename = _p4Rename
-
 
 pathCopy = Path.copy
 def _p4Copy( filepath, target, nameIsLeaf=False, doP4=True ):
@@ -956,7 +946,7 @@ def _p4Copy( filepath, target, nameIsLeaf=False, doP4=True ):
 		if nameIsLeaf:
 			target = filepath.up() / target
 
-		if doP4 and P4File.DoP4():
+		if doP4 and isPerforceEnabled():
 			try:
 				asP4 = P4File( filepath )
 				tgtAsP4 = P4File( target )
@@ -969,8 +959,6 @@ def _p4Copy( filepath, target, nameIsLeaf=False, doP4=True ):
 			except: pass
 
 	return pathCopy( filepath )
-
-Path.copy = _p4Copy
 
 
 def lsP4( queryStr, includeDeleted=False ):
@@ -1078,6 +1066,45 @@ def enablePerforce( state=True ):
 	sets the enabled state of perforce
 	'''
 	P4File.USE_P4 = bool( state )
+
+	#hook up various convenience functions on the Path class, and plug in the overrides for operations
+	#such as write, delete, rename etc...  This makes using perforce in conjunction with the Path class
+	#transparent to the programmer
+	if state:
+		Path.asP4 = asP4
+		Path.edit = edit
+		Path.editoradd = edit
+		Path.add = add
+		Path.revert = revert
+		Path.asDepot = asDepot
+
+		Path.write = _p4write
+		Path.pickle = _p4Pickle
+
+		Path.delete = _p4Delete
+		Path.rename = _p4Rename
+		Path.copy = _p4Copy
+
+	#restore the overridden methods on the Path class and delete any of the convenience methods added
+	else:
+		try:
+			del( Path.asP4 )
+			del( Path.edit )
+			del( Path.editoradd )
+			del( Path.add )
+			del( Path.revert )
+			del( Path.asDepot )
+
+		#if any of the above throw an Attribute error, presumably perforce hasn't been setup yet so assume none are present and just pass
+		except AttributeError: pass
+
+		#if perforce hasn't been setup already, doing this is harmless...
+		Path.write = pathWrite
+		Path.pickle = pathPickle
+
+		Path.delete = pathDelete
+		Path.rename = pathRename
+		Path.copy = pathCopy
 
 
 def disablePerforce():
