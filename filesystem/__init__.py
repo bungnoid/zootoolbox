@@ -1,7 +1,7 @@
 
 from path import *
 from misc import *
-from perforce import *
+#from perforce import *
 from presets import *
 
 

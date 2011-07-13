@@ -1,11 +1,15 @@
 @setlocal enableextensions & python -x "%~f0" %* & goto :EOF
 
 
-import dependencies, wingdbstub
-from consoleChroma import Warn, Error, Good, setConsoleColour, BRIGHT, FG_WHITE, FG_YELLOW
-import sys
-import os
+try:
+	import wingdbstub
+except: pass
 
+import os
+import sys
+import dependencies
+
+from consoleChroma import Warn, Error, Good, setConsoleColour, BRIGHT, FG_WHITE, FG_YELLOW
 from filesystem import Path
 
 HELP_ARGS = '-h', '-help', '/h', '/help', '/?'
@@ -16,6 +20,7 @@ PRINT_DEPENDENTS = '/d', '/dependents'
 PRINT_DEPENDENCIES = '/i', '/imports'
 PRINT_TESTS_ARGS = '/s', '/tests'
 PACKAGE_SCRIPTS = '/p', '/package'
+
 
 def printHelp():
 	print """Prints a list of scripts dependent on the given script/s.  ie: prints

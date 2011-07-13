@@ -551,7 +551,7 @@ def packageScripts( scriptFilesToPackage, destPackageFilepath, dependencyTree ):
 	if destPackageFilepath.exists:
 		destPackageFilepath.delete()
 
-	filesToPackage = scriptFilesToPackage[:]
+	filesToPackage = map( Path, scriptFilesToPackage )
 	for f in scriptFilesToPackage:
 		filesToPackage += dependencyTree.findDependencies( f, None, False )
 
@@ -560,6 +560,12 @@ def packageScripts( scriptFilesToPackage, destPackageFilepath, dependencyTree ):
 
 	#remove any duplicate files...
 	filesToPackage = removeDupes( filesToPackage )
+
+	#this is a little hacky - but we don't want to re-distribute wingdbstub so lets check to see if its in the list of files
+	for f in filesToPackage:
+		if f.name() == 'wingdbstub':
+			filesToPackage.remove( f )
+			break
 
 	#now build the zip file
 	import zipfile
