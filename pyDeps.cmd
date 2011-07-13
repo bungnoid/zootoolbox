@@ -28,13 +28,13 @@ the scripts that directly import the one/s specified on the cmd-line
 
 USAGE: pydeps <flags> someScript.py
 
-	to update the dependency cache:                                        %s
-	to rebuild the dependency cache:                                       %s
-	to print the dependency tree:                                          %s
-	prints downstream dependents (scripts that import this one) [depth]:   %s
-	prints import dependencies [depth]:                                    %s
-	prints out the tests that exercise the given scripts                   %s
-	packages up the given scripts and all import dependencies into a zip   %s
+	to update the dependency cache:                                          %s
+	to rebuild the dependency cache:                                         %s
+	to print the dependency tree:                                            %s
+	prints dependents (scripts that import this one) [depth, default 0]:     %s
+	prints import dependencies [depth, default 1]:                           %s
+	prints out the tests that exercise the given scripts                     %s
+	packages up the given scripts and all import dependencies into a zip     %s
 """ % (' '.join( UPDATE_ARGS ), ' '.join( REBUILD_ARGS ), ' '.join( PRINT_TREE_ARGS ), ' '.join( PRINT_DEPENDENTS ), ' '.join( PRINT_DEPENDENCIES ), ' '.join( PRINT_TESTS_ARGS ), ' '.join( PACKAGE_SCRIPTS ))
 
 
@@ -77,14 +77,14 @@ def main():
 			args.remove( arg )
 
 	printDependents = False
-	printDependentsDepth = 1
+	printDependentsDepth = 0
 	for arg in PRINT_DEPENDENTS:
 		if arg in args:
 			idx = args.index( arg )
 			if args[ idx+1 ].isdigit():
 				printDependentsDepth = int( args[ idx+1 ] )
 				if printDependentsDepth < 1:
-					printDependentsDepth = None
+					printDependentsDepth = 0
 
 				args.pop( idx+1 )
 
@@ -162,13 +162,16 @@ def main():
 		if printDependents:
 			pf, sf = depTree.findDependents( f )
 			deps = pf
-			logHighlight( '-- %d DEPENDENTS THAT IMPORT %s' % (len( deps ), f) )
 
-			if printDependentsDepth > 1:
-				deps = pf | sf
-
+			logHighlight( '-- %d DEPENDENTS THAT IMMEDIATELY IMPORT %s' % (len( deps ), f) )
 			for ff in sorted( deps ):
 				print ff
+
+			if printDependentsDepth > 0:
+				deps = sf.difference( pf )
+				logHighlight( '-- %d ADDITIONAL DEPENDENTS THAT INDIRECTLY IMPORT %s' % (len( deps ), f) )
+				for ff in sorted( deps ):
+					print ff
 
 			print
 
