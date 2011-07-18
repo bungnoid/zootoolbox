@@ -4,7 +4,6 @@ from common import printInfoStr, printErrorStr
 from mayaDecorators import d_unifyUndo
 
 import maya.cmds as cmd
-import utils
 import names
 import api
 import apiExtensions

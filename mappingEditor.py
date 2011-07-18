@@ -1,8 +1,8 @@
+
 from filesystem import *
 from baseMelUI import *
 from mappingUtils import *
 
-import utils
 import names
 import api
 import presetsUI
@@ -178,8 +178,8 @@ class MappingForm(MelHLayout):
 			theSrcs.append( src )
 			theTgts += self._srcToTgtDict[ src ]
 
-		theSrcs = utils.removeDupes( theSrcs )
-		theTgts = utils.removeDupes( theTgts )
+		theSrcs = removeDupes( theSrcs )
+		theTgts = removeDupes( theTgts )
 
 		self.UI_srcs.setItems( theSrcs )
 		self.UI_tgts.setItems( theTgts )
@@ -224,7 +224,7 @@ class MappingForm(MelHLayout):
 		for loc in LOCAL, GLOBAL:
 			for f in presets[ loc ]:
 				f = Path( f )
-				cmd.menuItem( l=f.name(), c=utils.Callback( self.loadMappingFile, f ) )
+				cmd.menuItem( l=f.name(), c=Callback( self.loadMappingFile, f ) )
 
 		cmd.menuItem( d=True )
 		cmd.menuItem( l='Manage Mappings...', c=lambda *x: presetsUI.load( TOOL_NAME, LOCAL, EXT ) )

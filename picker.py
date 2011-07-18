@@ -267,14 +267,18 @@ class Button(object):
 		setAttr( '%s.label' % self.getNode(), val, type='string' )
 
 		#rename the node to reflect the label
-		if val and isValidMayaNodeName( val ):
-			rename( self.getNode(), val )
-		else:
-			objs = self.getObjs()
-			if objs:
-				rename( self.getNode(), '%s_picker' % objs[0] )
+		try:
+			if val and isValidMayaNodeName( val ):
+				rename( self.getNode(), val )
 			else:
-				rename( self.getNode(), 'picker' )
+				objs = self.getObjs()
+				if objs:
+					rename( self.getNode(), '%s_picker' % objs[0] )
+				else:
+					rename( self.getNode(), 'picker' )
+
+		#this generally happens if the node is referenced...  its no big deal if the rename fails - renaming just happens to make the sets slightly more comprehendible when outliner surfing
+		except RuntimeError: pass
 	def setObjs( self, val ):
 		if isinstance( val, basestring ):
 			val = [ val ]
@@ -980,7 +984,7 @@ class CharacterUI(MelHLayout):
 	def refreshImage( self ):
 		self.UI_picker.setVisibility( False )
 		self.UI_picker.setVisibility( True )
-		self.sendEvent( 'updateEditor' )
+		self.updateEditor()
 	def buttonSelected( self, button ):
 		mods = getModifiers()
 		if mods & SHIFT and mods & CTRL:
@@ -1268,6 +1272,9 @@ class EditorLayout(MelVSingleStretchLayout):
 		return self.pickerUI.getSelectedButtonUIs()
 	def updateButtonList( self ):
 		currentCharacterUI = self.getCurrentCharacterUI()
+		if currentCharacterUI is None:
+			return
+
 		self.UI_buttons.setItems( currentCharacterUI.getButtonUIs() )
 	def update( self, selectInList=True ):
 		currentCharacterUI = self.getCurrentCharacterUI()
@@ -1476,6 +1483,7 @@ class EditorWindow(BaseMelWindow):
 
 		#kill the window when the scene changes
 		self.setSceneChangeCB( self.on_sceneChange )
+		self.show()
 	def update( self ):
 		self.UI_editor.update()
 	def updateButtonList( self ):
@@ -1498,7 +1506,7 @@ class PickerLayout(MelVSingleStretchLayout):
 		self.layout()
 
 		#build an editor - but keep it hidden
-		self.UI_editor = EditorWindow( self )
+		self.UI_editor = None
 
 		#setup up the UI
 		self.populate()
@@ -1545,11 +1553,16 @@ class PickerLayout(MelVSingleStretchLayout):
 		for idx, ui in enumerate( self.UI_tabs.getChildren() ):
 			if ui.character == character:
 				self.UI_tabs.setSelectedTabIdx( idx )
+	def isEditorOpen( self ):
+		if self.UI_editor is None:
+			return False
+
+		return self.UI_editor.exists()
 	def updateEditor( self ):
-		if self.UI_editor.exists():
+		if self.isEditorOpen():
 			self.UI_editor.update()
 	def updateButtonList( self ):
-		if self.UI_editor.exists():
+		if self.isEditorOpen():
 			self.UI_editor.updateButtonList()
 	def loadPreset( self, preset, *a ):  #*a exists only because this gets directly called by a menuItem - and menuItem's always pass a bool arg for some reason...  check state maybe?
 		namespaceHint = None
@@ -1579,14 +1592,13 @@ class PickerLayout(MelVSingleStretchLayout):
 
 	### EVENT HANDLERS ###
 	def on_showEditor( self, *a ):
-		if self.UI_editor is None or not self.UI_editor.exists():
+		if not self.isEditorOpen():
 			self.UI_editor = EditorWindow( self )
 
-		self.UI_editor.show()
 		self.updateButtonList()
 		self.updateEditor()
 	def on_tabChange( self, *a ):
-		if self.UI_editor.exists():
+		if self.isEditorOpen():
 			self.UI_editor.updateButtonList()
 
 		self.on_selectionChange()
@@ -1602,7 +1614,7 @@ class PickerLayout(MelVSingleStretchLayout):
 		#check to see if the user only wants the undo to work if the editor is open
 		undoOnlyIfEditorOpen = optionVar( q='zooUndoOnlyIfEditorOpen' )
 		if undoOnlyIfEditorOpen:
-			if not EditorWindow.Exists():
+			if not self.isEditorOpen():
 				return
 
 		charUI = self.getCurrentCharacterUI()

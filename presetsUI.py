@@ -1,8 +1,9 @@
-import maya.cmds as cmd
-import utils
-import api
+
 from baseMelUI import *
 from filesystem import *
+
+import maya.cmds as cmd
+import api
 
 
 ui = None
@@ -131,8 +132,7 @@ class PresetLayout(MelFormLayout):
 			cmd.button(self.UI_button_4, e=1, en=1)
 	def selected( self ):
 		'''
-		returns the selected presets as utils.Path instances - if nothing is selected, an empty
-		list is returned
+		returns the selected presets as Path instances - if nothing is selected, an empty list is returned
 		'''
 		try:
 			selectedIdxs = [idx-1 for idx in cmd.textScrollList(self.UI_tsl_presets, q=True, sii=True)]
@@ -225,11 +225,12 @@ class PresetLayout(MelFormLayout):
 		'''
 		dirs = getPresetDirs(self.locale, self.tool)
 		for dir in dirs:
-			utils.P4Data(dir).sync()
+			#P4Data(dir).sync()
 			print 'syncing to %s...' % dir.resolve().asdir()
 		self.updateList()
 	def on_notepad( self, filepath ):
-		utils.spawnProcess('notepad "%s"' % utils.Path(filepath).asNative())
+		filepath = Path( filepath )
+		subprocess.Popen( 'notepad "%s"' % filepath.asNative(), cwd=filepath.up() )
 	def popup_filemenu( self, parent, *args ):
 		cmd.menu(parent, e=True, dai=True)
 		cmd.setParent(parent, m=True)

@@ -832,6 +832,28 @@ float $normZ = %(aimNode)s.constraintVectorZ / $mag;
 		setInfinity( '%s.worldUpVector%s' % (aimNode, axisName), pri='oscillate', poi='oscillate' )
 
 
+def reorderAttrs( obj, newAttribOrder ):
+	for attr in newAttribOrder:
+		objAttrpath = '%s.%s' % (obj, attr)
+
+		#if the attribute is locked, we'll need to unlock it to rename it
+		isAttrLocked = getAttr( objAttrpath, l=True )
+		if isAttrLocked:
+			setAttr( objAttrpath, l=False )
+
+		#rename the attribute to a temporary name.  You can't rename it to its own name, so we need to rename it to a proxy name, and then back again
+		tempAttrname = '_temp__123xx'
+		while objExists( '%s.%s' % (obj, tempAttrname) ):
+			tempAttrname += '_1'
+
+		tempAttrib = renameAttr( objAttrpath, tempAttrname )
+		renameAttr( '%s.%s' % (obj, tempAttrname), attr )
+
+		#if the attribute WAS locked, lock it again, in order to maximise transparency
+		if isAttrLocked:
+			setAttr( objAttrpath, l=True )
+
+
 def dumpNodeAttrs( node ):
 	'''
 	simple debug function - you can use this to dump out attributes for nodes, stick em in a text file and do a diff

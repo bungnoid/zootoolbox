@@ -6,6 +6,7 @@ easier to read scripts if speed isn't a consideration
 '''
 
 import __future__
+import traceback
 
 from cacheDecorators import *
 from filesystem import *
@@ -17,29 +18,12 @@ import maya.cmds as cmd
 import maya.mel
 
 import maya.utils
-import names, utils, filesystem
-import traceback, datetime
-import math
+import names
 
 melEval = maya.mel.eval
 mayaVer = melEval( 'getApplicationVersionAsFloat()' )
 
-Callback = utils.Callback
-
 MATRIX_ROTATION_ORDER_CONVERSIONS_TO = Matrix.ToEulerXYZ, Matrix.ToEulerYZX, Matrix.ToEulerZXY, Matrix.ToEulerXZY, Matrix.ToEulerYXZ, Matrix.ToEulerZYX
-
-
-'''
-_today = datetime.datetime.today()
-kMAYA_SCRIPT_EDITOR_LOG = 'c:/mayaScriptEditorLog_%d%d%d%d%d%d%d' % (_today.year, _today.month, _today.day, _today.hour, _today.minute, _today.second, _today.microsecond)
-
-
-#turn on script editor logging - so we can query script editor dumps when sending maya bug reports
-try:
-	cmd.scriptEditorInfo(hfn=kMAYA_SCRIPT_EDITOR_LOG, wh=1)
-	cmd.scriptEditorInfo(clearHistoryFile=True)
-except RuntimeError: pass
-'''
 
 
 def getMObject( objectName ):
@@ -462,7 +446,7 @@ def writeExportDict( toolName=None, toolVersion=None, **kwargs ):
 	wraps the filesystem method of the same name - and populates the dict with maya
 	specific data
 	'''
-	d = filesystem.writeExportDict( toolName, toolVersion, **kwargs )
+	d = writeExportDict( toolName, toolVersion, **kwargs )
 	d[ kEXPORT_DICT_SCENE ] = cmd.file( q=True, sn=True )
 	d[ kEXPORT_DICT_APP_VERSION ] = cmd.about( version=True )
 
@@ -471,7 +455,6 @@ def writeExportDict( toolName=None, toolVersion=None, **kwargs ):
 
 def referenceFile( filepath, namespace, silent=False ):
 	filepath = Path( filepath )
-	#cmd.file( filepath << '%VCONTENT%', r=True, prompt=silent, namespace=namespace )
 	cmd.file( filepath, r=True, prompt=silent, namespace=namespace )
 
 
@@ -668,11 +651,6 @@ def updateProgressCallback( curLine, numLines ):
 	progressWindow(edit=True,progress=progress)
 
 
-def lengthyPerforceOpWarning( *a, **kw ):
-	cmd.confirmDialog( t='PERFORCE IS BEING TARDY', m='perforce is taking a long time...  the command issued was:\n%s, %s' % (a, kw), b=('OK',), db='OK' )
-
-
-filesystem.P4_LENGTHY_CALLBACK = lengthyPerforceOpWarning
 def addPerforceMenuItems( filepath, **kwargs ):
 	pass
 

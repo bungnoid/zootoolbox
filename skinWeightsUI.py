@@ -1,8 +1,7 @@
 
-from filesystem import Path, removeDupes
+from filesystem import Path, removeDupes, Callback
 from api import mel
 from names import getCommonPrefix
-from utils import Callback
 from baseMelUI import *
 
 import maya.cmds as cmd

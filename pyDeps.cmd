@@ -213,7 +213,11 @@ def main():
 			logHighlight( '-- PACKAGE WRITTEN TO %s' % packageFilepath )
 
 
-main()
+try:
+	main()
+except KeyboardInterrupt:
+	logWarning( "Aborted by user" )
+	sys.exit( 0 )
 
 
 #end

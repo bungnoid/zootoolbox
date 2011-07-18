@@ -1,4 +1,5 @@
-import utils, visManager, api, skinCluster, presets, presetsUI
+
+import baseMelUI, visManager, api, skinCluster, presets, presetsUI
 import maya.cmds as cmd
 
 mel = api.mel
@@ -7,18 +8,20 @@ name = __name__
 ui = None
 
 
-class VisManagerUI(utils.Singleton):
+class VisManagerUI(baseMelUI.BaseMelWindow):
 	WINDOW_NAME = "visManagerUI"
+	WINDOW_TITLE = 'vis set manager'
+
+	DEFAULT_SIZE = 254, 375
 	SPACER = "    "
 	EXPANDED = "[-] "
 	COLLAPSED = "[+]"
 	def __init__( self ):
+		baseMelUI.BaseMelWindow.__init__( self )
+
 		mel.zooVisManUtils()
 		mel.zooVisInitialSetup()
 
-		if cmd.window(self.WINDOW_NAME, ex=True): cmd.deleteUI(self.WINDOW_NAME)
-
-		cmd.window(self.WINDOW_NAME, t="vis set manager", wh=(254, 375))
 		api.mel.eval(r'''scriptJob -p %s -e "SceneOpened" "python(\"visManagerUI.ui.populate()\");";''' % self.WINDOW_NAME)
 		self.UI_form = cmd.formLayout(docTag=0)
 		self.UI_check_state = cmd.checkBox(v=self.state(), al="left", l="turn ON", cc=self.on_state_change)
@@ -43,7 +46,7 @@ class VisManagerUI(utils.Singleton):
 				   ap=((self.UI_tsl_sets, "right", 0, 100)) )
 
 		self.populate()
-		cmd.showWindow(self.WINDOW_NAME)
+		self.show()
 	def __del__( self ):
 		if self.reparentUI is not None:
 			if cmd.window(self.reparentUI, ex=True):
@@ -240,16 +243,19 @@ class VisManagerUI(utils.Singleton):
 		cmd.delete(selected[0])
 
 
-class ParentChooserUI(utils.Singleton):
+class ParentChooserUI(baseMelUI.BaseMelWindow):
 	WINDOW_NAME = "visManagerParentChooser"
+	WINDOW_TITLE = "vis set manager"
 	NO_PARENT = '--no parent--'
+
+	DEFAULT_SIZE = 180, 200
+
 	def __init__( self, setsToReparent ):
+		baseMelUI.BaseMelWindow.__init__( self )
+
 		allSets = set( mel.zooVisManListHeirarchically() )
 		allSets.difference_update( set(setsToReparent) )
 
-		if cmd.window(self.WINDOW_NAME, ex=True): cmd.deleteUI(self.WINDOW_NAME)
-
-		cmd.window(self.WINDOW_NAME, t="vis set manager", wh=(180, 200))
 		self.UI_form = cmd.formLayout()
 		self.UI_tsl = cmd.textScrollList(ams=0, nr=18)
 		self.UI_button_parent = cmd.button(l="parent")
@@ -273,7 +279,7 @@ class ParentChooserUI(utils.Singleton):
 
 		#select the no parent option
 		cmd.textScrollList(self.UI_tsl, e=True, si=self.NO_PARENT)
-		cmd.showWindow(self.WINDOW_NAME)
+		self.show()
 	def selection( self ):
 		sel = cmd.textScrollList(self.UI_tsl, q=True, si=True)
 		try: return sel[0]
