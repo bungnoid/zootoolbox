@@ -43,9 +43,9 @@ def trackableTypeFactory( metaclassSuper=type ):
 		'''
 		return _SUB_CLASS_DICT.get( name, None )
 
-	class _TrackableType(type):
+	class _TrackableType(metaclassSuper):
 		def __new__( cls, name, bases, attrs ):
-			newCls = type.__new__( cls, name, bases, attrs )
+			newCls = metaclassSuper.__new__( cls, name, bases, attrs )
 			_SUB_CLASS_LIST.append( newCls )
 			_SUB_CLASS_DICT.setdefault( name, newCls )  #set default so subclass name clashes are resolved using the first definition parsed
 
