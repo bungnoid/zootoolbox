@@ -965,7 +965,7 @@ class BaseMelWidget(BaseMelUI):
 		kw = { 'q': True, self.KWARG_VALUE_NAME: True }
 		return self.WIDGET_CMD( self, **kw )
 	def enable( self, state=True ):
-		try: self( e=True, enable=state )
+		try: self( e=True, enable=bool( state ) )  #explicitly cast here in case we've been passed a non-bool.  the maya.cmds binding interprets any non-boolean object as True it seems...
 		except: pass
 	def disable( self ):
 		self.enable( False )
@@ -978,7 +978,7 @@ class BaseMelWidget(BaseMelUI):
 		try: return self( q=True, enable=True )
 		except: return True
 	def editable( self, state=True ):
-		try: self( e=True, editable=state )
+		try: self( e=True, editable=bool( state ) )
 		except: pass
 	def setEditable( self, state ):
 		self.editable( state )
