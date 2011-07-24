@@ -2,13 +2,55 @@
 from baseMelUI import *
 from maya.mel import eval as evalMel
 from filesystem import Path
+from common import printErrorStr
 
+import re
 import maya
 
 try:
 	#try to connect to wing - otherwise don't worry
 	import wingdbstub
 except ImportError: pass
+
+
+def setupDagProcMenu():
+	'''
+	sets up the modifications to the dagProcMenu script
+	'''
+	dagMenuScript = r'C:\Program Files\Autodesk\Maya2011\scripts\others\dagMenuProc.mel'
+	globalProcDefRex = re.compile( "^global +proc +dagMenuProc *\( *string *(\$[a-zA-Z0-9_]+), *string *(\$[a-zA-Z0-9_]+) *\)" )
+
+	dagMenuScriptLines = Path( dagMenuScript ).read()
+	dagMenuScriptLineIter = iter( dagMenuScriptLines )
+
+	newLines = []
+	hasDagMenuProcBeenSetup = False
+	for line in dagMenuScriptLineIter:
+		newLines.append( line )
+
+		globalProcDefSearch = globalProcDefRex.search( line )
+		if globalProcDefSearch:
+			parentVarStr, objectVarStr = globalProcDefSearch.groups()
+			selHierarchyRex = re.compile( 'uiRes *\( *"m_dagMenuProc.kSelectHierarchy" *\)' )
+			#menuItem -label (uiRes("m_dagMenuProc.kDagMenuSelectHierarchy"))  -c ("select -hierarchy " + $object);
+
+			#if we're past the global proc definition for dagMenuProc start looking for the menu item to
+			for line in dagMenuScriptLineIter:
+				newLines.append( line )
+				if 'menuItem' in line and selHierarchyRex.search( line ):
+					newLines.append( '\t\t\tmenuItem -d 1;' )
+					newLines.append( '\t\t\tpython( "import triggeredUI" );' )
+					newLines.append( """\t\t\tint $killState = python( "triggeredUI.buildMenuItems( '"+ %s +"', '"+ %s +"' )" );""" % (parentVarStr, objectVarStr) )
+					newLines.append( '\t\t\tif( $killState ) return;' )
+					hasDagMenuProcBeenSetup = True
+					break
+
+	if not hasDagMenuProcBeenSetup:
+		printErrorStr( "Couldn't auto setup dagMenuProc!  AWOOGA!" )
+		return
+
+	newScript = '\n'.join( newLines )
+	evalMel( newScript )
 
 
 def setupZooToolBox():
@@ -40,6 +82,9 @@ def setupZooToolBox():
 	newPlugPathStr = ';'.join( newPlugPaths )
 
 	maya.mel.eval( 'putenv MAYA_PLUG_IN_PATH "%s";' % newPlugPathStr )
+
+	#now setup the dagMenuProc
+	setupDagProcMenu()
 
 
 def loadZooPlugin( pluginName ):

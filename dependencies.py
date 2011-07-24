@@ -467,6 +467,13 @@ class DependencyTree(DependencyNode):
 		self.FromSimpleDict( self )
 		self.FromSimpleDict( self._crcs )
 		self.FromSimpleDict( self._stats )
+	def moduleNameToScript( self, moduleName ):
+		for scriptPath in self:
+			if scriptPath.name() == moduleName or moduleName in scriptPath:
+				if makeScriptPathRelative( scriptPath ).name() == moduleName:
+					return scriptPath
+
+		raise ValueError( "Module cannot be mapped to any script" )
 
 
 def _depTreeStr( scriptPath, dependencyTree, depth=None ):
@@ -515,7 +522,7 @@ def generateDepTree( rebuildCache=False ):
 	return DependencyTree( rebuildCache=rebuildCache )
 
 
-def getModuleNameForScript( scriptFilepath ):
+def makeScriptPathRelative( scriptFilepath ):
 	'''
 	will attempt to transform the name of the given script into the shortest possible path relative
 	to the python search paths defined in sys.path.
@@ -571,7 +578,7 @@ def packageScripts( scriptFilesToPackage, destPackageFilepath, dependencyTree ):
 	import zipfile
 	with zipfile.ZipFile( str( destPackageFilepath ), 'w' ) as thePackage:
 		for f in filesToPackage:
-			thePackage.write( str( f ), str( getModuleNameForScript( f ) ) )
+			thePackage.write( str( f ), str( makeScriptPathRelative( f ) ) )
 
 	return destPackageFilepath
 

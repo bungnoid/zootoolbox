@@ -1,0 +1,11 @@
+#these are the python tool modules that get bundled up in the package
+animLibUI
+picker
+poseSymUI
+skeletonBuilderUI
+skinWeightsUI
+spaceSwitchingUI
+visManagerUI
+xferAnimUI
+
+#end

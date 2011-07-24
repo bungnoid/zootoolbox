@@ -5,14 +5,10 @@ from consoleChroma import Good
 from filesystem import Path, removeDupes
 from dependencies import generateDepTree, makeScriptPathRelative
 
+_THIS_FILE = Path( os.path.abspath( __file__ ) )
+_PYTHON_TOOLS_TO_PACKAGE = _THIS_FILE.up() / 'pythonToolsToPackage.txt'
 _PACKAGE_DIR_NAME = 'zooToolboxPy'
-_PACKAGE_DIR = Path( __file__ ).up( 2 ) / _PACKAGE_DIR_NAME
-
-#this is the list of modules to package - these tools and all dependencies get packaged into the _PACKAGE_DIR
-_MODULES_TO_PACKAGE = ( 'animLibUI', 'picker', 'poseSymUI',
-                        'skeletonBuilderUI', 'skinWeightsUI',
-                        'spaceSwitchingUI', 'visManagerUI',
-                        'xferAnimUI' )
+_PACKAGE_DIR = _THIS_FILE.up( 2 ) / _PACKAGE_DIR_NAME
 
 
 def cleanPackageDir():
@@ -23,13 +19,26 @@ def cleanPackageDir():
 
 
 def buildPackage( dependencyTree=None ):
+	if not _PYTHON_TOOLS_TO_PACKAGE.exists:
+		raise ValueError( "Cannot find %s file!" % _PYTHON_TOOLS_TO_PACKAGE.name() )
+
+	modulesToPackage = []
+	for toolName in _PYTHON_TOOLS_TO_PACKAGE.read():
+		if toolName:
+			if toolName.startswith( '#' ):
+				continue
+			elif toolName.startswith( '//' ):
+				continue
+
+			modulesToPackage.append( toolName )
+
 	cleanPackageDir()
 
 	if dependencyTree is None:
 		dependencyTree = generateDepTree()
 
 	filesToPackage = []
-	for moduleName in _MODULES_TO_PACKAGE:
+	for moduleName in modulesToPackage:
 		moduleScriptPath = dependencyTree.moduleNameToScript( moduleName )
 		filesToPackage += dependencyTree.findDependencies( moduleScriptPath, None, False )
 

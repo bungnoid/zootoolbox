@@ -16,13 +16,6 @@ MAIL_SERVER = 'exchange'
 
 DEFAULT_AUTHOR = 'default_username@your_domain.com'
 
-
-#try to import the windows api - this may fail if we're not running on windows
-try:
-	import win32con, win32api
-except ImportError: pass
-
-
 #set the pickle protocol to use
 PICKLE_PROTOCOL = 2
 
@@ -556,17 +549,19 @@ class Path(str):
 		WindowsError is raised if the file cannot be deleted
 		'''
 		if self.isfile():
+			selfStr = str( self )
 			try:
-				os.remove( self )
+				os.remove( selfStr )
 			except WindowsError, e:
-				win32api.SetFileAttributes( self, win32con.FILE_ATTRIBUTE_NORMAL )
-				os.remove( self )
+				os.chmod( selfStr, stat.S_IWRITE )
+				os.remove( selfStr )
 		elif self.isdir():
+			selfStr = str( self.asDir() )
 			for f in self.files( recursive=True ):
 				f.delete()
 
-			win32api.SetFileAttributes( self, win32con.FILE_ATTRIBUTE_NORMAL )
-			shutil.rmtree( str( self.asDir() ), True )
+			os.chmod( selfStr, stat.S_IWRITE )
+			shutil.rmtree( selfStr, True )
 	remove = delete
 	def rename( self, newName, nameIsLeaf=False ):
 		'''

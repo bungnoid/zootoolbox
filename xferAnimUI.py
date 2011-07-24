@@ -241,13 +241,6 @@ class XferAnimWindow(baseMelUI.BaseMelWindow):
 		if clipPreset is not None:
 			self.editor.setClipPreset( clipPreset )
 
-		def loadOffsetEditor( *a ):
-			import applyToRig
-			editor = applyToRig.CreateRigOffsetEditor()
-
-		cmd.setParent( self.getMenu( 'Tools' ), m=True )
-		cmd.menuItem( l="Open Offset Editor", c=loadOffsetEditor )
-
 		self.show()
 
 XferAnimEditor = XferAnimWindow  #older name...
