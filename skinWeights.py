@@ -1,6 +1,5 @@
 
 from skinWeightsBase import *
-from api import melPrint
 from filesystem import removeDupes
 from maya.cmds import *
 from binarySearchTree import BinarySearchTree
@@ -129,7 +128,7 @@ def saveWeights( geos, filepath=None ):
 
 	filepath = Path( filepath )
 	filepath.pickle( toWrite, False )
-	melPrint( 'Weights Successfully Saved to %s: time taken %.02f seconds' % (filepath, time.clock()-start) )
+	print 'Weights Successfully Saved to %s: time taken %.02f seconds' % (filepath, time.clock()-start)
 
 	return filepath
 
@@ -362,7 +361,7 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 		curItem += 1
 
 	end = time.clock()
-	api.melPrint('time for weight load %.02f secs' % (end-start))
+	print 'time for weight load %.02f secs' % (end-start)
 
 
 import profileDecorators

@@ -372,7 +372,7 @@ def findVertsInVolume( meshes, volume ):
 	#grab any data we're interested in for the volume
 	volumePos = vectors.Vector( cmd.xform(volume, q=True, ws=True, rp=True) )
 	volumeScale = map(abs, cmd.getAttr('%s.s' % volume)[0])
-	volumeBasis = [ Vector( (v.x, v.y, v.z) ) for v in api.getObjectBases( volume ) ]
+	volumeBasis = rigUtils.getObjectBasisVectors( volume )
 
 	#make sure the basis is normalized
 	volumeBasis = [v.normalize() for v in volumeBasis]

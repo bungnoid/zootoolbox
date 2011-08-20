@@ -87,18 +87,18 @@ def getObjectBasisVectors( obj ):
 	'''
 	returns 3 world space orthonormal basis vectors that represent the orientation of the given object
 	'''
-	xPrime, yPrime, zPrime = api.getObjectBases( obj )
+	worldMatrix = Matrix( cmd.getAttr( '%s.worldMatrix' % obj ), size=4 )
 
-	return Vector([xPrime.x, xPrime.y, xPrime.z]), Vector([yPrime.x, yPrime.y, yPrime.z]), Vector([zPrime.x, zPrime.y, zPrime.z])
+	return Vector( worldMatrix[0][:3] ), Vector( worldMatrix[1][:3] ), Vector( worldMatrix[2][:3] )
 
 
 def getLocalBasisVectors( obj ):
 	'''
 	returns 3 world space orthonormal basis vectors that represent the local coordinate system of the given object
 	'''
-	xPrime, yPrime, zPrime = api.getLocalBases( obj )
+	localMatrix = Matrix( cmd.getAttr( '%s.matrix' % obj ), size=4 )
 
-	return Vector([xPrime.x, xPrime.y, xPrime.z]), Vector([yPrime.x, yPrime.y, yPrime.z]), Vector([zPrime.x, zPrime.y, zPrime.z])
+	return Vector( localMatrix[0][:3] ), Vector( localMatrix[1][:3] ), Vector( localMatrix[2][:3] )
 
 
 def getPlaneNormalForObjects( objA, objB, objC, defaultVector=MAYA_UP ):
@@ -199,10 +199,9 @@ def getAimVector( obj ):
 		axisVector = Axis( axisIdx ).asVector()
 
 		#now just return the axis vector in world space
-		mat = api.getWorldSpaceMatrix( obj )
-		axisVector = api.MVectorToVector( api.VectorToMVector( axisVector ) * mat )
+		mat = Matrix( cmd.getAttr( '%s.worldMatrix' % obj ) )
 
-		return axisVector
+		return multVectorMatrix( axisVector, mat )
 
 
 def getObjectAxisInDirection( obj, compareVector, defaultAxis=Axis(0) ):

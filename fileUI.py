@@ -206,8 +206,6 @@ class FileListLayout(MelVSingleStretchLayout):
 				cmd.menuItem( l='reference file', c=lambda *x: self.on_reference( files[ 0 ] ) )
 
 			cmd.menuItem( d=True )
-			api.addPerforceMenuItems( files[ 0 ] )
-			cmd.menuItem( d=True )
 			api.addExploreToMenuItems( files[ 0 ] )
 		else:
 			cmd.menuItem( l="please select a single file" )

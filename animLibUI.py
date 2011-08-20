@@ -114,9 +114,6 @@ class AnimLibClipLayout(MelForm):
 		cmd.menuItem( l='edit clip', c=self.onEdit )
 		cmd.menuItem( d=True )
 		api.addExploreToMenuItems(self.clipPreset)
-		if self.clipPreset.locale == GLOBAL:
-			cmd.menuItem( d=True )
-			api.addPerforceMenuItems( self.clipPreset, others=[self.clipPreset.icon], previous=False )
 	def onPublish( self, *args ):
 		movedPreset = self.clipPreset.move()
 

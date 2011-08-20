@@ -151,9 +151,6 @@ class PresetLayout(MelFormLayout):
 		for s in self.selected():
 			files.append( s.copy() )
 
-		if self.locale == LOCAL:
-			self.promptForSubmit( files )
-
 		self.sendEvent( 'presetsCopied', files )
 	def delete( self, *args ):
 		files = self.selected()
@@ -161,9 +158,6 @@ class PresetLayout(MelFormLayout):
 			s.delete()
 
 		self.updateList()
-		if self.locale == GLOBAL:
-			self.promptForSubmit( files )
-
 		self.sendEvent( 'presetsDeleted', files )
 	def move( self, *args ):
 		files = []
@@ -173,11 +167,6 @@ class PresetLayout(MelFormLayout):
 			movedFiles.append( ff )
 
 		self.updateList()
-
-		#if we've moved FROM the local locale, prompt to submit files...
-		if self.locale == LOCAL:
-			self.promptForSubmit( movedFiles )
-
 		self.sendEvent( 'presetsMoved', files )
 	def rename( self, *args ):
 		'''
@@ -193,9 +182,6 @@ class PresetLayout(MelFormLayout):
 
 		renamedPreset = selected.rename( newName )
 		self.updateList()
-		if self.locale == LOCAL:
-			self.promptForSubmit( [renamedPreset] )
-
 		self.sendEvent( 'presetRenamed', selected, renamedPreset )
 	def swap( self, *args ):
 		'''
@@ -203,21 +189,6 @@ class PresetLayout(MelFormLayout):
 		'''
 		self.locale = self.other()
 		self.populate()
-	def promptForSubmit( self, files ):
-		'''
-		handles asking the user whether they want to submit changes - called after any file operation that happens
-		in the global locale
-		'''
-		ans = api.doConfirm(t='submit files?', m='do you want to submit the files?', b=api.ui_QUESTION, db=api.YES)
-
-		p4 = P4File()
-		change = p4.getChangeNumFromDesc('presetManager auto submit')
-		for f in files:
-			p4.setChange(change, f)
-
-		if ans == api.YES:
-			print 'submitting change', change
-			p4.submit(change)
 	def syncall( self, *a ):
 		'''
 		syncs to ALL global presets for the current tool - NOTE: this syncs to all global preset dirs in
@@ -247,10 +218,6 @@ class PresetLayout(MelFormLayout):
 				cmd.menuItem(d=True)
 				cmd.menuItem(l='open in notepad', c=lambda *x: self.on_notepad( filepath ))
 
-				#if the files are global files, display the perforce menu
-				if self.locale == GLOBAL:
-					cmd.menuItem(d=True)
-					api.addPerforceMenuItems(filepath)
 				cmd.menuItem(d=True)
 				api.addExploreToMenuItems(filepath)
 

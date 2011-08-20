@@ -915,7 +915,7 @@ class RiggingLayout(MelForm):
 		referenceModel = self.UI_reference.getValue()
 		if referenceModel:
 			if not curScene:
-				api.doConfirm( t='Scene not saved!', m="Looks like your current scene isn't saved\n\nPlease save it first so I know where to save the rig.  thanks!", b=('OK',), db='OK' )
+				cmd.confirmDialog( t='Scene not saved!', m="Looks like your current scene isn't saved\n\nPlease save it first so I know where to save the rig.  thanks!", b=('OK',), db='OK' )
 				return
 
 		rigPrimitives.buildRigForModel( referenceModel=referenceModel, deletePlacers=False )
