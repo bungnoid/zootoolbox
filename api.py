@@ -11,34 +11,6 @@ import maya.mel
 import maya.utils
 import names
 
-melEval = maya.mel.eval
-mayaVer = melEval( 'getApplicationVersionAsFloat()' )
-
-MATRIX_ROTATION_ORDER_CONVERSIONS_TO = Matrix.ToEulerXYZ, Matrix.ToEulerYZX, Matrix.ToEulerZXY, Matrix.ToEulerXZY, Matrix.ToEulerYXZ, Matrix.ToEulerZYX
-
-
-def getRotateDelta__( srcJoint, jointControl ):
-	'''
-	srcJoint should be the joint to which we want to align the rigged skeleton
-	tgtJoint is the joint on the rigged skeleton which is driven by the jointControl
-	'''
-	mat_j = Matrix( getAttr( '%s.worldInverseMatrix' % srcJoint ) )
-	mat_c = Matrix( getAttr( '%s.worldMatrix' % jointControl ) )
-
-	#generate the matrix describing offset between joint and the rig control
-	mat_o = mat_j * mat_c
-
-	#put into space of the control
-	rel_mat = mat_o * Matrix( getAttr( '%s.parentInverseMatrix' % jointControl ) )
-
-	#now figure out the euler rotations for the offset
-	ro = getAttr( '%s.ro' % jointControl )
-	asEuler = MATRIX_ROTATION_ORDER_CONVERSIONS_TO[ ro ]( rel_mat, True )
-
-	cmd.rotate( asEuler[ 0 ], asEuler[ 1 ], asEuler[ 2 ], jointControl, relative=True, os=True )
-
-	return asEuler
-
 
 def getFps():
 	'''
@@ -47,65 +19,6 @@ def getFps():
 	timebases = {'ntsc': 30, 'pal': 25, 'film': 24, 'game': 15, 'show': 48, 'palf': 50, 'ntscf': 60}
 	base = cmd.currentUnit(q=True, time=True)
 	return timebases[base]
-
-
-def pyArgToMelArg(arg):
-	#given a python arg, this method will attempt to convert it to a mel arg string
-	if isinstance(arg, basestring): return '"%s"' % cmd.encodeString(arg)
-
-	#if the object is iterable then turn it into a mel array string
-	elif hasattr(arg, '__iter__'): return '{%s}' % ','.join(map(pyArgToMelArg, arg))
-
-	#either lower case bools or ints for mel please...
-	elif isinstance(arg, bool): return str(arg).lower()
-
-	#otherwise try converting the sucka to a string directly
-	return unicode(arg)
-
-
-class Mel( object ):
-	'''creates an easy to use interface to mel code as opposed to having string formatting operations
-	all over the place in scripts that call mel functionality'''
-	def __init__( self, echo=False ):
-		self.echo = echo
-	def __getattr__( self, attr ):
-		if attr.startswith('__') and attr.endswith('__'):
-			return self.__dict__[attr]
-
-		#construct the mel cmd execution method
-		echo = self.echo
-		def melExecutor( *args ):
-			strArgs = map( pyArgToMelArg, args )
-			cmdStr = '%s(%s);' % (attr, ','.join( strArgs ))
-
-			if echo: print cmdStr
-			try:
-				retVal = melEval( cmdStr )
-			except RuntimeError:
-				print 'cmdStr: %s' % cmdStr
-				return
-			return retVal
-
-		melExecutor.__name__ = attr
-
-		return melExecutor
-	def source( self, script ):
-		return melEval('source "%s";' % script)
-	def eval( self, cmdStr ):
-		if self.echo:
-			print cmdStr
-
-		try:
-			return melEval(cmdStr)
-		except RuntimeError:
-			print 'ERROR :: trying to execute the cmd:'
-			print cmdStr
-			raise
-
-
-mel = Mel()
-melecho = Mel(echo=True)
-
 
 class CmdQueue(list):
 	'''
@@ -191,7 +104,7 @@ def addExploreToMenuItems( filepath ):
 		return
 
 	filepath = Path( filepath )
-	if not filepath.exists:
+	if not filepath.exists():
 		filepath = filepath.getClosestExisting()
 
 	if filepath is None:
@@ -200,31 +113,6 @@ def addExploreToMenuItems( filepath ):
 	cmd.menuItem(l="Explore to location...", c=lambda x: mel.zooExploreTo( filepath ), ann='open an explorer window to the location of this file/directory')
 
 	cmd.menuItem(l="CMD prompt to location...", c=lambda x: mel.zooCmdTo( filepath ), ann='open a command prompt to the location of this directory')
-
-
-def resolveMapping( mapping, **kw ):
-	'''
-	resolves the mapping to actual maya nodes - returns a mapping object with non existing nodes
-	stripped.  any additional kw args are passed to the matchNames function
-	'''
-	assert isinstance( mapping, names.Mapping )
-
-	toSearch = cmd.ls( typ='transform' )
-	existingSrcs = []
-	existingTgts = []
-
-	for src, tgt in mapping.iteritems():
-		if not cmd.objExists( src ):
-			src = names.matchNames( [ src ], toSearch, **kw )[ 0 ]
-
-		if not cmd.objExists( tgt ):
-			tgt = names.matchNames( [ tgt ], toSearch, **kw )[ 0 ]
-
-		if cmd.objExists( src ) and cmd.objExists( tgt ):
-			existingSrcs.append( src )
-			existingTgts.append( tgt )
-
-	return names.Mapping( existingSrcs, existingTgts )
 
 
 #end

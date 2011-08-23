@@ -6,7 +6,7 @@ from filesystem import Path, Preset, GLOBAL, LOCAL, removeDupes
 from names import *
 from vectors import *
 
-from api import mel
+from melUtils import mel
 from picker import resolveCmdStr
 from mappingUtils import *
 from common import printWarningStr, printErrorStr
@@ -26,6 +26,7 @@ kROOS = "xyz", "yzx", "zxy", "xzy", "yxz", "zyx"
 kM_ROOS = [eul.kXYZ, eul.kYZX, eul.kZXY, eul.kXZY, eul.kYXZ, eul.kZYX]
 
 POST_TRACE_ATTR_NAME = 'xferPostTraceCmd'
+MATRIX_ROTATION_ORDER_CONVERSIONS_TO = Matrix.ToEulerXYZ, Matrix.ToEulerYZX, Matrix.ToEulerZXY, Matrix.ToEulerXZY, Matrix.ToEulerYXZ, Matrix.ToEulerZYX
 
 
 def bakeRotateDelta( src, ctrl, presetStr ):
@@ -37,7 +38,20 @@ def bakeRotateDelta( src, ctrl, presetStr ):
 	can be useful when you have motion from a tool such as SFM, or generated from motion capture that
 	needs to be applied back to a rig.
 	'''
-	offset = api.getRotateDelta__( src, ctrl )
+	mat_j = Matrix( getAttr( '%s.worldInverseMatrix' % srcJoint ) )
+	mat_c = Matrix( getAttr( '%s.worldMatrix' % jointControl ) )
+
+	#generate the matrix describing offset between joint and the rig control
+	mat_o = mat_j * mat_c
+
+	#put into space of the control
+	rel_mat = mat_o * Matrix( getAttr( '%s.parentInverseMatrix' % jointControl ) )
+
+	#now figure out the euler rotations for the offset
+	ro = getAttr( '%s.ro' % jointControl )
+	offset = MATRIX_ROTATION_ORDER_CONVERSIONS_TO[ ro ]( rel_mat, True )
+
+	cmd.rotate( asEuler[ 0 ], asEuler[ 1 ], asEuler[ 2 ], jointControl, relative=True, os=True )
 
 	mel.zooSetPostTraceCmd( ctrl, presetStr % offset )
 	mel.zooAlign( "-src %s -tgt %s -postCmds 1" % (src, ctrl) )
@@ -60,7 +74,7 @@ def bakeManualRotateDelta( src, ctrl, presetStr ):
 
 	#now figure out the euler rotations for the offset
 	ro = getAttr( '%s.ro' % ctrl )
-	rotDelta = api.MATRIX_ROTATION_ORDER_CONVERSIONS_TO[ ro ]( mat_o, True )
+	rotDelta = MATRIX_ROTATION_ORDER_CONVERSIONS_TO[ ro ]( mat_o, True )
 
 	#now get the positional delta
 	posDelta = Vector( xform( src, q=True, ws=True, rp=True ) ) - Vector( xform( ctrl, q=True, ws=True, rp=True ) )
@@ -193,6 +207,7 @@ def executePostTraceCmd( node ):
 	mel.eval( resolvedCmdStr )
 
 
+"""
 def trace( srcs, tgts, keysOnly=True, matchRotationOrder=True, processPostCmds=True, sortByHeirarchy=True, start=None, end=None, skip=1 ):
 	if start is None:
 		keys = keyframe( srcs, q=True )
@@ -206,12 +221,7 @@ def trace( srcs, tgts, keysOnly=True, matchRotationOrder=True, processPostCmds=T
 
 	api.mel.zooXferAnimUtils()
 	api.mel._zooXferTrace( srcs, tgts, 2 if keysOnly else 0, 0, int( matchRotationOrder ), int( processPostCmds ), int( sortByHeirarchy ), int( start ), int( end ), int( skip ) )
-
-
-#def trace( srcs, tgts, keysOnly=True, matchRotationOrder=True, processPostCmds=True, sortByHeirarchy=True, start=None, end=None, skip=1 ):
-	#tracer = Tracer( keysOnly, matchRotationOrder, processPostCmds, sortByHeirarchy, start, end, skip )
-	#tracer.setSrcsAndTgts( srcs, tgts )
-	#tracer.trace()
+"""
 
 
 def constructDummyParentConstraint( src, tgt ):
@@ -445,7 +455,7 @@ class Tracer(object):
 		return transformNodePairs
 	@d_unifyUndo
 	@d_noAutoKey
-	#@d_disableViews
+	@d_disableViews
 	@d_restoreTime
 	def trace( self ):
 		if not self._tracePairs:
@@ -491,6 +501,12 @@ class Tracer(object):
 		finally:
 			for tracePair in self._tracePairs:
 				tracePair.postTrace()
+
+
+def trace( srcs, tgts, keysOnly=True, matchRotationOrder=True, processPostCmds=True, sortByHeirarchy=True, start=None, end=None, skip=1 ):
+	tracer = Tracer( keysOnly, matchRotationOrder, processPostCmds, sortByHeirarchy, start, end, skip )
+	tracer.setSrcsAndTgts( srcs, tgts )
+	tracer.trace()
 
 
 class AnimCurveCopier(object):
@@ -540,10 +556,7 @@ class AnimCurveCopier(object):
 
 def test():
 	tracer = Tracer()
-	#tracer.setSrcsAndTgts( ['windrunner:armControl_R', 'windrunner:upperBodyControl', 'windrunner:clavicleControl_R', 'windrunner:model:bow_1_ctrl'], ['windrunner1:armControl_A_R', 'windrunner1:upperBodyControl', 'windrunner1:clavicleControl_R', 'windrunner1:model:bow_1_ctrl'] )
-	tracer.setSrcsAndTgts( ['windrunner:armControl_R'], ['windrunner1:armControl_A_R'] )
-	#tracer.setSrcsAndTgts( ['pSphere2', 'pCylinder1'], ['pSphere1', 'pCube1'] )
-	#tracer.setSrcsAndTgts( ['pSphere2'], ['pSphere1'] )
+	tracer.setSrcsAndTgts( ['pSphere2', 'pCylinder1'], ['pSphere1', 'pCube1'] )
 	tracer.trace()
 
 
