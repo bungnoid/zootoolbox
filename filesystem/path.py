@@ -180,9 +180,9 @@ class Path(str):
 			rnd = '%06d' % (abs(random.gauss(0.5, 0.5)*10**6))
 			return '%TEMP%'+ PATH_SEPARATOR +'TMP_FILE_%s%s%s%s%s%s%s%s' % (now.year, now.month, now.day, now.hour, now.minute, now.second, now.microsecond, rnd)
 
-		randomPathName = cls(generateRandomPathName())
-		while randomPathName.exists:
-			randomPathName = cls(generateRandomPathName())
+		randomPathName = cls( generateRandomPathName() )
+		while randomPathName.exists():
+			randomPathName = cls( generateRandomPathName() )
 
 		return randomPathName
 	def __nonzero__( self ):
@@ -513,14 +513,11 @@ class Path(str):
 
 		return idx
 	index = find
-	def doesExist( self ):
+	def exists( self ):
 		'''
 		returns whether the file exists on disk or not
 		'''
-		try:
-			return os.path.exists( self )
-		except IndexError: return False
-	exists = property( doesExist )
+		return os.path.exists( self )
 	def matchCase( self ):
 		'''
 		If running under an env where file case doesn't matter, this method will return a Path instance
@@ -542,7 +539,7 @@ class Path(str):
 		'''
 		if the directory doesn't exist - create it
 		'''
-		if not self.exists:
+		if not self.exists():
 			os.makedirs( str( self ) )
 	def delete( self ):
 		'''
@@ -575,7 +572,7 @@ class Path(str):
 
 		if self.isfile():
 			if newPath != self:
-				if newPath.exists:
+				if newPath.exists():
 					newPath.delete()
 
 			#now perform the rename
@@ -609,7 +606,7 @@ class Path(str):
 		returns a list of lines contained in the file. NOTE: newlines are stripped from the end but whitespace
 		at the head of each line is preserved unless strip=False
 		'''
-		if self.exists and self.isfile():
+		if self.exists() and self.isfile():
 			fileId = file( self )
 			if strip:
 				lines = [line.rstrip() for line in fileId.readlines()]
@@ -734,11 +731,12 @@ class Path(str):
 		returns the longest path that exists on disk
 		'''
 		path = self
-		while not path.exists and len( path ) > 1:
+		while not path.exists() and len( path ) > 1:
 			path = path.up()
 
-		if not path.exists:
-			return None
+		if not path.exists():
+			raise IOError( "Cannot find any path above this one" )
+
 		return path
 	getClosestExisting = findNearest
 	nearest = findNearest
@@ -796,7 +794,7 @@ class Path(str):
 		os.path.isdir.  if anything else is passed in, the arg given is the full path as a
 		string to the filesystem item
 		'''
-		if not self.exists:
+		if not self.exists():
 			return
 
 		if recursive:
@@ -850,7 +848,7 @@ def findInPyPath( filename ):
 	'''
 	for p in map( Path, sys.path ):
 		loc = p / filename
-		if loc.exists:
+		if loc.exists():
 			return loc
 
 	return None
@@ -863,7 +861,7 @@ def findInPath( filename ):
 	'''
 	for p in map( Path, os.environ[ 'PATH' ].split( ';' ) ):
 		loc = p / filename
-		if loc.exists:
+		if loc.exists():
 			return loc
 
 	return None

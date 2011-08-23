@@ -390,7 +390,7 @@ class SkinWeightsLayout(MelColumnLayout):
 		thisFile = Path( cmd.file( q=True, sn=True ) )
 
 		#if the file doesn't exist, then use teh cwd
-		if not thisFile.exists:
+		if not thisFile.exists():
 			thisFile = thisFile.getcwd() / "tmp.ma"
 
 		dir = thisFile.up()
@@ -404,7 +404,7 @@ class SkinWeightsLayout(MelColumnLayout):
 		cmd.menuItem( l="browse", c=self.on_browseWeightFile )
 		cmd.menuItem( d=True )
 		cmd.menuItem( l="clear", c=lambda *a: cmd.textField( self.UI_file, e=True, tx='' ) )
-		if curFile.exists:
+		if curFile.exists():
 			cmd.menuItem( d=True )
 			api.addExploreToMenuItems( curFile )
 

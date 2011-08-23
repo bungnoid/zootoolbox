@@ -589,7 +589,7 @@ def d_performInSkeletonPartScene( f ):
 
 		partContainerFilepath = filesystem.Path( referenceQuery( self.getContainer(), filename=True ) )
 		curScene = filesystem.Path( file( q=True, sn=True ) )
-		if not curScene.exists:
+		if not curScene.exists():
 			raise TypeError( "This scene isn't saved!  Please save this scene somewhere before executing the decorated method!" )
 
 		initialContainer = ReferencedNode( self.getContainer() )

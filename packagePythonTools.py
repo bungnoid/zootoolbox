@@ -12,14 +12,14 @@ _PACKAGE_DIR = _THIS_FILE.up( 2 ) / _PACKAGE_DIR_NAME
 
 
 def cleanPackageDir():
-	if _PACKAGE_DIR.exists:
+	if _PACKAGE_DIR.exists():
 		_PACKAGE_DIR.delete()
 
 	_PACKAGE_DIR.create()
 
 
 def buildPackage( dependencyTree=None ):
-	if not _PYTHON_TOOLS_TO_PACKAGE.exists:
+	if not _PYTHON_TOOLS_TO_PACKAGE.exists():
 		raise ValueError( "Cannot find %s file!" % _PYTHON_TOOLS_TO_PACKAGE.name() )
 
 	modulesToPackage = []

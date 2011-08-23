@@ -80,13 +80,13 @@ def generateIcon( preset ):
 	time = cmd.currentTime(q=True)
 
 	#make sure the icon is open for edit if its a global clip
-	if preset.locale == GLOBAL and preset.icon.exists:
+	if preset.locale == GLOBAL and preset.icon.exists():
 		preset.edit()
 
 	icon = cmd.playblast(st=time, et=time, w=kICON_W_H[0], h=kICON_W_H[1], fo=True, fmt="image", v=0, p=100, orn=0, cf=str(preset.icon.resolve()))
 	icon = Path(icon)
 
-	if icon.exists:
+	if icon.exists():
 		icon = icon.setExtension('bmp', True)
 
 	cmd.setAttr("defaultRenderGlobals.imageFormat", imgFormat)
@@ -807,7 +807,7 @@ class ClipManager(PresetManager):
 			localeClips = clips[locale]
 			for dir in getPresetDirs(locale, TOOL_NAME):
 				dir += library
-				if not dir.exists:
+				if not dir.exists():
 					continue
 
 				for f in dir.files():

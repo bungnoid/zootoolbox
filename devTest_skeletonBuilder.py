@@ -80,7 +80,7 @@ class TestSkeletonBuilder(_BaseTest):
 		self._buildTestSkeleton()
 		rigScene = rigPrimitives.buildRigForModel()  #build the model in a referenced scene
 
-		assert rigScene.exists, "Cannot find the rig scene!"
+		assert rigScene.exists(), "Cannot find the rig scene!"
 		rigScene.delete()
 	def testUI( self ):
 		'''

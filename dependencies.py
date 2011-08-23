@@ -86,7 +86,7 @@ def isScriptInSuperiorBranch( scriptPath ):
 
 	for p in sys.path:
 		possibleSuperiorPath = p / scriptPath
-		if possibleSuperiorPath.exists:
+		if possibleSuperiorPath.exists():
 			if possibleSuperiorPath == originalPath:
 				return None
 
@@ -242,7 +242,7 @@ class DependencyTree(DependencyNode):
 		cache = Path( cls._CACHE_PATH )
 
 		self = None
-		if cache.exists and not rebuildCache:
+		if cache.exists() and not rebuildCache:
 			try:
 				with file( cache, 'r' ) as f:
 					version, self = pickle.load( f )
@@ -255,7 +255,7 @@ class DependencyTree(DependencyNode):
 
 					#remove any files from the cache that don't exist
 					for f in self.keys():
-						if not f.exists:
+						if not f.exists():
 							self.pop( f )
 				else:
 					self = None
@@ -555,7 +555,7 @@ def packageScripts( scriptFilesToPackage, destPackageFilepath, dependencyTree ):
 	will package all given files and import dependencies into a single zip file
 	'''
 	destPackageFilepath = Path( destPackageFilepath ).setExtension( 'zip' )
-	if destPackageFilepath.exists:
+	if destPackageFilepath.exists():
 		destPackageFilepath.delete()
 
 	filesToPackage = map( Path, scriptFilesToPackage )

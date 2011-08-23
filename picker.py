@@ -560,7 +560,7 @@ class Character(object):
 		stores this picker character out to disk
 		'''
 		filepath = filesystem.Path( filepath )
-		if filepath.exists:
+		if filepath.exists():
 			filepath.editoradd()
 
 		with open( filepath, 'w' ) as fOpen:

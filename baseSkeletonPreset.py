@@ -82,10 +82,10 @@ def writePresetToFile( presetFilepath ):
 
 def loadPreset( presetName ):
 	p = Preset( LOCAL, skeletonBuilder.TOOL_NAME, presetName, XTN )
-	if not p.exists:
+	if not p.exists():
 		p = Preset( GLOBAL, skeletonBuilder.TOOL_NAME, presetName, XTN )
 
-	assert p.exists, "Cannot find a %s preset called %s" % (XTN, presetName)
+	assert p.exists(), "Cannot find a %s preset called %s" % (XTN, presetName)
 
 	return loadPresetFile( p )
 
@@ -95,7 +95,7 @@ def loadPresetFile( presetFilepath ):
 	deals with unserializing a skeleton preset definition into the scene
 	'''
 
-	assert presetFilepath.exists, "No preset file found!  %" % presetFilepath
+	assert presetFilepath.exists(), "No preset file found!  %" % presetFilepath
 	itemRemapDict = {}
 	partList = []
 

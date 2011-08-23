@@ -150,7 +150,7 @@ class MelFileBrowser(MelHLayout):
 		elif not curValue.isDir():
 			curValue = Path( cmd.file( q=True, sn=True ) ).up( 2 )
 
-		if not curValue.exists:
+		if not curValue.exists():
 			curValue = Path( '' )
 
 		filepath = cmd.fileDialog( directoryMask=curValue / ("/*.%s" % ext) )
@@ -1083,7 +1083,7 @@ class PartExplorerLayout(MelTabLayout):
 
 		def getFile( cls ):
 			clsFile = Path( inspect.getfile( cls ) )
-			if clsFile.setExtension( 'py' ).exists:
+			if clsFile.setExtension( 'py' ).exists():
 				return clsFile.setExtension( 'py' )
 
 			return clsFile

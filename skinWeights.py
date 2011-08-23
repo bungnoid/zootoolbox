@@ -148,7 +148,7 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 	if filepath is None:
 		filepath = getDefaultPath()
 
-	if not filepath.exists:
+	if not filepath.exists():
 		print 'File does not exist %s' % filepath
 		return
 

@@ -680,11 +680,11 @@ def getControlShapeFiles():
 	if isinstance( dir, basestring ):
 		dir = Path( dir )
 
-	if not isinstance( dir, Path ) or not dir.exists:
+	if not isinstance( dir, Path ) or not dir.exists():
 		dir = Path( __file__ ).up()
 
 	shapes = []
-	if dir.exists:
+	if dir.exists():
 		shapes = [ f for f in dir.files() if f.hasExtension( 'shape' ) ]
 
 	if not shapes:

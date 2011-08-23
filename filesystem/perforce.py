@@ -427,7 +427,7 @@ class P4File(Path):
 			return '"%s"' % self
 
 		if isinstance( f, (list, tuple) ):
-			if verifyExistence: return '"%s"' % '" "'.join( [ anF for anF in f if Path( anF ).exists ] )
+			if verifyExistence: return '"%s"' % '" "'.join( [ anF for anF in f if Path( anF ).exists() ] )
 			else: return '"%s"' % '" "'.join( f )
 
 		return '"%s"' % Path( f )
@@ -785,7 +785,7 @@ def edit( self ):
 	if the file exists and is in perforce, this will open it for edit - if the file isn't in perforce
 	AND exists then this will open the file for add, otherwise it does nothing
 	'''
-	if self.exists:
+	if self.exists():
 		return self.asP4().editoradd()
 
 	return False
@@ -818,7 +818,7 @@ def _p4write( filepath, contentsStr, doP4=True ):
 		hasBeenHandled = False
 
 		isUnderClient = P4File().isUnderClient( filepath )
-		if filepath.exists:
+		if filepath.exists():
 			#assume if its writeable that its open for edit already
 			if not filepath.getWritable():
 				_p4fast( 'edit', filepath )
@@ -845,7 +845,7 @@ def _p4Pickle( filepath, toPickle, doP4=True ):
 		hasBeenHandled = False
 
 		isUnderClient = P4File().isUnderClient( filepath )
-		if filepath.exists:
+		if filepath.exists():
 			if not filepath.getWritable():
 				_p4fast( 'edit', filepath )
 				if not filepath.getWritable():
@@ -872,7 +872,7 @@ def _p4Delete( filepath, doP4=True ):
 			if asP4.managed():
 				if asP4.action is None:
 					asP4.delete()
-					if not filepath.exists:
+					if not filepath.exists():
 						return
 				else:
 					asP4.revert()
@@ -880,7 +880,7 @@ def _p4Delete( filepath, doP4=True ):
 
 					#only return if the file doesn't exist anymore - it may have been open for add in
 					#which case we still need to do a normal delete...
-					if not filepath.exists:
+					if not filepath.exists():
 						return
 		except Exception, e: pass
 
@@ -900,7 +900,7 @@ def _p4Rename( filepath, newName, nameIsLeaf=False, doP4=True ):
 		newPath = filepath.up() / newName
 
 	if filepath.isfile():
-		tgtExists = newPath.exists
+		tgtExists = newPath.exists()
 		if doP4 and isPerforceEnabled():
 			reAdd = False
 			change = None
@@ -1201,7 +1201,7 @@ def gatherFilesIntoChange( files, change=None ):
 
 		if not stat:
 			try:
-				if not f.exists:
+				if not f.exists():
 					continue
 			except TypeError: continue
 
@@ -1248,7 +1248,7 @@ def findRedundantPYCs( rootDir=None, recursive=True ):
 
 	rootDir = Path( rootDir )
 	orphans = []
-	if rootDir.exists:
+	if rootDir.exists():
 		p4 = P4File()
 		files = rootDir.files( recursive=recursive )
 		bytecodeFiles = []
@@ -1264,7 +1264,7 @@ def findRedundantPYCs( rootDir=None, recursive=True ):
 			pyF = Path( f ).setExtension( 'py' )
 
 			#is there a corresponding py script for this file?  if it does, the pyc is safe to delete - so delete it
-			if pyF.exists:
+			if pyF.exists():
 				f.reason = 'corresponding py script found'
 				orphans.append( f )
 				continue

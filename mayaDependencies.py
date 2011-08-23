@@ -24,7 +24,7 @@ def flush():
 	for pluginName in loadedPluginNames:
 		for p in pluginPaths:
 			possiblePluginPath = (p / pluginName).setExtension( 'py' )
-			if possiblePluginPath.exists:
+			if possiblePluginPath.exists():
 				loadedScriptedPlugins.append( possiblePluginPath[-1] )
 
 	initialScene = None
@@ -58,7 +58,7 @@ def flush():
 	dependencies.flush( [ mayaLibPath ] )
 
 	if initialScene and not cmd.file( q=True, sn=True ):
-		if Path( initialScene ).exists:
+		if Path( initialScene ).exists():
 			cmd.file( initialScene, o=True )
 
 	print "WARNING: You'll need to close and re-open any python based tools that are currently open..."

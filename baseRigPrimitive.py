@@ -1112,9 +1112,11 @@ def buildRigForModel( scene=None, referenceModel=True, deletePlacers=False ):
 		raise SceneNotSavedError( "Uh oh, your scene hasn't been saved - Please save it somewhere on disk so I know where to put the rig.  Thanks!" )
 
 	#backup the current state of the scene, just in case something goes south...
-	if scene.exists:
+	if scene.exists():
 		backupFilename = scene.up() / ('%s_backup.%s' % (scene.name(), scene.getExtension()))
-		if backupFilename.exists: backupFilename.delete()
+		if backupFilename.exists():
+			backupFilename.delete()
+
 		cmd.file( rename=backupFilename )
 		cmd.file( save=True, force=True )
 		cmd.file( rename=scene )
