@@ -1,91 +1,60 @@
+
+from baseMelUI import *
+from apiExtensions import iterParents
+from melUtils import mel, melecho
+
 import maya.cmds as cmd
-import baseMelUI
 import mappingEditor
-import api
+import mappingUtils
 import xferAnim
 import animLib
 
-
 __author__ = 'mel@macaronikazoo.com'
-ui = None
-MelForm = baseMelUI.MelForm
-
-class MelFrame(baseMelUI.BaseMelWidget):
-	WIDGET_CMD = cmd.frameLayout
 
 
-setParent = cmd.setParent
-class XferAnimForm(MelForm):
-	MODE_SCENE = 0
-	MODE_FILE = 1
-
+class XferAnimForm(MelVSingleStretchLayout):
 	def __init__( self, parent ):
-		MelForm.__init__( self, parent )
+		MelVSingleStretchLayout.__init__( self, parent )
 
 		self.sortBySrcs = True  #otherwise it sorts by tgts when doing traces
 		self._clipPreset = None
 		self.UI_mapping = mappingEditor.MappingForm( self )
-		self.UI_options = MelFrame( self, l="xfer options", labelVisible=True, collapsable=False, collapse=False, h=115, borderStyle='etchedIn' )  #need to specify the height for 2011 coz its ghey!
+		self.UI_options = MelFrameLayout( self, l="xfer options", labelVisible=True, collapsable=False, collapse=False, h=115, borderStyle='etchedIn' )  #need to specify the height for 2011 coz its ghey!
 
-		cmd.columnLayout( adjustableColumn=True, rowSpacing=5 )
-		cmd.rowLayout( numberOfColumns=2,
-					   columnWidth2=(175, 165),
-					   columnAttach=((1, "both", 5), (2, "both", 5)) )
+		hLayout = MelHLayout( self.UI_options )
 
-		cmd.columnLayout( adjustableColumn=True )
-		self.UI_radios = cmd.radioCollection()
-		self.RAD_dupe = cmd.radioButton( l="duplicate nodes", align='left', sl=True, cc=self.on_update )
-		self.RAD_copy = cmd.radioButton( l="copy/paste keys", align='left', cc=self.on_update )
-		self.RAD_trace = cmd.radioButton( l="trace objects", align='left', cc=self.on_update )
-		setParent('..')
+		colLayout = MelColumnLayout( hLayout )
+		self.UI_radios = MelRadioCollection()
+		self.RAD_dupe = self.UI_radios.createButton( colLayout, l="duplicate nodes", align='left', sl=True, cc=self.on_update )
+		self.RAD_copy = self.UI_radios.createButton( colLayout, l="copy/paste keys", align='left', cc=self.on_update )
+		self.RAD_trace = self.UI_radios.createButton( colLayout, l="trace objects", align='left', cc=self.on_update )
 
+		colLayout = MelColumnLayout( hLayout )
+		self.UI_check1 = MelCheckBox( colLayout, l="instance animation" )
+		self.UI_check2 = MelCheckBox( colLayout, l="match rotate order", v=1 )
+		self.UI_check3 = MelCheckBox( colLayout, l="", vis=0, v=0 )
+		self.UI_check4 = MelCheckBox( colLayout, l="", vis=0, v=1 )
+		hLayout.layout()
 
-		cmd.columnLayout( adjustableColumn=True )
-		self.UI_check1 = cmd.checkBox( l="instance animation" )
-		self.UI_check2 = cmd.checkBox( l="match rotate order", v=1 )
-		self.UI_check3 = cmd.checkBox( l="", vis=0, v=0 )
-		self.UI_check4 = cmd.checkBox( l="", vis=0, v=1 )
-		setParent('..')
-		setParent('..')
-
-
-		cmd.rowColumnLayout( numberOfColumns=7,
-							 columnWidth=((1, 75), (2, 95), (3, 35), (4, 45), (5, 35), (6, 45)),
-							 columnAttach=((1, "both", 1),
-										   (2, "both", 1),
-										   (3, "both", 1),
-										   (4, "both", 1),
-										   (5, "both", 5),
-										   (6, "both", 1),
-										   (7, "both", 5)) )
-		self.UI_keysOnly = cmd.checkBox( l="keys only", v=0, cc=self.on_update )
-		self.UI_withinRange = cmd.checkBox( l="within range:", v=0, cc=self.on_update )
-		cmd.text( l="start ->" )
-		self.UI_start = cmd.textField( en=0, tx='!' )
+		hLayout = MelHLayout( self.UI_options )
+		self.UI_keysOnly = MelCheckBox( hLayout, l="keys only", v=0, cc=self.on_update )
+		self.UI_withinRange = MelCheckBox( hLayout, l="within range:", v=0, cc=self.on_update )
+		MelLabel( hLayout, l="start ->" )
+		self.UI_start = MelTextField( hLayout, en=0, tx='!' )
 		cmd.popupMenu( p=self.UI_start, b=3, pmc=self.buildTimeMenu )
 
-		cmd.text( l="end ->" )
-		self.UI_end = cmd.textField( en=0, tx='!' )
+		MelLabel( hLayout, l="end ->" )
+		self.UI_end = MelTextField( hLayout, en=0, tx='!' )
 		cmd.popupMenu( p=self.UI_end, b=3, pmc=self.buildTimeMenu )
 
-		cmd.setParent( self )
-		UI_button = cmd.button( l='Xfer Animation', c=self.on_xfer )
+		UI_button = cmd.button( self, l='Xfer Animation', c=self.on_xfer )
 
-		self( e=True,
-			  af=((self.UI_mapping, 'top', 0),
-				  (self.UI_mapping, 'left', 0),
-				  (self.UI_mapping, 'right', 0),
-				  (self.UI_options, 'left', 0),
-				  (self.UI_options, 'right', 0),
-				  (UI_button, 'left', 0),
-				  (UI_button, 'right', 0),
-				  (UI_button, 'bottom', 0)),
-			  ac=((self.UI_mapping, 'bottom', 0, self.UI_options),
-				  (self.UI_options, 'bottom', 0, UI_button)) )
+		self.setStretchWidget( self.UI_mapping )
+		self.layout()
 
 		self.on_update()  #set initial state
 	def isTraceMode( self, theMode ):
-		m = cmd.radioCollection( self.UI_radios, q=True, sl=True )
+		m = self.UI_radios.getSelected()
 		return theMode.endswith( '|'+ m )
 	def setMapping( self, mapping ):
 		self.UI_mapping.setMapping( mapping )
@@ -126,44 +95,44 @@ class XferAnimForm(MelForm):
 
 	### EVENT HANDLERS ###
 	def on_update( self, *a ):
-			sel = cmd.ls( sl=True, dep=True )
+		sel = cmd.ls( sl=True, dep=True )
 
-			if not self._clipPreset is not None:
-				if self.isTraceMode( self.RAD_dupe ):
-					cmd.checkBox( self.UI_check1, e=True, en=True )
-				else:
-					cmd.checkBox( self.UI_check1, e=True, en=False, v=0 )
-
-			if self.isTraceMode( self.RAD_trace ):
-				cmd.checkBox( self.UI_keysOnly, e=True, en=True )
-				cmd.checkBox( self.UI_check2, e=True, v=0 )
-				cmd.checkBox( self.UI_check3, e=True, vis=1, v=1, l="process post-trace cmds" )
+		if not self._clipPreset is not None:
+			if self.isTraceMode( self.RAD_dupe ):
+				cmd.checkBox( self.UI_check1, e=True, en=True )
 			else:
-				cmd.checkBox( self.UI_keysOnly, e=True, en=False, v=0 )
-				cmd.checkBox( self.UI_check3, e=True, vis=0, v=0 )
+				cmd.checkBox( self.UI_check1, e=True, en=False, v=0 )
 
-			if  cmd.checkBox( self.UI_keysOnly, q=True, v=True ):
-				cmd.checkBox( self.UI_withinRange, e=True, en=1 )
-			else:
-				cmd.checkBox( self.UI_withinRange, e=True, en=0, v=0 )
+		if self.isTraceMode( self.RAD_trace ):
+			cmd.checkBox( self.UI_keysOnly, e=True, en=True )
+			cmd.checkBox( self.UI_check2, e=True, v=0 )
+			cmd.checkBox( self.UI_check3, e=True, vis=1, v=1, l="process post-trace cmds" )
+		else:
+			cmd.checkBox( self.UI_keysOnly, e=True, en=False, v=0 )
+			cmd.checkBox( self.UI_check3, e=True, vis=0, v=0 )
 
-			enableRange = self.isTraceMode( self.RAD_copy ) or self.isTraceMode( self.RAD_trace )
-			keysOnly = cmd.checkBox( self.UI_keysOnly, q=True, v=True )
-			withinRange = cmd.checkBox( self.UI_withinRange, q=True, v=True )
-			if enableRange and not keysOnly or withinRange:
-				cmd.textField( self.UI_start, e=True, en=True )
-				cmd.textField( self.UI_end, e=True, en=True )
-			else:
-				cmd.textField( self.UI_start, e=True, en=False )
-				cmd.textField( self.UI_end, e=True, en=False )
+		if  cmd.checkBox( self.UI_keysOnly, q=True, v=True ):
+			cmd.checkBox( self.UI_withinRange, e=True, en=1 )
+		else:
+			cmd.checkBox( self.UI_withinRange, e=True, en=0, v=0 )
+
+		enableRange = self.isTraceMode( self.RAD_copy ) or self.isTraceMode( self.RAD_trace )
+		keysOnly = cmd.checkBox( self.UI_keysOnly, q=True, v=True )
+		withinRange = cmd.checkBox( self.UI_withinRange, q=True, v=True )
+		if enableRange and not keysOnly or withinRange:
+			cmd.textField( self.UI_start, e=True, en=True )
+			cmd.textField( self.UI_end, e=True, en=True )
+		else:
+			cmd.textField( self.UI_start, e=True, en=False )
+			cmd.textField( self.UI_end, e=True, en=False )
 	def on_xfer( self, *a ):
-		mapping = api.resolveMapping( self.UI_mapping.getMapping() )
+		mapping = mappingUtils.resolveMappingToScene( self.UI_mapping.getMapping() )
 		theSrcs = []
 		theTgts = []
 
 		#perform the hierarchy sort
 		idx = 0 if self.sortBySrcs else 1
-		toSort = [ (len(list(api.iterParents( srcAndTgt[ idx ] ))), srcAndTgt) for srcAndTgt in mapping.iteritems() if cmd.objExists( srcAndTgt[ idx ] ) ]
+		toSort = [ (len(list(iterParents( srcAndTgt[ idx ] ))), srcAndTgt) for srcAndTgt in mapping.iteritems() if cmd.objExists( srcAndTgt[ idx ] ) ]
 		toSort.sort()
 		for idx, (src, tgt) in toSort:
 			theSrcs.append( src )
@@ -204,9 +173,7 @@ class XferAnimForm(MelForm):
 		if isCopy:
 			offset = "*"
 
-		api.mel.zooXferAnimUtils()
 		if self._clipPreset is not None:
-			print self._clipPreset.asClip()
 			#convert to mapping as expected by animLib...  this is messy!
 			animLibMapping = {}
 			for src, tgts in mapping.iteritems():
@@ -214,26 +181,22 @@ class XferAnimForm(MelForm):
 
 			self._clipPreset.asClip().apply( animLibMapping )
 		elif isDupe:
-			api.melecho.zooXferBatch( "-mode 0 -instance %d -matchRo %d" % (instance, matchRo), theSrcs, theTgts )
+			melecho.zooXferBatch( "-mode 0 -instance %d -matchRo %d" % (instance, matchRo), theSrcs, theTgts )
 		elif isCopy:
-			api.melecho.zooXferBatch( "-mode 1 -range %s %s -matchRo %d" % (startTime, endTime, matchRo), theSrcs, theTgts )
+			melecho.zooXferBatch( "-mode 1 -range %s %s -matchRo %d" % (startTime, endTime, matchRo), theSrcs, theTgts )
 		elif isTraced:
 			xferAnim.trace( theSrcs, theTgts, traceKeys, matchRo, processPostCmds, True, startTime, endTime )
 
 
-class XferAnimWindow(baseMelUI.BaseMelWindow):
+class XferAnimWindow(BaseMelWindow):
 	WINDOW_NAME = 'xferAnim'
 	WINDOW_TITLE = 'Xfer Anim'
 
 	DEFAULT_SIZE = 350, 450
 	DEFAULT_MENU = 'Tools'
 
-	#FORCE_DEFAULT_SIZE = False
-
-	def __new__( cls, mapping=None, clipPreset=None ):
-		return baseMelUI.BaseMelWindow.__new__( cls )
 	def __init__( self, mapping=None, clipPreset=None ):
-		baseMelUI.BaseMelWindow.__init__( self )
+		BaseMelWindow.__init__( self )
 		self.editor = XferAnimForm( self )
 		if mapping is not None:
 			self.editor.setMapping( mapping )
@@ -242,13 +205,6 @@ class XferAnimWindow(baseMelUI.BaseMelWindow):
 			self.editor.setClipPreset( clipPreset )
 
 		self.show()
-
-XferAnimEditor = XferAnimWindow  #older name...
-
-
-def load():
-	global ui
-	ui = XferAnimEditor()
 
 
 #end

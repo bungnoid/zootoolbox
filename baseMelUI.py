@@ -1057,6 +1057,58 @@ class MelCheckBox(BaseMelWidget):
 		return BaseMelWidget.__new__( cls, parent, *a, **kw )
 
 
+class MelRadioButton(BaseMelWidget):
+	WIDGET_CMD = cmd.radioButton
+
+	def getLabel( self ):
+		return self( q=True, label=True )
+	def setLabel( self, label ):
+		self( e=True, label=label )
+	def select( self ):
+		self( e=True, select=True )
+	def isSelected( self ):
+		return self( q=True, select=True )
+
+
+class MelRadioCollection(unicode):
+	def __new__( self ):
+		new = unicode.__new__( cls, cmd.radioCollection() )
+		new._items = []
+
+		return new
+	def addButton( self, button ):
+		'''
+		adds the given button to this collection
+		'''
+		self._items.append( button( e=True, collection=self ) )
+	def createButton( self, parent, **kw ):
+		'''
+		creates a new radio button and adds it to the collection
+		'''
+		button = MelRadioButton( parent, collection=self, **kw )
+		self._items.append( button )
+
+		return button
+	def getItems( self ):
+		'''
+		returns the radio buttons in the collection
+		'''
+		return self._items[:]
+	def count( self ):
+		'''
+		returns the items in the collection
+		'''
+		return len( self._items )
+	def getSelected( self ):
+		'''
+		returns the selected MelRadio button instance
+		'''
+		selItemStr = self( q=True, sl=True )
+		for item in self._items:
+			if str( item ) == selItemStr:
+				return item
+
+
 class MelSeparator(BaseMelWidget):
 	WIDGET_CMD = cmd.separator
 

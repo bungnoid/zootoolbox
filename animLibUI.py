@@ -146,7 +146,7 @@ class AnimLibClipLayout(MelForm):
 		for src, tgt in mapping.iteritems():
 			xferAnimMapping[ src ] = [ tgt ]
 
-		xferAnimUI.XferAnimEditor( mapping=xferAnimMapping, clipPreset=self.clipPreset )
+		xferAnimUI.XferAnimWindow( mapping=xferAnimMapping, clipPreset=self.clipPreset )
 	def onEdit( self, *args ):
 		AnimClipChannelEditorWindow( self.clipPreset )
 	def onRename( self, *args ):
