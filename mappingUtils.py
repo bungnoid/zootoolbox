@@ -1,3 +1,4 @@
+
 from names import *
 from apiExtensions import *
 
@@ -20,33 +21,22 @@ def resolveMappingToScene( mapping, threshold=1.0 ):
 	'''
 	assert isinstance( mapping, Mapping )
 
-	__NAME_MAPPING_IS_BROKEN = True
-	if __NAME_MAPPING_IS_BROKEN:
-		'''
-		its broken because it strips the namespace off before doing the matches - so it can erroneously
-		think "ns:root" is an exact match to "root" if it comes before the item "root" in the tgtList
-		'''
-		srcs = []
-		for i in mapping.srcs:
-			i = i.split( ':' )[-1].split( '|' )[-1]
-			if not cmd.objExists( i ):
-				possibles = cmd.ls( i, r=True )
-				if possibles: i = possibles[0]
+	toSearch = cmd.ls( typ='transform' )
+	existingSrcs = []
+	existingTgts = []
 
-			srcs.append( i )
+	for src, tgt in mapping.iteritems():
+		if not cmd.objExists( src ):
+			src = matchNames( [ src ], toSearch, **kw )[ 0 ]
 
-		tgts = []
-		for i in mapping.tgts:
-			if not cmd.objExists( i ):
-				possibles = cmd.ls( i, r=True )
-				if possibles: i = possibles[0]
+		if not cmd.objExists( tgt ):
+			tgt = matchNames( [ tgt ], toSearch, **kw )[ 0 ]
 
-			tgts.append( i )
-	else:
-		srcs = matchNames( mapping.srcs, allItems, threshold=threshold )
-		tgts = matchNames( mapping.tgts, allItems, threshold=threshold )
+		if cmd.objExists( src ) and cmd.objExists( tgt ):
+			existingSrcs.append( src )
+			existingTgts.append( tgt )
 
-	return Mapping( srcs, tgts )
+	return Mapping( existingSrcs, existingTgts )
 
 
 #end
