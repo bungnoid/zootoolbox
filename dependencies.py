@@ -619,12 +619,22 @@ def flush( dirsNeverToFlush=() ):
 	keysToDelete = []
 
 	dirsNeverToFlush.extend( _LIB_PATHS )
+	flushableExtensions = 'py', 'pyc', 'pyo'
+	builtin_module_names = set( sys.builtin_module_names )
 	while True:
 		try:
 			for modName, mod in sys.modules.items():
 				try:
 					modPath = filesystem.Path( mod.__file__ )
 				except AttributeError: continue
+
+				#if its in the list of builtin module names, skip it - no point flushing builtins
+				if modName in builtin_module_names:
+					continue
+
+				#only flush the module if has a valid extension - binary modules don't unload properly in CPython
+				if modPath.getExtension() not in flushableExtensions:
+					continue
 
 				doFlush = True
 				for ignoreDir in dirsNeverToFlush:
@@ -646,6 +656,7 @@ def flush( dirsNeverToFlush=() ):
 			del( sys.modules[ keyToDelete ] )
 		except KeyError: continue
 
+	#force a garbage collection
 	gc.collect()
 
 
