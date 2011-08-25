@@ -1,9 +1,12 @@
-import exportManagerCore, filesystem, datetime, api
-import maya.cmds as cmd
-from filesystem import resolvePath
 
-mel = api.mel
-melecho = api.melecho
+import exportManagerCore, filesystem, datetime, melUtils
+import maya.cmds as cmd
+
+from filesystem import resolvePath
+from mayaDecorators import d_showWaitCursor
+
+mel = melUtils.mel
+melecho = melUtils.melecho
 
 TOOL_NAME = 'visManager'
 TOOL_VERSION = 1
@@ -17,7 +20,7 @@ def exportPreset( presetName, visHierarchyTop, locale=DEFAULT_LOCALE ):
 	each empty transform node in the group represents a set, and each volume in the structure represents a face
 	selection used to determine vis set membership
 	'''
-	exportDict = api.writeExportDict(TOOL_NAME, TOOL_VERSION)
+	exportDict = melUtils.writeExportDict(TOOL_NAME, TOOL_VERSION)
 
 	#simply returns the
 	def getVolumesAndEmptyGroups( node ):
@@ -56,7 +59,7 @@ def exportPreset( presetName, visHierarchyTop, locale=DEFAULT_LOCALE ):
 	thePreset.pickle(exportDict)
 
 
-@api.d_showWaitCursor
+@d_showWaitCursor
 def importPreset( presetName, locale=DEFAULT_LOCALE, createSets=True, deleteAfterImport=True ):
 	thePreset = filesystem.Preset(locale, TOOL_NAME, presetName, EXTENSION)
 	presetData = thePreset.unpickle()

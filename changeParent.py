@@ -3,7 +3,7 @@ from maya.cmds import *
 
 from baseMelUI import *
 from mayaDecorators import d_disableViews, d_noAutoKey, d_unifyUndo
-from common import printWarningStr
+from melUtils import printWarningStr
 
 
 @d_unifyUndo

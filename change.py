@@ -5,7 +5,7 @@ from changeIkFk import ChangeIkFkLayout
 from changeParent import ChangeParentLayout
 from changeRo import ChangeRoLayout
 
-__author__ = 'hamish@valvesoftware.com'
+__author__ = 'hamish@macaronikazoo.com'
 
 
 class ChangeLayout(MelColumnLayout):
@@ -27,8 +27,6 @@ class ChangeWindow(BaseMelWindow):
 	DEFAULT_SIZE = 300, 250
 	DEFAULT_MENU = 'Help'
 	FORCE_DEFAULT_SIZE = True
-
-	HELP_MENU = 'ChangeTool', __author__, 'https://intranet.valvesoftware.com/wiki/index.php/Change_Tool'
 
 	def __init__( self ):
 		ChangeLayout( self )

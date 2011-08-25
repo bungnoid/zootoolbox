@@ -6,8 +6,7 @@ currently just contains a function to take skin weights from the current scene a
 
 from maya.cmds import *
 from filesystem import Path
-from api import mel
-from common import printWarningStr
+from melUtils import printWarningStr
 from referenceUtils import stripNamespaceFromNamePath
 
 import skinWeights

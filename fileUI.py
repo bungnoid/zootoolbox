@@ -2,11 +2,28 @@
 from baseMelUI import *
 
 from filesystem import Path, Callback
-from common import printWarningStr
-import api, presetsUI
+from melUtils import printWarningStr, openFile, importFile, referenceFile
+
+import presetsUI
 
 PRESET_ID_STR = 'zoo'
 PRESET_EXTENSION = 'filter'
+
+
+def addExploreToMenuItems( filepath ):
+	if filepath is None:
+		return
+
+	filepath = Path( filepath )
+	if not filepath.exists():
+		filepath = filepath.getClosestExisting()
+
+	if filepath is None:
+		return
+
+	cmd.menuItem(l="Explore to location...", c=lambda x: mel.zooExploreTo( filepath ), ann='open an explorer window to the location of this file/directory')
+
+	cmd.menuItem(l="CMD prompt to location...", c=lambda x: mel.zooCmdTo( filepath ), ann='open a command prompt to the location of this directory')
 
 
 class FileScrollList(MelObjectScrollList):
@@ -206,7 +223,7 @@ class FileListLayout(MelVSingleStretchLayout):
 				cmd.menuItem( l='reference file', c=lambda *x: self.on_reference( files[ 0 ] ) )
 
 			cmd.menuItem( d=True )
-			api.addExploreToMenuItems( files[ 0 ] )
+			addExploreToMenuItems( files[ 0 ] )
 		else:
 			cmd.menuItem( l="please select a single file" )
 
@@ -216,11 +233,11 @@ class FileListLayout(MelVSingleStretchLayout):
 
 	### EVENT CALLBACKS ###
 	def on_open( self, theFile ):
-		api.openFile( theFile )
+		openFile( theFile )
 	def on_import( self, theFile ):
-		api.importFile( theFile )
+		importFile( theFile )
 	def on_reference( self, theFile ):
-		api.referenceFile( theFile, 'ref' )
+		referenceFile( theFile, 'ref' )
 	def on_dirChange( self, theDir=None ):
 		if theDir is None:
 			theDir = self.getDir()
@@ -249,7 +266,7 @@ class FileListLayout(MelVSingleStretchLayout):
 		self._extensionsToDisplay = cmd.optionMenu( self.UI_filter, q=True, v=True ).split()
 		self.populateFiles()
 	def on_doubleClick( self, *args ):
-		api.openFile( self.getSelectedFiles()[ 0 ] )
+		openFile( self.getSelectedFiles()[ 0 ] )
 	def on_filterSave( self, *args ):
 		presetName = self.UI_filter.getValue()
 		presetsUI.savePreset( presetsUI.LOCAL, PRESET_ID_STR, presetName, PRESET_EXTENSION )

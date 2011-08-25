@@ -1,12 +1,7 @@
 
-try:
-	import wingdbstub
-except ImportError: pass
-
-
 from baseMelUI import *
 from maya.cmds import *
-from common import printWarningStr
+from melUtils import printWarningStr
 
 #this dict stores attribute values for the selection - attributeChange scriptjobs fire when an attribute changes
 #but don't pass in pre/post values, or even the name of the attribute that has changed.  So when the scriptjobs

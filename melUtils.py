@@ -1,9 +1,16 @@
 
+from maya.OpenMaya import MGlobal
+from exceptionHandlers import generateTraceableStrFactory
+from maya import cmds as cmd
+
+import filesystem
 import maya.mel
 
-from maya.cmds import cmd
-
 melEval = maya.mel.eval
+
+generateInfoStr, printInfoStr = generateTraceableStrFactory( '*** INFO ***', MGlobal.displayInfo )
+generateWarningStr, printWarningStr = generateTraceableStrFactory( '', MGlobal.displayWarning )
+generateErrorStr, printErrorStr = generateTraceableStrFactory( '', MGlobal.displayError )
 
 
 def pyArgToMelArg( arg ):
@@ -67,9 +74,67 @@ class Mel( object ):
 			print cmdStr
 			raise
 
-
 mel = Mel()
 melecho = Mel(echo=True)
+
+
+class CmdQueue(list):
+	'''
+	the cmdQueue is generally used as a bucket to store a list of maya commands to execute.  for whatever
+	reason executing individual maya commands through python causes each command to get put into the undo
+	queue - making tool writing a pain.  so for scripts that have to execute maya commands one at a time,
+	consider putting them into a CmdQueue object and executing the object once you're done generating
+	commands...  to execute a CmdQueue instance, simply call it
+	'''
+	def __init__( self ):
+		list.__init__(self)
+	def __call__( self, echo=False ):
+		m = mel
+		if echo:
+			m = melecho
+
+		fp = Path( "%TEMP%/cmdQueue.mel" )
+		f = open( fp, 'w' )
+		f.writelines( '%s;\n' % l for l in self )
+		f.close()
+		print fp
+
+		m.source( fp )
+
+
+def referenceFile( filepath, namespace, silent=False ):
+	filepath = Path( filepath )
+	cmd.file( filepath, r=True, prompt=silent, namespace=namespace )
+
+
+def openFile( filepath, silent=False ):
+	filepath = Path( filepath )
+	ext = filepath.getExtension().lower()
+	if ext == 'ma' or ext == 'mb':
+		mel.saveChanges( 'file -f -prompt %d -o "%s"' % (silent, filepath) )
+		mel.addRecentFile( filepath, 'mayaAscii' if Path( filepath ).hasExtension( 'ma' ) else 'mayaBinary' )
+
+
+def importFile( filepath, silent=False ):
+	filepath = Path( filepath )
+	ext = filepath.getExtension().lower()
+	if ext == 'ma' or ext == 'mb':
+		cmd.file( filepath, i=True, prompt=silent, rpr='__', type='mayaAscii', pr=True, loadReferenceDepth='all' )
+
+
+#there are here to follow the convention specified in the filesystem writeExportDict method
+kEXPORT_DICT_SCENE = 'scene'
+kEXPORT_DICT_APP_VERSION = 'app_version'
+def writeExportDict( toolName=None, toolVersion=None, **kwargs ):
+	'''
+	wraps the filesystem method of the same name - and populates the dict with maya
+	specific data
+	'''
+	d = filesystem.writeExportDict( toolName, toolVersion, **kwargs )
+	d[ kEXPORT_DICT_SCENE ] = cmd.file( q=True, sn=True )
+	d[ kEXPORT_DICT_APP_VERSION ] = cmd.about( version=True )
+
+	return d
 
 
 #end

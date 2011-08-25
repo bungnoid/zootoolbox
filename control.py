@@ -1,7 +1,8 @@
+
 import os
 import sys
 
-from api import mel
+from melUtils import mel
 from maya.cmds import *
 from filesystem import Path, removeDupes, BreakException, getArgDefault
 from vectors import Vector
@@ -15,7 +16,7 @@ import colours
 import meshUtils
 import profileDecorators
 from apiExtensions import asMObject, MObject
-from common import printErrorStr
+from melUtils import printErrorStr
 
 
 SPACE_WORLD = rigUtils.SPACE_WORLD

@@ -2,9 +2,9 @@
 from filesystem import *
 from baseMelUI import *
 from mappingUtils import *
+from melUtils import writeExportDict
 
 import names
-import api
 import presetsUI
 
 
@@ -185,7 +185,7 @@ class MappingForm(MelHLayout):
 		self.UI_tgts.setItems( theTgts )
 	def saveMappingToFile( self, filepath ):
 		filepath = Path( filepath ).setExtension( EXT )
-		filedata = api.writeExportDict( TOOL_NAME, TOOL_VER ), self.getMapping()
+		filedata = writeExportDict( TOOL_NAME, TOOL_VER ), self.getMapping()
 		filepath.pickle( filedata )
 	def saveMappingPreset( self, presetName ):
 		filepath = Preset( LOCAL, TOOL_NAME, presetName, EXT )

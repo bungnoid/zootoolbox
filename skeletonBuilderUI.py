@@ -3,9 +3,10 @@ from maya.cmds import *
 from maya import cmds as cmd
 from filesystem import Path
 from baseMelUI import *
+from melUtils import mel
+from mayaDecorators import d_showWaitCursor
 
 import os
-import api
 import names
 import skeletonBuilderPresets
 import rigPrimitives
@@ -449,7 +450,7 @@ class CommonButtonsLayout(MelColumn):
 	def on_skinOn( self, e=None ):
 		rigUtils.enableSkinClusters()
 		self.updateSkinButtons()
-	@api.d_showWaitCursor
+	@d_showWaitCursor
 	def on_resetSkin( self, e=None ):
 		for sc in ls( typ='skinCluster' ):
 			rigUtils.resetSkinCluster( sc )
@@ -461,7 +462,7 @@ class CommonButtonsLayout(MelColumn):
 		rigPrimitives.removeAllVolumes()
 	def on_extractSelected( self, e=None ):
 		cmd.select( meshUtils.extractFaces( cmd.ls( sl=True, fl=True ) ) )
-		api.mel.setSelectMode( "objects", "Objects" )
+		mel.setSelectMode( "objects", "Objects" )
 	def on_generateWeights( self, e=None ):
 		rigPrimitives.volumesToSkinning()
 	def on_sceneOpen( self, *a ):
@@ -1103,7 +1104,7 @@ class PartExplorerLayout(MelTabLayout):
 			hLayout.layout()
 
 			hLayout = MelHLayout( col )
-			MelButton( hLayout, l='Explore To', c=Callback( api.mel.zooExploreTo, clsFile ), h=20 )
+			MelButton( hLayout, l='Explore To', c=Callback( mel.zooExploreTo, clsFile ), h=20 )
 			MelButton( hLayout, l='Edit', c=Callback( os.system, 'start %s' % clsFile ), h=20 )
 			hLayout.layout()
 
@@ -1126,7 +1127,7 @@ class PartExplorerLayout(MelTabLayout):
 			hLayout.layout()
 
 			hLayout = MelHLayout( col )
-			MelButton( hLayout, l='Explore To', c=Callback( api.mel.zooExploreTo, clsFile ), h=20 )
+			MelButton( hLayout, l='Explore To', c=Callback( mel.zooExploreTo, clsFile ), h=20 )
 			MelButton( hLayout, l='Edit', c=Callback( os.system, 'start %s' % clsFile ), h=20 )
 			hLayout.layout()
 

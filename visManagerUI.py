@@ -1,9 +1,14 @@
 
-import baseMelUI, visManager, api, skinCluster, presets, presetsUI
+import baseMelUI
+import visManager
+import melUtils
+import skinCluster
+import presetsUI
 import maya.cmds as cmd
+from filesystem import Callback
 
-mel = api.mel
-melecho = api.melecho
+mel = melUtils.mel
+melecho = melUtils.melecho
 name = __name__
 ui = None
 
@@ -22,7 +27,7 @@ class VisManagerUI(baseMelUI.BaseMelWindow):
 		mel.zooVisManUtils()
 		mel.zooVisInitialSetup()
 
-		api.mel.eval(r'''scriptJob -p %s -e "SceneOpened" "python(\"visManagerUI.ui.populate()\");";''' % self.WINDOW_NAME)
+		melUtils.mel.eval(r'''scriptJob -p %s -e "SceneOpened" "python(\"visManagerUI.ui.populate()\");";''' % self.WINDOW_NAME)
 		self.UI_form = cmd.formLayout(docTag=0)
 		self.UI_check_state = cmd.checkBox(v=self.state(), al="left", l="turn ON", cc=self.on_state_change)
 		self.UI_button_marks = cmd.button(l="bookmarks")
@@ -176,7 +181,7 @@ class VisManagerUI(baseMelUI.BaseMelWindow):
 		add = kwargs.get('add', False )
 		marks = mel.zooVisManListBookmarks()
 		for mark in marks:
-			cmd.menuItem(l=mark, c=api.Callback(self.on_activate_mark, mark, add))
+			cmd.menuItem(l=mark, c=Callback(self.on_activate_mark, mark, add))
 
 		cmd.menuItem(d=1)
 		cmd.menuItem(l='create bookmark', c=self.on_create_bookmark)
@@ -209,17 +214,17 @@ class VisManagerUI(baseMelUI.BaseMelWindow):
 		cmd.menuItem(d=True)
 
 		#build the preset list...
-		visPresets = presets.listAllPresets(visManager.TOOL_NAME, visManager.EXTENSION, True)
+		visPresets = presetsUI.listAllPresets( visManager.TOOL_NAME, visManager.EXTENSION, True )
 		cmd.menuItem(l="build sets from preset", sm=True)
 		for locale, pList in visPresets.iteritems():
 			for p in pList:
-				cmd.menuItem(l=p.name(), c=api.Callback(self.import_preset, p.name(), locale, True, True))
+				cmd.menuItem(l=p.name(), c=Callback(self.import_preset, p.name(), locale, True, True))
 		cmd.setParent('..', m=True)
 
 		cmd.menuItem(l="import preset volumes", sm=True)
 		for locale, pList in visPresets.iteritems():
 			for p in pList:
-				cmd.menuItem(l=p.name(), c=api.Callback(self.import_preset, p.name(), locale, False, False))
+				cmd.menuItem(l=p.name(), c=Callback(self.import_preset, p.name(), locale, False, False))
 		cmd.setParent('..', m=True)
 		selected = cmd.ls(sl=True)
 		cmd.menuItem(en=len(selected)==1, l="export volume preset", c=self.export_preset)
@@ -232,15 +237,20 @@ class VisManagerUI(baseMelUI.BaseMelWindow):
 		visManager.importPreset(presetName, locale, createSets, deleteVolumes)
 		self.populate()
 	def export_preset( self, *args ):
-		ans, name = api.doPrompt(t="volume preset name", m="enter a name for the volume preset", db=api.OK)
-		if ans != api.OK:
+		BUTTONS = OK, CANCEL = 'Ok', 'Cancel'
+		ans = cmd.promptDialog( t="volume preset name", m="enter a name for the volume preset", b=BUTTONS, db=OK )
+		if ans != OK:
 			return
 
-		selected = cmd.ls(sl=True)
-		visManager.exportPreset(name, selected[0])
+		name = cmd.promptDialog( q=True, tx=True )
+		if not name:
+			return
+
+		selected = cmd.ls( sl=True )
+		visManager.exportPreset( name, selected[0] )
 
 		#now delete the vis volumes
-		cmd.delete(selected[0])
+		cmd.delete( selected[0] )
 
 
 class ParentChooserUI(baseMelUI.BaseMelWindow):

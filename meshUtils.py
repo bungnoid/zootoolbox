@@ -9,9 +9,9 @@ from maya.cmds import *
 from maya.OpenMayaAnim import MFnSkinCluster
 from vectors import Vector, Matrix
 from filesystem import Path, BreakException
+from mayaDecorators import d_progress
 
 import maya.cmds as cmd
-import api
 import apiExtensions
 import maya.OpenMaya as OpenMaya
 
@@ -584,7 +584,7 @@ def stampVolumeToJoint( joint, volume, amount=0.1 ):
 			print vertName, currentWeight
 
 
-@api.d_progress(t='clamping influence count', st='clamping vert influences to %d' % kMAX_INF_PER_VERT)
+@d_progress(t='clamping influence count', st='clamping vert influences to %d' % kMAX_INF_PER_VERT)
 def clampVertInfluenceCount( geos=None ):
 	'''
 	'''
@@ -709,7 +709,7 @@ def getAlignedBoundsForJoint( joint, threshold=0.65, onlyVisibleMeshes=True ):
 	else:
 		verts += jointVertsForMaya( joint, threshold, onlyVisibleMeshes )
 
-	jointDag = api.getMDagPath( theJoint )
+	jointDag = apiExtensions.asMDagPath( theJoint )
 	jointMatrix = jointDag.inclusiveMatrix()
 	vJointPos = OpenMaya.MTransformationMatrix( jointMatrix ).rotatePivot( OpenMaya.MSpace.kWorld ) + OpenMaya.MTransformationMatrix( jointMatrix ).getTranslation( OpenMaya.MSpace.kWorld )
 	vJointPos = Vector( [vJointPos.x, vJointPos.y, vJointPos.z] )

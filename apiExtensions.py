@@ -35,6 +35,10 @@ def asMObject( otherMobject ):
 		return otherMobject
 
 
+def asMDagPath( otherMobject ):
+	pass
+
+
 def asMPlug( otherMobject ):
 	if '.' in otherMobject:
 		sel = MSelectionList()

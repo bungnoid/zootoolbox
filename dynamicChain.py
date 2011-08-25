@@ -1,7 +1,7 @@
 
 from maya.cmds import *
 from baseMelUI import *
-from common import printWarningStr
+from melUtils import printWarningStr
 from control import attrState, LOCK_HIDE, Axis
 from mayaDecorators import d_unifyUndo
 from names import camelCaseToNice

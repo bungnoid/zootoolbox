@@ -9,8 +9,8 @@ from control import *
 from names import Parity, Name, camelCaseToNice, stripParity
 from skeletonBuilder import *
 from vectors import Vector, Matrix
-from mayaDecorators import d_unifyUndo
-from common import printInfoStr, printWarningStr, printErrorStr
+from mayaDecorators import d_unifyUndo, d_showWaitCursor
+from melUtils import printInfoStr, printWarningStr, printErrorStr, referenceFile
 
 import apiExtensions
 import skeletonBuilder
@@ -19,7 +19,6 @@ import triggered
 import poseSym
 import vectors
 import control
-import api
 
 __author__ = 'hamish@macaronikazoo.com'
 
@@ -816,7 +815,7 @@ def getSpaceSwitchControls( theJoint ):
 	'''
 	parentControls = []
 
-	for p in api.iterParents( theJoint ):
+	for p in apiExtensions.iterParents( theJoint ):
 		theControl = getItemRigControl( p )
 		if theControl is not None:
 			parentControls.append( theControl )
@@ -865,7 +864,7 @@ def getParentAndRootControl( theJoint ):
 	control object
 	'''
 	parentControl, rootControl = None, None
-	for p in api.iterParents( theJoint ):
+	for p in apiExtensions.iterParents( theJoint ):
 		theControl = getItemRigControl( p )
 		if theControl is None:
 			continue
@@ -1086,7 +1085,7 @@ def setupMirroring():
 
 
 @d_unifyUndo
-@api.d_showWaitCursor
+@d_showWaitCursor
 def buildRigForModel( scene=None, referenceModel=True, deletePlacers=False ):
 	'''
 	given a model scene whose skeleton is assumed to have been built by the
@@ -1146,7 +1145,7 @@ def buildRigForModel( scene=None, referenceModel=True, deletePlacers=False ):
 		cmd.file( f=True, save=True )
 		cmd.file( f=True, new=True )
 
-		api.referenceFile( scene, 'model' )
+		referenceFile( scene, 'model' )
 
 		#rename the scene to the rig
 		rigSceneName = '%s_rig.ma' % scene.name()

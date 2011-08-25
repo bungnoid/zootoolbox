@@ -1,8 +1,11 @@
 
 from vectors import *
-from filesystem import Path, resolvePath, writeExportDict
+from filesystem import Path, resolvePath
 
-import time, datetime, names, filesystem
+import time
+import datetime
+import names
+import filesystem
 
 
 TOOL_NAME = 'weightSaver'

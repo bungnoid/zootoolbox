@@ -11,7 +11,7 @@ http://www.macaronikazoo.com/?page_id=311
 import re
 import maya
 import names
-import common
+import melUtils
 import inspect
 import maya.cmds as cmd
 import filesystem
@@ -226,7 +226,7 @@ class BaseMelUI(typeFactories.trackableClassFactory( unicode )):
 			try:
 				cb()
 			except Exception, x:
-				common.printErrorStr( "The %s callback failed" % cbFlagName )
+				melUtils.printErrorStr( "The %s callback failed" % cbFlagName )
 	def getFullName( self ):
 		'''
 		returns the fullname to the UI widget
@@ -258,7 +258,7 @@ class BaseMelUI(typeFactories.trackableClassFactory( unicode )):
 				try:
 					method( *methodArgs, **methodKwargs )
 				except:
-					common.printErrorStr( 'Event Failed: %s, %s, %s' % (methodName, methodArgs, methodKwargs) )
+					melUtils.printErrorStr( 'Event Failed: %s, %s, %s' % (methodName, methodArgs, methodKwargs) )
 		else:
 			self.parent.processEvent( methodName, methodArgs, methodKwargs )
 	def getVisibility( self ):
@@ -431,7 +431,7 @@ class BaseMelUI(typeFactories.trackableClassFactory( unicode )):
 
 		#if the data stored in the docTag doesn't map to a subclass, then we'll have to guess at the best class...
 		if theCls is None:
-			#common.printInfoStr( cmd.objectTypeUI( theStr ) )  ##NOTE: the typestr isn't ALWAYS the same name as the function used to interact with said control, so this debug line can be useful for spewing object type names...
+			#melUtils.printInfoStr( cmd.objectTypeUI( theStr ) )  ##NOTE: the typestr isn't ALWAYS the same name as the function used to interact with said control, so this debug line can be useful for spewing object type names...
 
 			theCls = BaseMelUI  #at this point default to be an instance of the base widget class
 			candidates = list( BaseMelUI.IterWidgetClasses( uiCmd ) )
@@ -489,11 +489,11 @@ class BaseMelLayout(BaseMelUI):
 	def printUIHierarchy( self ):
 		def printChildren( children, depth ):
 			for child in children:
-				common.printInfoStr( '%s%s' % ('  ' * depth, child) )
+				melUtils.printInfoStr( '%s%s' % ('  ' * depth, child) )
 				if isinstance( child, BaseMelLayout ):
 					printChildren( child.getChildren(), depth+1 )
 
-		common.printInfoStr( self )
+		melUtils.printInfoStr( self )
 		printChildren( self.getChildren(), 1 )
 	def clear( self ):
 		'''
@@ -956,7 +956,7 @@ class BaseMelWidget(BaseMelUI):
 			kw = { 'e': True, self.KWARG_VALUE_NAME: value }
 			self.WIDGET_CMD( self, **kw )
 		except TypeError, x:
-			common.printErrorStr( 'Running setValue method using %s command' % self.WIDGET_CMD )
+			melUtils.printErrorStr( 'Running setValue method using %s command' % self.WIDGET_CMD )
 			raise
 
 		if executeChangeCB:
@@ -2435,7 +2435,7 @@ class PyFuncLayout(MelColumnLayout):
 
 		MelButton( self, l='Execute %s' % names.camelCaseToNice( func.__name__ ), c=self.execute )
 	def changeCB( self, argName ):
-		common.printInfoStr( '%s arg changed!' % argName )
+		melUtils.printInfoStr( '%s arg changed!' % argName )
 	def getArgDict( self ):
 		argDict = {}
 		for argName, ui in self.argUIDict.iteritems():

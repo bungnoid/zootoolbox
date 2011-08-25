@@ -4,11 +4,11 @@ from maya.cmds import *
 import re
 import time
 
-import api
+import melUtils
 import maya.cmds as cmd
 
-mel = api.mel
-melecho = api.melecho
+mel = melUtils.mel
+melecho = melUtils.melecho
 
 
 def resolveCmdStr( cmdStr, obj, connects, optionals=[] ):

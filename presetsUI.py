@@ -1,9 +1,9 @@
 
 from baseMelUI import *
 from filesystem import *
+from fileUI import addExploreToMenuItems
 
 import maya.cmds as cmd
-import api
 
 
 ui = None
@@ -173,8 +173,14 @@ class PresetLayout(MelFormLayout):
 		performs the prompting and renaming of presets
 		'''
 		selected = self.selected()[0]
-		ans, newName = api.doPrompt(m='new name', tx=selected.name())
-		if ans != api.OK:
+
+		BUTTONS = OK, CANCEL = 'Ok', 'Cancel'
+		ans = cmd.promptDialog( m='new name', tx=selected.name(), b=BUTTONS, db=OK )
+		if ans != OK:
+			return
+
+		newName = cmd.promptDialog( q=True, tx=True )
+		if not newName:
 			return
 
 		if not newName.endswith('.'+ self.ext):
@@ -219,7 +225,7 @@ class PresetLayout(MelFormLayout):
 				cmd.menuItem(l='open in notepad', c=lambda *x: self.on_notepad( filepath ))
 
 				cmd.menuItem(d=True)
-				api.addExploreToMenuItems(filepath)
+				addExploreToMenuItems(filepath)
 
 			cmd.menuItem(d=True)
 			cmd.menuItem(l='delete', c=self.delete)

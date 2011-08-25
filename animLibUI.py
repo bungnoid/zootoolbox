@@ -1,11 +1,12 @@
 
 from baseMelUI import *
 from animLib import *
+from fileUI import addExploreToMenuItems
 
 import presetsUI
 import xferAnimUI
 
-__author__ = 'mel@macaronikazoo.com'
+__author__ = 'hamish@macaronikazoo.com'
 
 
 def getSelectedChannelBoxAttrNames():
@@ -47,7 +48,7 @@ class AnimLibClipLayout(MelForm):
 		'''
 		populates the top level form with ui widgets
 		'''
-		self.UI_icon = MelIconButton( self, l=self.name(), image=str(self.clipPreset.icon.resolve()), w=kICON_W_H[0], h=kICON_W_H[1], c=self.onApply, sourceType='python', ann="click the icon to apply the clip, or use the slider to partially apply it.  if you don't like the icon, right click and choose re-generate icon" )
+		self.UI_icon = MelIconButton( self, l=self.name(), image=str(self.clipPreset.icon()), w=kICON_W_H[0], h=kICON_W_H[1], c=self.onApply, sourceType='python', ann="click the icon to apply the clip, or use the slider to partially apply it.  if you don't like the icon, right click and choose re-generate icon" )
 
 		typeLbl = ClipPreset.TYPE_LABELS[ self.clipPreset.getType() ]
 		self.UI_lbl = MelLabel( self, l='%s clip:  %s' % (typeLbl, self.name()), font='boldLabelFont', ann="this is the clip's name.  right click and choose rename to change the clip's name" )
@@ -94,7 +95,7 @@ class AnimLibClipLayout(MelForm):
 		cmd.menu( parent, e=True, dai=True )
 
 		cmd.menuItem( l=self.name(), boldFont=True )
-		if self.clipPreset.locale == LOCAL:
+		if self.clipPreset.locale() == LOCAL:
 			cmd.menuItem( l='publish to global -->', c=self.onPublish )
 
 		def onIcon(*x):
@@ -113,7 +114,7 @@ class AnimLibClipLayout(MelForm):
 		cmd.menuItem( d=True )
 		cmd.menuItem( l='edit clip', c=self.onEdit )
 		cmd.menuItem( d=True )
-		api.addExploreToMenuItems(self.clipPreset)
+		addExploreToMenuItems( self.clipPreset.path() )
 	def onPublish( self, *args ):
 		movedPreset = self.clipPreset.move()
 
@@ -150,8 +151,13 @@ class AnimLibClipLayout(MelForm):
 	def onEdit( self, *args ):
 		AnimClipChannelEditorWindow( self.clipPreset )
 	def onRename( self, *args ):
-		ans, name = api.doPrompt(t='new name', m='enter new name', tx=self.name())
-		if ans != api.OK:
+		BUTTONS = OK, CANCEL = 'Ok', 'Cancel'
+		ans = cmd.promptDialog( t='new name', m='enter new name', tx=self.name(), b=BUTTONS, db=OK )
+		if ans != OK:
+			return
+
+		name = cmd.promptDialog( q=True, tx=True )
+		if not name:
 			return
 
 		self.clipPreset = self.clipPreset.rename( name )

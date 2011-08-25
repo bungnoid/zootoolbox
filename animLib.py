@@ -1,18 +1,22 @@
 
 from filesystem import *
-from common import printInfoStr, printErrorStr
-from mayaDecorators import d_unifyUndo
+from melUtils import printInfoStr, printWarningStr, printErrorStr
+from mayaDecorators import d_unifyUndo, d_noAutoKey
 
 import maya.cmds as cmd
 import names
-import api
+import melUtils
 import apiExtensions
 
 
-__author__ = 'mel@macaronikazoo.com'
+__author__ = 'hamish@macaronikazoo.com'
 TOOL_NAME = 'animLib'
 kEXT = 'clip'
 VER = 3  #version
+
+#ICON_FMT_MAGIC_INT is the value for the defaultRenderGlobals.imageFormat node in maya
+_BMP, _PNG, _XPM = ('bmp', 20), ('png', 32), ('xpm', 63)
+ICON_FMT_STR, ICON_FMT_MAGIC_INT = _PNG
 
 
 ### clip types
@@ -24,7 +28,7 @@ kDEFAULT_MAPPING_THRESHOLD = 1
 
 kICON_W_H = 60, 60
 
-mel = api.mel
+mel = melUtils.mel
 Mapping = names.Mapping
 
 
@@ -70,7 +74,7 @@ def generateIcon( preset ):
 	imgFormat = cmd.getAttr("defaultRenderGlobals.imageFormat")
 	states = []
 
-	cmd.setAttr("defaultRenderGlobals.imageFormat", 20)
+	cmd.setAttr("defaultRenderGlobals.imageFormat", ICON_FMT_MAGIC_INT)
 	for setting in settings:
 		states.append( mel.eval("modelEditor -q %s %s;" % (setting, panel)) )
 
@@ -80,16 +84,16 @@ def generateIcon( preset ):
 	time = cmd.currentTime(q=True)
 
 	#make sure the icon is open for edit if its a global clip
-	if preset.locale == GLOBAL and preset.icon.exists():
+	if preset.locale() == GLOBAL and preset.icon().exists():
 		preset.edit()
 
-	icon = cmd.playblast(st=time, et=time, w=kICON_W_H[0], h=kICON_W_H[1], fo=True, fmt="image", v=0, p=100, orn=0, cf=str(preset.icon.resolve()))
+	icon = cmd.playblast(st=time, et=time, w=kICON_W_H[0], h=kICON_W_H[1], fo=True, fmt="image", v=0, p=100, orn=0, cf=str(preset.icon().resolve()))
 	icon = Path(icon)
 
 	if icon.exists():
-		icon = icon.setExtension('bmp', True)
+		icon = icon.setExtension( ICON_FMT_STR, True )
 
-	cmd.setAttr("defaultRenderGlobals.imageFormat", imgFormat)
+	cmd.setAttr( "defaultRenderGlobals.imageFormat", ICON_FMT_MAGIC_INT )
 
 	#restore viewport settings
 	try: cmd.select(sel)
@@ -128,7 +132,7 @@ class BaseBlender(object):
 class PoseBlender(BaseBlender):
 	def __call__( self, pct, mapping=None, attributes=None ):
 		BaseBlender.__call__(self, pct, mapping)
-		cmdQueue = api.CmdQueue()
+		cmdQueue = melUtils.CmdQueue()
 
 		if mapping is None:
 			mapping = self.getMapping()
@@ -214,7 +218,7 @@ class AnimBlender(BaseBlender):
 			print 'keys on', attrPath, 'at times', curveTimes
 	def __call__( self, pct, mapping=None ):
 		BaseBlender.__call__(self, pct, mapping)
-		cmdQueue = api.CmdQueue()
+		cmdQueue = melUtils.CmdQueue()
 
 		if pct == 0:
 			self.clipA.apply( self.getMapping() )
@@ -358,7 +362,7 @@ class PoseClip(BaseClip):
 		'''
 		construct a mel string to pass to eval - so it can be contained in a single undo...
 		'''
-		cmdQueue = api.CmdQueue()
+		cmdQueue = melUtils.CmdQueue()
 
 		#gather options...
 		additive = kwargs.get( self.kOPT_ADDITIVE,
@@ -410,6 +414,10 @@ class AnimClip(BaseClip):
 		are lists of tuples with the form: (keyTime, attrDict) where attrDict is a dictionary with
 		attribute name keys and attribute value keys
 		'''
+		if not objects:
+			printErrorStr( "No objects given!" )
+			return
+
 		defaultWeightedTangentOpt = bool(cmd.keyTangent(q=True, g=True, wt=True))
 		self.clear()
 
@@ -642,14 +650,16 @@ class ClipPreset(Preset):
 		ext = '%s.%s' % (typeLbl, kEXT)
 
 		self = Preset.__new__( cls, locale, tool, name, ext )
-		self.icon = Preset( locale, tool, name, '%s.bmp' % typeLbl )
+		self._icon = self.path().setExtension( ICON_FMT_STR )
 
 		return self
+	def icon( self ):
+		return self._icon
 	def asClip( self ):
 		presetDict = self.unpickle()
 		return presetDict[ kEXPORT_DICT_THE_CLIP ]
 	def niceName( self ):
-		return self.name().split('.')[0]
+		return self.path().name().split('.')[0]
 	def getLibrary( self ):
 		return self[-2]
 	def setLibrary( self, library ):
@@ -666,32 +676,30 @@ class ClipPreset(Preset):
 		newLoc = ClipPreset(self.other(), library, self.niceName(), self.getType())
 
 		#perform the move...
-		Path.move(self, newLoc)
-		Path.move(self.icon, newLoc.icon)
-
-		return newLoc
+		self._path = self.path().move( newLoc )
+		self._icon = self.icon().move( newLoc.icon() )
 	def copy( self, library=None ):
 		if library is None:
 			library = self.library
 
-		newLoc = ClipPreset(self.other(), library, self.niceName(), self.getType())
+		newLoc = ClipPreset( self.other(), library, self.niceName(), self.getType() )
 
 		#perform the copy...
-		Path.copy(self, newLoc)
-		Path.copy(self.icon, newLoc.icon)
+		self.path().copy( newLoc )
+		self.icon().copy( newLoc.icon() )
 
 		return newLoc
 	def rename( self, newName ):
 		'''
 		newName should be the base name - sans any clip type id or extension...
 		'''
-		newName = '%s.%s' % (scrubName(newName), self.getTypeName())
-		Preset.rename(self, newName)
-		self.icon.rename(newName)
+		newName = '%s.%s' % (newName, self.getTypeName())
+		self.path().rename( newName )
+		self.icon().rename( newName )
 	def delete( self ):
-		Path.delete(self)
-		self.icon.delete()
-	@api.d_noAutoKey
+		self.path().delete()
+		self.icon().delete()
+	@d_noAutoKey
 	def apply( self, objects, attributes=None, **kwargs ):
 		presetDict = self.unpickle()
 		srcObjs = presetDict[ kEXPORT_DICT_OBJECTS ]
@@ -701,9 +709,9 @@ class ClipPreset(Preset):
 		try:
 			ver = presetDict[ kEXPORT_DICT_TOOL_VER ]
 			if ver != VER:
-				api.melWarning("the anim clip version don't match!")
+				printWarningStr( "the anim clip version don't match!" )
 		except KeyError:
-			api.melWarning("this is an old VER 1 pose clip - I don't know how to load them anymore...")
+			printWarningStr( "this is an old VER 1 pose clip - I don't know how to load them anymore..." )
 			return
 
 		#generate the name mapping
@@ -728,7 +736,7 @@ class ClipPreset(Preset):
 		return srcObjs
 	def write( self, objects, **kwargs ):
 		type = self.getType()
-		clipDict = api.writeExportDict( TOOL_NAME, VER )
+		clipDict = melUtils.writeExportDict( TOOL_NAME, VER )
 		clipDict[ kEXPORT_DICT_CLIP_TYPE ] = type
 		clipDict[ kEXPORT_DICT_OBJECTS ] = objects
 		clipDict[ kEXPORT_DICT_WORLDSPACE ] = False
@@ -743,11 +751,10 @@ class ClipPreset(Preset):
 		clipDict[ kEXPORT_DICT_THE_CLIP ] = theClip
 
 		#write the preset file to disk
-		self.pickle( clipDict )
+		self.path().pickle( clipDict )
 
 		#generate the icon for the clip and add it to perforce if appropriate
 		icon = generateIcon( self )
-		#icon.asP4().add()
 
 		printInfoStr( "Generated clip!" )
 

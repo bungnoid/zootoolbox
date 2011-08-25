@@ -7,7 +7,7 @@ from rigUtils import MATRIX_ROTATION_ORDER_CONVERSIONS_FROM, MATRIX_ROTATION_ORD
      MAYA_ROTATION_ORDERS, ROO_XYZ, ROO_YZX, ROO_ZXY, ROO_XZY, ROO_YXZ, ROO_ZYX, ROT_ORDER_STRS
 from mayaDecorators import d_disableViews, d_noAutoKey, d_unifyUndo, d_restoreTime
 from animUtils import KeyServer
-from common import printWarningStr
+from melUtils import printWarningStr
 
 XYZ, YZX, ZXY, XZY, YXZ, ZYX = ROT_ORDER_STRS
 

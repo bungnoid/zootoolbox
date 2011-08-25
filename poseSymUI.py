@@ -20,9 +20,6 @@ class PoseSymLayout(MelVSingleStretchLayout):
 		self.UI_mirror = mirror = LabelledIconButton( self, llabel='mirror pose', llabelWidth=65, llabelAlign='right', c=self.on_mirror )
 		mirror.setImage( self.ICON_MATCH )
 
-		#self.UI_match = match = LabelledIconButton( self, llabel='match pose', llabelWidth=65, llabelAlign='right', c=self.on_match )
-		#match.setImage( self.ICON_MATCH )
-
 		spacer = MelSpacer( self )
 
 		hLayout = MelHLayout( self )
@@ -53,8 +50,6 @@ class PoseSymWindow(BaseMelWindow):
 
 	DEFAULT_SIZE = 280, 200
 	DEFAULT_MENU = 'Setup'
-
-	HELP_MENU = WINDOW_NAME, 'hamish@valvesoftware.com', 'https://intranet.valvesoftware.com/wiki/index.php/Pose_Mirror_Tool'
 
 	FORCE_DEFAULT_SIZE = True
 

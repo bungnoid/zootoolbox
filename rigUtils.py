@@ -5,11 +5,11 @@ for determining things like aimAxes, aimVectors, rotational offsets for controls
 
 from maya.cmds import *
 from vectors import *
+from melUtils import mel
 
 import apiExtensions
 import maya.cmds as cmd
 import meshUtils
-import api
 import vectors
 import random
 
@@ -399,7 +399,7 @@ def getJointBounds( joints, threshold=0.65, space=SPACE_OBJECT ):
 	for j in joints:
 		verts += meshUtils.jointVertsForMaya( j, threshold )
 
-	jointDag = api.getMDagPath( theJoint )
+	jointDag = apiExtensions.asMDagPath( theJoint )
 
 	if space == SPACE_OBJECT:
 		jointMatrix = jointDag.inclusiveMatrix()
@@ -502,7 +502,7 @@ def ikSpringSolver( start, end, **kw ):
 	to ensure its possible to create an ik chain using the spring solver
 	'''
 
-	api.mel.ikSpringSolver()
+	mel.ikSpringSolver()
 	kw[ 'solver' ] = 'ikSpringSolver'
 
 	handle, effector = cmd.ikHandle( '%s.rotatePivot' % start, '%s.rotatePivot' % end, **kw )
@@ -540,7 +540,7 @@ def resetSkinCluster( skinCluster ):
 		idx = dest[ dest.rfind( '[' )+1:-1 ]
 		matrixAsStr = ' '.join( map( str, cmd.getAttr( '%s.worldInverseMatrix' % srcNode ) ) )
 		melStr = 'setAttr -type "matrix" %s.bindPreMatrix[%s] %s' % (skinCluster, idx, matrixAsStr)
-		api.mel.eval( melStr )
+		mel.eval( melStr )
 
 		#reset the stored pose in any dagposes that are conn
 		for dPose in dagPoseNodes:
@@ -617,7 +617,7 @@ def getChain( startNode, endNode ):
 	returns a list of all the joints from the given start to the end inclusive
 	'''
 	chainNodes = [ endNode ]
-	for p in api.iterParents( endNode ):
+	for p in apiExtensions.iterParents( endNode ):
 		if not p:
 			raise ValueError( "Chain terminated before reaching the end node!" )
 
@@ -636,7 +636,7 @@ def chainLength( startNode, endNode ):
 	'''
 	length = 0
 	curNode = endNode
-	for p in api.iterParents( endNode ):
+	for p in apiExtensions.iterParents( endNode ):
 		curPos = Vector( xform( curNode, q=True, ws=True, rp=True ) )
 		parPos = Vector( xform( p, q=True, ws=True, rp=True ) )
 		dif = curPos - parPos

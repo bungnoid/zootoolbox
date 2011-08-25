@@ -5,7 +5,7 @@ from maya import mel
 from maya.cmds import *
 from baseMelUI import *
 from vectors import Vector, Colour
-from common import printErrorStr, printWarningStr
+from melUtils import printErrorStr, printWarningStr
 from mayaDecorators import d_unifyUndo
 from apiExtensions import asMObject, sortByHierarchy
 from triggered import resolveCmdStr, Trigger

@@ -1,8 +1,9 @@
 
 from filesystem import Path, removeDupes, Callback
-from api import mel
+from melUtils import mel
 from names import getCommonPrefix
 from baseMelUI import *
+from fileUI import addExploreToMenuItems
 
 import maya.cmds as cmd
 import mappingEditor
@@ -10,7 +11,6 @@ import skinWeights
 import meshUtils
 import rigUtils
 import time
-import api
 
 
 def isMesh( item ):
@@ -398,7 +398,7 @@ class SkinWeightsLayout(MelColumnLayout):
 
 		for f in dir.files():
 			if f.hasExtension( skinWeights.EXTENSION ):
-				cmd.menuItem( l=f.name(), cb=f==curFile, c=api.Callback( cmd.textField, self.UI_file, e=True, tx=f ) )
+				cmd.menuItem( l=f.name(), cb=f==curFile, c=Callback( cmd.textField, self.UI_file, e=True, tx=f ) )
 
 		cmd.menuItem( d=True )
 		cmd.menuItem( l="browse", c=self.on_browseWeightFile )
@@ -406,7 +406,7 @@ class SkinWeightsLayout(MelColumnLayout):
 		cmd.menuItem( l="clear", c=lambda *a: cmd.textField( self.UI_file, e=True, tx='' ) )
 		if curFile.exists():
 			cmd.menuItem( d=True )
-			api.addExploreToMenuItems( curFile )
+			addExploreToMenuItems( curFile )
 
 	### EVENT HANDLERS ###
 	def on_changeRestoreMode( self, *a ):
@@ -523,7 +523,6 @@ class SkinWeightsWindow(BaseMelWindow):
 
 	DEFAULT_SIZE = 425, 375
 	DEFAULT_MENU = None
-	HELP_MENU = WINDOW_NAME, 'hamish@valvesoftware.com', None
 
 	FORCE_DEFAULT_SIZE = False
 

@@ -7,12 +7,10 @@ LOCALES = LOCAL, GLOBAL = 'local', 'global'
 DEFAULT_XTN = 'preset'
 
 #define where the base directories are for presets
-kLOCAL_BASE_DIR = Path('%HOME%/presets/')
+kLOCAL_BASE_DIR = Path( '%HOME%/presets/' )
 kGLOBAL_BASE_DIR = Path( __file__ ).up( 2 )
 
-class PresetException(Exception):
-	def __init__( self, *args ):
-		Exception.__init__(self, *args)
+class PresetError(Exception): pass
 
 
 def getPresetDirs( locale, tool ):
@@ -23,37 +21,37 @@ def getPresetDirs( locale, tool ):
 		localDir = kLOCAL_BASE_DIR / tool
 		localDir.create()
 
-		return [localDir]
+		return [ localDir ]
 
 	globalDir = kGLOBAL_BASE_DIR / tool
 	globalDir.create()
 
-	return [globalDir]
+	return [ globalDir ]
 
 
 def presetPath( locale, tool, presetName, ext=DEFAULT_XTN ):
-	preset = getPresetDirs(locale, tool)[0] + scrubName(presetName, exceptions='./')
-	preset = preset.setExtension( ext )
+	preset = getPresetDirs( locale, tool )[0] / presetName
 
-	return preset
+	return preset.setExtension( ext )
 
 
 def readPreset( locale, tool, presetName, ext=DEFAULT_XTN ):
 	'''
 	reads in a preset file if it exists, returning its contents
 	'''
-	file = getPresetPath(presetName, tool, ext, locale)
-	if file is not None:
-		return file.read()
-	return []
+	presetFilepath = getPresetPath( presetName, tool, ext, locale )
+	if presetFilepath is not None:
+		return presetFilepath.getFilepath().read()
+
+	raise PresetError( "No such preset %s %s %s %s" % (locale, tool, presetName, ext) )
 
 
 def savePreset( locale, tool, presetName, ext=DEFAULT_XTN, contentsStr='' ):
 	'''
 	given a contents string, this convenience method will store it to a preset file
 	'''
-	preset = Preset(locale, tool, presetName, ext)
-	preset.write( contentsStr )
+	preset = Preset( locale, tool, presetName, ext )
+	preset.getFilepath().write( contentsStr )
 
 	return preset
 
@@ -62,17 +60,19 @@ def unpicklePreset( locale, tool, presetName, ext=DEFAULT_XTN ):
 	'''
 	same as readPreset except for pickled presets
 	'''
-	dirs = getPresetDirs(locale, tool)
-	for dir in dirs:
-		cur = dir/presetName
-		cur.extension = ext
-		if cur.exists: return cur.unpickle()
-	raise IOError("file doesn't exist!")
+	dirs = getPresetDirs( locale, tool )
+	for presetDir in dirs:
+		cur = presetDir / presetName
+		cur = cur.setExtension( ext )
+		if cur.exists():
+			return cur.unpickle()
+
+	raise PresetError( "file doesn't exist!" )
 
 
 def picklePreset( locale, tool, presetName, ext=DEFAULT_XTN, contentsObj=None ):
-	preset = presetPath(locale, tool, presetName, ext)
-	preset.pickle(contentsObj, locale==GLOBAL)
+	preset = presetPath( locale, tool, presetName, ext )
+	preset.pickle( contentsObj, locale==GLOBAL )
 
 
 def listPresets( locale, tool, ext=DEFAULT_XTN ):
@@ -81,10 +81,12 @@ def listPresets( locale, tool, ext=DEFAULT_XTN ):
 	'''
 	files = []
 	alreadyAdded = set()
-	for d in getPresetDirs(locale, tool):
-		if d.exists:
+	for d in getPresetDirs( locale, tool ):
+		if d.exists():
 			for f in d.files():
-				if f.name() in alreadyAdded: continue
+				if f.name() in alreadyAdded:
+					continue
+
 				if f.hasExtension( ext ):
 					files.append( f )
 					alreadyAdded.add( f.name() )
@@ -137,7 +139,7 @@ def getPresetPath( presetName, tool, ext=DEFAULT_XTN, locale=GLOBAL ):
 	dirs = getPresetDirs(locale, tool)
 	for dir in dirs:
 		presetPath = dir / searchPreset
-		if presetPath.exists:
+		if presetPath.exists():
 			return presetPath
 
 
@@ -155,7 +157,7 @@ def findPreset( presetName, tool, ext=DEFAULT_XTN, startLocale=LOCAL ):
 
 def dataFromPresetPath( path ):
 	'''
-	returns a tuple containing the locale, tool, name, extension for a given Path instance.  a PresetException
+	returns a tuple containing the locale, tool, name, extension for a given Path instance.  a PresetError
 	is raised if the path given isn't an actual preset path
 	'''
 	locale, tool, name, ext = None, None, None, None
@@ -167,25 +169,13 @@ def dataFromPresetPath( path ):
 		locale = LOCAL
 		pathCopy -= kLOCAL_BASE_DIR
 	else:
-		raise PresetException("%s isn't under the local or the global preset dir" % file)
+		raise PresetError("%s isn't under the local or the global preset dir" % file)
 
 	tool = pathCopy[ -2 ]
 	ext = pathCopy.getExtension()
 	name = pathCopy.name()
 
 	return locale, tool, name, ext
-
-
-def scrubName( theStr, replaceChar='_', exceptions=None ):
-	invalidChars = """`~!@#$%^&*()-+=[]\\{}|;':"/?><., """
-	if exceptions:
-		for char in exceptions:
-			invalidChars = invalidChars.replace(char, '')
-
-	for char in invalidChars:
-		theStr = theStr.replace(char, '_')
-
-	return theStr
 
 
 #these are a bunch of variables used for keys in the export dict.  they're provided mainly for
@@ -237,7 +227,7 @@ class PresetManager(object):
 		return listAllPresets(self.tool, self.extension, localTakesPrecedence)
 
 
-class Preset(Path):
+class Preset(object):
 	'''
 	provides a convenient way to write/read and otherwise handle preset files
 	'''
@@ -247,19 +237,22 @@ class Preset(Path):
 		used to refer to all presets of that kind, while ext is the file extension used to
 		differentiate between multiple preset types a tool may have
 		'''
-		name = scrubName(name, exceptions='./')
-		path = getPresetPath(name, tool, ext, locale)
+		path = getPresetPath( name, tool, ext, locale )
 		if path is None:
-			path = presetPath(locale, tool, name, ext)
+			path = presetPath( locale, tool, name, ext )
 
-		return Path.__new__( cls, path )
-	def __init__( self, locale, tool, name, ext=DEFAULT_XTN ):
-		self.locale = locale
-		self.tool = tool
+		self = object.__new__( cls )
+		self._path = path
+		self._locale = locale
+		self._tool = tool
+
+		return self
 	@staticmethod
 	def FromFile( filepath ):
 		return Preset(*dataFromPresetPath(filepath))
 	FromPreset = FromFile
+	def getFilepath( self ):
+		return self._path
 	def up( self, levels=1 ):
 		return Path( self ).up( levels )
 	def other( self ):

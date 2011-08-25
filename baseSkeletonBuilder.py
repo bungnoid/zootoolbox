@@ -4,7 +4,7 @@ from names import Parity, Name, camelCaseToNice
 from vectors import Vector, Colour
 from control import attrState, NORMAL, HIDE, LOCK_HIDE, NO_KEY
 from apiExtensions import asMObject, castToMObjects, cmpNodes
-from mayaDecorators import d_unifyUndo
+from mayaDecorators import d_unifyUndo, d_maintainSceneSelection, d_showWaitCursor
 from maya.OpenMaya import MGlobal
 from referenceUtils import ReferencedNode
 
@@ -17,7 +17,7 @@ import maya.cmds as cmd
 import profileDecorators
 
 #now do maya imports and maya specific assignments
-import api
+import melUtils
 import maya.cmds as cmd
 import rigUtils
 
@@ -25,7 +25,7 @@ from rigUtils import ENGINE_FWD, ENGINE_UP, ENGINE_SIDE
 from rigUtils import MAYA_SIDE, MAYA_FWD, MAYA_UP
 from rigUtils import Axis, resetSkinCluster
 
-mel = api.mel
+mel = melUtils.mel
 
 AXES = Axis.BASE_AXES
 
@@ -2032,7 +2032,7 @@ def getPartsFromObjects( objs ):
 
 
 @d_unifyUndo
-@api.d_maintainSceneSelection
+@d_maintainSceneSelection
 def realignSelectedParts():
 	'''
 	re-aligns all selected parts
@@ -2045,7 +2045,7 @@ def realignSelectedParts():
 
 
 @d_unifyUndo
-@api.d_maintainSceneSelection
+@d_maintainSceneSelection
 def realignAllParts():
 	'''
 	re-aligns all parts in the current scene
@@ -2060,7 +2060,7 @@ def realignAllParts():
 
 
 @d_unifyUndo
-@api.d_maintainSceneSelection
+@d_maintainSceneSelection
 def finalizeAllParts():
 
 	#do a pre-pass on the skin clusters to remove un-used influences - this can speed up the speed of the alignment code
@@ -2146,8 +2146,8 @@ def getNamespaceFromReferencing( node ):
 
 
 @d_unifyUndo
-@api.d_showWaitCursor
-@api.d_maintainSceneSelection
+@d_showWaitCursor
+@d_maintainSceneSelection
 def buildAllVolumes():
 
 	#align all parts first

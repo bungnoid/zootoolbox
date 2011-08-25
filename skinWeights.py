@@ -3,14 +3,13 @@ from skinWeightsBase import *
 from filesystem import removeDupes
 from maya.cmds import *
 from binarySearchTree import BinarySearchTree
-from mayaDecorators import d_unifyUndo
+from mayaDecorators import d_unifyUndo, d_progress, d_showWaitCursor
+from melUtils import mel, printWarningStr, writeExportDict
 
 import maya.cmds as cmd
-import api
 import apiExtensions
 
-mel = api.mel
-iterParents = api.iterParents
+iterParents = apiExtensions.iterParents
 VertSkinWeight = MayaVertSkinWeight
 
 
@@ -37,10 +36,10 @@ def getDefaultPath():
 
 kAPPEND = 0
 kREPLACE = 1
-@api.d_showWaitCursor
+@d_showWaitCursor
 def saveWeights( geos, filepath=None ):
 	start = time.clock()
-	miscData = api.writeExportDict(TOOL_NAME, TOOL_VERSION)
+	miscData = writeExportDict(TOOL_NAME, TOOL_VERSION)
 
 	#if filepath is None, then generate a default filepath based on the location of the file
 	if filepath is None:
@@ -60,7 +59,7 @@ def saveWeights( geos, filepath=None ):
 	for geo in geos:
 		skinClusters = cmd.ls( cmd.listHistory( geo ), type='skinCluster' )
 		if len( skinClusters ) > 1:
-			api.melWarning("more than one skinCluster found on %s" % geo)
+			printWarningStr( "more than one skinCluster found on %s" % geo )
 			continue
 
 		#so the geo isn't skinned in the traditional way - check to see if it is parented to a joint.  if so,
@@ -77,7 +76,7 @@ def saveWeights( geos, filepath=None ):
 
 			if not dealtWith:
 				msg = "cannot find a skinCluster for %s" % geo
-				api.melWarning(msg)
+				printWarningStr( msg )
 
 			continue
 
@@ -133,7 +132,7 @@ def saveWeights( geos, filepath=None ):
 	return filepath
 
 
-@api.d_progress(t='initializing...', status='initializing...', isInterruptable=True)
+@d_progress(t='initializing...', status='initializing...', isInterruptable=True)
 @d_unifyUndo
 def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMult=None, swapParity=True, averageVerts=True, doPreview=False, meshNameRemapDict=None, jointNameRemapDict=None ):
 	'''
@@ -199,8 +198,8 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 
 
 	#see if the file versions match
-	if miscData[ api.kEXPORT_DICT_TOOL_VER ] != TOOL_VERSION:
-		api.melWarning( "WARNING: the file being loaded was stored from an older version (%d) of the tool - please re-generate the file.  Current version is %d." % (miscData[ api.kEXPORT_DICT_TOOL_VER ], TOOL_VERSION) )
+	if miscData[ filesystem.kEXPORT_DICT_TOOL_VER ] != TOOL_VERSION:
+		printWarningStr( "WARNING: the file being loaded was stored from an older version (%d) of the tool - please re-generate the file.  Current version is %d." % (miscData[ filesystem.kEXPORT_DICT_TOOL_VER ], TOOL_VERSION) )
 
 
 	#the miscData contains a dictionary with a bunch of data stored from when the weights was saved - do some
@@ -208,7 +207,7 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 	curFile = cmd.file(q=True, sn=True)
 	origFile = miscData['scene']
 	if curFile != origFile:
-		api.melWarning('the file these weights were saved in a different file from the current: "%s"' % origFile)
+		printWarningStr( 'the file these weights were saved in a different file from the current: "%s"' % origFile )
 
 
 	#remap joint names in the saved file to joint names that are in the scene - they may be namespace differences...
@@ -472,7 +471,7 @@ def autoSkinToVolumeMesh( mesh, skeletonMeshRoot ):
 			parent( j, jParent )
 
 	#now do positioning
-	for t in api.sortByHierarchy( transforms ):
+	for t in apiExtensions.sortByHierarchy( transforms ):
 		j = jointRemap[ t ]
 		pos = xform( t, q=True, ws=True, rp=True )
 		move( pos[0], pos[1], pos[2], j, ws=True, rpr=True )
@@ -498,12 +497,12 @@ def autoSkinToVolumeMesh( mesh, skeletonMeshRoot ):
 
 
 def transferSkinning( sourceMesh, targetMesh ):
-	sourceSkinCluster = api.mel.findRelatedSkinCluster( sourceMesh )
+	sourceSkinCluster = mel.findRelatedSkinCluster( sourceMesh )
 	if not sourceSkinCluster:
 		raise SkeletonError( "Cannot find a skin cluster on %s" % sourceMesh )
 
 	#if there isn't a skin cluster already, create one
-	targetSkinCluster = api.mel.findRelatedSkinCluster( targetMesh )
+	targetSkinCluster = mel.findRelatedSkinCluster( targetMesh )
 	if not targetSkinCluster:
 		influences = skinCluster( sourceSkinCluster, q=True, inf=True )
 		targetSkinCluster = skinCluster( targetMesh, influences, toSelectedBones=True )[0]

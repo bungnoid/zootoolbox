@@ -9,7 +9,7 @@ import mappingUtils
 import xferAnim
 import animLib
 
-__author__ = 'mel@macaronikazoo.com'
+__author__ = 'hamish@macaronikazoo.com'
 
 
 class XferAnimForm(MelVSingleStretchLayout):

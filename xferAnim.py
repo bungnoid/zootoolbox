@@ -9,10 +9,10 @@ from vectors import *
 from melUtils import mel
 from picker import resolveCmdStr
 from mappingUtils import *
-from common import printWarningStr, printErrorStr
+from melUtils import printWarningStr, printErrorStr
 from mayaDecorators import d_noAutoKey, d_unifyUndo, d_disableViews, d_restoreTime
 
-import api
+import melUtils
 import maya
 
 
@@ -112,7 +112,7 @@ def savePostTraceScheme( presetName ):
 		noNS = noNS.split( '.' )[ 0 ]  #strip the attribute
 		postTraceDict[ noNS ] = getAttr( n )
 
-	xportDict = api.writeExportDict( TOOL_NAME, 0 )
+	xportDict = melUtils.writeExportDict( TOOL_NAME, 0 )
 
 	p = Preset( GLOBAL, TOOL_NAME, presetName, EXTENSION )
 	p.pickle( (xportDict, postTraceDict) )
@@ -219,8 +219,8 @@ def trace( srcs, tgts, keysOnly=True, matchRotationOrder=True, processPostCmds=T
 		keys.sort()
 		end = keys[-1]
 
-	api.mel.zooXferAnimUtils()
-	api.mel._zooXferTrace( srcs, tgts, 2 if keysOnly else 0, 0, int( matchRotationOrder ), int( processPostCmds ), int( sortByHeirarchy ), int( start ), int( end ), int( skip ) )
+	melUtils.mel.zooXferAnimUtils()
+	melUtils.mel._zooXferTrace( srcs, tgts, 2 if keysOnly else 0, 0, int( matchRotationOrder ), int( processPostCmds ), int( sortByHeirarchy ), int( start ), int( end ), int( skip ) )
 """
 
 

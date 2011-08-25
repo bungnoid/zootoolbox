@@ -5,7 +5,7 @@ import baseSkeletonBuilder
 from filesystem import Path
 from baseSkeletonBuilder import *
 
-__author__ = 'mel@macaronikazoo.com'
+__author__ = 'hamish@macaronikazoo.com'
 
 SKELETON_PART_SCRIPT_PREFIX = 'skeletonPart_'
 

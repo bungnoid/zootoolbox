@@ -841,30 +841,41 @@ class Path(str):
 		return self._list_filesystem_items( os.path.isfile, namesOnly, recursive )
 
 
+def findFirstInPaths( filename, paths ):
+	'''
+	given a filename or path fragment, this will return the first occurance of a file with that name
+	in the given list of search paths
+	'''
+	for p in map( Path, paths ):
+		loc = p / filename
+		if loc.exists():
+			return loc
+
+	raise Exception( "The file %s cannot be found in the given paths" % filename )
+
+
+def findFirstInEnv( filename, envVarName ):
+	'''
+	given a filename or path fragment, will return the full path to the first matching file found in
+	the given env variable
+	'''
+	return findFirstInPaths( filename, os.environ[ envVarName ].split( os.pathsep ) )
+
+
+def findFirstInPath( filename ):
+	'''
+	given a filename or path fragment, will return the full path to the first matching file found in
+	the PATH env variable
+	'''
+	return findFirstInEnv( filename, 'PATH' )
+
+
 def findInPyPath( filename ):
 	'''
 	given a filename or path fragment, will return the full path to the first matching file found in
 	the sys.path variable
 	'''
-	for p in map( Path, sys.path ):
-		loc = p / filename
-		if loc.exists():
-			return loc
-
-	return None
-
-
-def findInPath( filename ):
-	'''
-	given a filename or path fragment, will return the full path to the first matching file found in
-	the PATH env variable
-	'''
-	for p in map( Path, os.environ[ 'PATH' ].split( ';' ) ):
-		loc = p / filename
-		if loc.exists():
-			return loc
-
-	return None
+	return findFirstInPaths( filename, sys.path )
 
 
 #end
