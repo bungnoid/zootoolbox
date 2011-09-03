@@ -1,9 +1,6 @@
 
 from __future__ import with_statement
 
-import uuid
-import weakref
-
 
 class ListStream(object):
 	def __init__( self ):
@@ -18,10 +15,7 @@ class ListStream(object):
 
 class SObject(object):
 
-	#keep track of SObject instances so we can find them by their id
-	__INSTANCE_STORE = weakref.WeakValueDictionary()
-
-	#
+	#stores any types that have been registered with this class for serialization
 	__REGISTERED_TYPES = []
 
 	@classmethod
@@ -35,35 +29,16 @@ class SObject(object):
 	@classmethod
 	def IsTypeRegistered( cls, type ):
 		return type in cls.__REGISTERED_TYPES
-	@classmethod
-	def _CreateFromId( cls, id ):
-		obj = cls.__INSTANCE_STORE.get( id, None )
-		if obj is None:
-			obj = cls( _id=id )
-
-		return obj
 
 	def __init__( self, *attrNameValuePairs, **kw ):
-		'''
-		NOTE: you can instantiate with a specific uuid by passed the _id=uuid.UUID() kwarg
-		'''
-		self.__dict__[ '_id' ] = id = kw.get( '_id', uuid.uuid4() )
 
 		#for preserving attribute ordering
 		self.__dict__[ '_attrNames' ] = []
 
 		for attrName, attrValue in attrNameValuePairs:
 			setattr( self, attrName, attrValue )
-
-		self.__INSTANCE_STORE[ id ] = self
-	#def __repr__( self ):
-		#attrNameValuePairs = [ "('%s', %s)" % (attrName, getattr( self, attrName )) for attrName in self.getAttrs() ]
-
-		#return u'%s( %s )' % (type( self ).__name__, ', '.join( attrNameValuePairs ))
-	#__str__ = __repr__
-	#__unicode__ = __repr__
 	def __hash__( self ):
-		return hash( self._id )
+		return id( self )
 	def __eq__( self, other, nodesCompared=None ):
 		'''
 		two SObjects are equal only if all they both possess the same attributes in the same order with
@@ -118,7 +93,7 @@ class SObject(object):
 
 		#write in the uuid for this SObject - we use the uuid for object referencing
 		depthPrefix = '\t' * depth
-		stream.write( '<%s>\n' % self._id )
+		stream.write( '<%s>\n' % id( self ) )
 
 		#track SObjects serialized so we don't get infinite loops if objects self reference
 		if self in serializedObjects:
@@ -173,9 +148,19 @@ class SObject(object):
 		lineIter = iter( stream )
 		objectStack = []
 
+		serializedIdToObjDict = {}  #track objects
+
 		def objectParser( line, depth=0 ):
-			id = uuid.UUID( line[1:-1] )
-			objectStack.append( SObject._CreateFromId( id ) )
+			serializedId = int( line[1:-2] )  #-2 because we want to strip the newline character and the closing > character
+
+			#if an object has already been created for the given id, use it, otherwise construct a new object
+			newObj = serializedIdToObjDict.get( serializedId, SObject() )
+
+			#append the new object to the stack
+			objectStack.append( newObj )
+
+			#track the object
+			serializedIdToObjDict[ serializedId ] = newObj
 			for line in lineIter:
 				if not line:
 					continue
@@ -225,6 +210,8 @@ class SObject(object):
 			setattr( obj, key, value )
 
 		return obj
+	def toDict( self ):
+		raise NotImplemented
 
 
 #end

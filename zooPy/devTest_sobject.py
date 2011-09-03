@@ -1,12 +1,23 @@
 
+import os
+import sys
+
 from sobject import SObject, ListStream
 from unittest import TestCase
 
+
 class SObjectTests(TestCase):
+	_TEST_FILE = '~/_sobject_devtest.txt'
+
 	def runTest( self ):
 		self.testGetAttr()
 		self.testSerializationRoundTrip()
 		self.testConversionFromDict()
+	def getTestFilepath( self ):
+		return os.path.expanduser( self._TEST_FILE )
+	def tearDown( self ):
+		testFilepath = self.getTestFilepath()
+		os.rmdir( testFilepath )
 	def testGetAttr( self ):
 		attrNames = 'apple', 'banana', 'pears', 'orange', 'peach', 'nectarine', 'grape', 'watermelon'
 		attrValues = range( len( attrNames ) )
@@ -33,10 +44,17 @@ class SObjectTests(TestCase):
 
 		assert s4.recursive_ref_to_root is root
 
-		#serialize the object and
-		listStream = ListStream()
-		root.serialize( listStream )
-		unserializedRoot = SObject.Unserialize( listStream )
+		root.serialize( sys.stdout )
+
+		#serialize the object
+		with open( self.getTestFilepath(), 'w' ) as fStream:
+			root.serialize( fStream )
+
+		with open( self.getTestFilepath() ) as fStream:
+			unserializedRoot = SObject.Unserialize( fStream )
+
+		#ensure the structures are identical - this should in theory act as a fairly comprehensive test
+		#of serialization and unserialization provided the test data is also comprehensive
 		assert root == unserializedRoot
 
 		#test that the object references unserialized properly
@@ -51,6 +69,7 @@ class SObjectTests(TestCase):
 		nestedDicts[ 'cyclic_ref' ] = subDict
 
 		convertedFromDict = SObject.FromDict( nestedDicts )
+		assert convertedFromDict.toDict() == nestedDicts
 
 SObjectTests().run()
 
