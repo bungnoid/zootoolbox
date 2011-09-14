@@ -1,17 +1,20 @@
 
+import re
+
+from zooPy.misc import removeDupes
+from zooPy.names import camelCaseToNice
+
 from triggered import Trigger
-from names import camelCaseToNice
-from filesystem import removeDupes
 from control import getNiceName
 from apiExtensions import asMObject, getShortName
 from maya.cmds import *
 
-import re
-import triggered
-import control
-import rigUtils
 import maya.cmds as cmd
+
 import apiExtensions
+import triggered
+import rigUtils
+import control
 
 attrState = control.attrState
 AXES = rigUtils.Axis.BASE_AXES

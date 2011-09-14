@@ -12,9 +12,8 @@ import gc
 from zlib import crc32
 from modulefinder import ModuleFinder
 
-import filesystem
-
-from filesystem import Path, removeDupes
+from path import Path
+from misc import removeDupes
 
 _MODULE_TYPE = type( os )
 
@@ -623,7 +622,7 @@ def flush( dirsNeverToFlush=() ):
 		try:
 			for modName, mod in sys.modules.items():
 				try:
-					modPath = filesystem.Path( mod.__file__ )
+					modPath = Path( mod.__file__ )
 				except AttributeError: continue
 
 				doFlush = True

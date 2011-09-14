@@ -3,7 +3,8 @@ from maya.cmds import *
 from maya import cmds as cmd
 from baseMelUI import *
 
-import names
+from zooPy import names
+
 import control
 import baseMelUI
 import spaceSwitching

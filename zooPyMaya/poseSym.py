@@ -1,12 +1,13 @@
 
-from vectors import Vector, Matrix, Axis, AX_X, AX_Y, AX_Z
+from zooPy.vectors import Vector, Matrix, Axis, AX_X, AX_Y, AX_Z
+
 from rigUtils import MATRIX_ROTATION_ORDER_CONVERSIONS_FROM, MATRIX_ROTATION_ORDER_CONVERSIONS_TO
-from maya.cmds import *
-from maya.OpenMaya import MGlobal
 from mayaDecorators import d_unifyUndo
+import apiExtensions
 
 import maya
-import apiExtensions
+from maya.cmds import *
+from maya.OpenMaya import MGlobal
 
 AXES = Axis.BASE_AXES
 

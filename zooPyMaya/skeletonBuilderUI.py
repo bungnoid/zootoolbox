@@ -1,23 +1,26 @@
 
+import os
+
 from maya.cmds import *
 from maya import cmds as cmd
-from filesystem import Path
+
+from zooPy import names
+from zooPy.path import Path
+
 from baseMelUI import *
 from melUtils import mel
 from mayaDecorators import d_showWaitCursor
 
-import os
-import names
 import skeletonBuilderPresets
-import rigPrimitives
 import baseRigPrimitive
-import rigUtils
-import control
+import spaceSwitchingUI
+import skinWeightsUI
+import rigPrimitives
 import meshUtils
 import baseMelUI
 import presetsUI
-import skinWeightsUI
-import spaceSwitchingUI
+import rigUtils
+import control
 
 Axis = rigUtils.Axis
 

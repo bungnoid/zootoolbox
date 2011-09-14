@@ -1,16 +1,19 @@
 
-from filesystem import Path, removeDupes, Callback
+import time
+import maya.cmds as cmd
+
+from zooPy.path import Path
+from zooPy.misc import removeDupes, Callback
+from zooPy.names import getCommonPrefix
+
 from melUtils import mel
-from names import getCommonPrefix
 from baseMelUI import *
 from fileUI import addExploreToMenuItems
 
-import maya.cmds as cmd
 import mappingEditor
 import skinWeights
 import meshUtils
 import rigUtils
-import time
 
 
 def isMesh( item ):

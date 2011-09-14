@@ -1,37 +1,32 @@
 
+import inspect
+
+import maya.cmds as cmd
 from maya.cmds import *
-from names import Parity, Name, camelCaseToNice
-from vectors import Vector, Colour
+
+from zooPy import names
+from zooPy import typeFactories
+from zooPy import profileDecorators
+from zooPy.names import Parity, Name, camelCaseToNice
+from zooPy.vectors import Vector, Colour, Axis
+from zooPy.path import Path
+from zooPy.misc import removeDupes
+
+import meshUtils
+import rigUtils
+
 from control import attrState, NORMAL, HIDE, LOCK_HIDE, NO_KEY
 from apiExtensions import asMObject, castToMObjects, cmpNodes
 from mayaDecorators import d_unifyUndo, d_maintainSceneSelection, d_showWaitCursor
-from maya.OpenMaya import MGlobal
 from referenceUtils import ReferencedNode
-
-import names
-import filesystem
-import typeFactories
-import inspect
-import meshUtils
-import maya.cmds as cmd
-import profileDecorators
-
-#now do maya imports and maya specific assignments
-import melUtils
-import maya.cmds as cmd
-import rigUtils
-
+from melUtils import mel, printErrorStr, mayaVar
 from rigUtils import ENGINE_FWD, ENGINE_UP, ENGINE_SIDE
 from rigUtils import MAYA_SIDE, MAYA_FWD, MAYA_UP
 from rigUtils import Axis, resetSkinCluster
 
-mel = melUtils.mel
-
 AXES = Axis.BASE_AXES
 
 eval = __builtins__[ 'eval' ]  #restore the eval function to point to python's eval
-mayaVar = float( mel.eval( 'getApplicationVersionAsFloat()' ) )
-
 
 TOOL_NAME = 'skeletonBuilder'
 
@@ -587,8 +582,8 @@ def d_performInSkeletonPartScene( f ):
 		if not self.isReferenced():
 			return f( self, *a, **kw )
 
-		partContainerFilepath = filesystem.Path( referenceQuery( self.getContainer(), filename=True ) )
-		curScene = filesystem.Path( file( q=True, sn=True ) )
+		partContainerFilepath = Path( referenceQuery( self.getContainer(), filename=True ) )
+		curScene = Path( file( q=True, sn=True ) )
 		if not curScene.exists():
 			raise TypeError( "This scene isn't saved!  Please save this scene somewhere before executing the decorated method!" )
 
@@ -1569,7 +1564,7 @@ class SkeletonPart(typeFactories.trackableClassFactory()):
 					allOutConnections += listConnections( '%s.%s%s' % (item, attr, c), source=False, skipConversionNodes=True, t='joint' ) or []
 
 		if allOutConnections:
-			allOutConnections = filesystem.removeDupes( allOutConnections )
+			allOutConnections = removeDupes( allOutConnections )
 			return getPartsFromObjects( allOutConnections )
 
 		return []
@@ -1735,7 +1730,7 @@ class SkeletonPart(typeFactories.trackableClassFactory()):
 		#bulid the rig and connect it to the part
 		theRig = rigType.Create( self, **kw )
 		if theRig is None:
-			MGlobal.displayError( "Failed to create the rig for part %s" % self )
+			printErrorStr( "Failed to create the rig for part %s" % self )
 			return
 
 		connectAttr( '%s.message' % theRig.getContainer(), '%s.rigContainer' % self._container, f=True )
@@ -2026,7 +2021,7 @@ def getPartsFromObjects( objs ):
 			parts.append( SkeletonPart.InitFromItem( o ) )
 		except SkeletonError: continue
 
-	selectedParts = filesystem.removeDupes( parts )
+	selectedParts = removeDupes( parts )
 
 	return selectedParts
 
@@ -2077,7 +2072,6 @@ def finalizeAllParts():
 				part.finalize()
 			except:
 				failedParts.append( part )
-				if filesystem.IS_WING_DEBUG: raise
 				print 'ERROR: %s failed to finalize properly!' % part
 				continue
 

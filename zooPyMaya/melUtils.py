@@ -1,16 +1,18 @@
 
-from maya.OpenMaya import MGlobal
-from exceptionHandlers import generateTraceableStrFactory
-from maya import cmds as cmd
-
-import filesystem
 import maya.mel
+from maya import cmds as cmd
+from maya.OpenMaya import MGlobal
+
+from zooPy import presets
+from zooPy.exceptionHandlers import generateTraceableStrFactory
 
 melEval = maya.mel.eval
 
 generateInfoStr, printInfoStr = generateTraceableStrFactory( '*** INFO ***', MGlobal.displayInfo )
 generateWarningStr, printWarningStr = generateTraceableStrFactory( '', MGlobal.displayWarning )
 generateErrorStr, printErrorStr = generateTraceableStrFactory( '', MGlobal.displayError )
+
+mayaVar = float( melEval( 'getApplicationVersionAsFloat()' ) )
 
 
 def pyArgToMelArg( arg ):
@@ -122,15 +124,15 @@ def importFile( filepath, silent=False ):
 		cmd.file( filepath, i=True, prompt=silent, rpr='__', type='mayaAscii', pr=True, loadReferenceDepth='all' )
 
 
-#there are here to follow the convention specified in the filesystem writeExportDict method
+#there are here to follow the convention specified in the presets writeExportDict method
 kEXPORT_DICT_SCENE = 'scene'
 kEXPORT_DICT_APP_VERSION = 'app_version'
 def writeExportDict( toolName=None, toolVersion=None, **kwargs ):
 	'''
-	wraps the filesystem method of the same name - and populates the dict with maya
+	wraps the presets method of the same name - and populates the dict with maya
 	specific data
 	'''
-	d = filesystem.writeExportDict( toolName, toolVersion, **kwargs )
+	d = presets.writeExportDict( toolName, toolVersion, **kwargs )
 	d[ kEXPORT_DICT_SCENE ] = cmd.file( q=True, sn=True )
 	d[ kEXPORT_DICT_APP_VERSION ] = cmd.about( version=True )
 

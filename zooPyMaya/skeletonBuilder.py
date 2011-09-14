@@ -2,7 +2,7 @@
 import sys
 import baseSkeletonBuilder
 
-from filesystem import Path
+from zooPy.path import Path
 from baseSkeletonBuilder import *
 
 __author__ = 'hamish@macaronikazoo.com'

@@ -2,9 +2,11 @@
 from maya.cmds import *
 from maya import OpenMaya
 
-from filesystem import Path, Preset, GLOBAL, LOCAL, removeDupes
-from names import *
-from vectors import *
+from zooPy.path import Path
+from zooPy.presets import Preset, GLOBAL, LOCAL
+from zooPy.misc import removeDupes
+from zooPy.names import *
+from zooPy.vectors import *
 
 from melUtils import mel
 from picker import resolveCmdStr

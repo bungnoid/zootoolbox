@@ -233,21 +233,6 @@ class Vector(list):
 	w = property( lambda self: self[ 3 ], lambda self, value: self.setIndex( 3, value ) )
 
 
-class Point(Vector):
-	def __init__( self, vals ):
-		if isinstance( vals, Point ):
-			list.__init__( self, vals )
-			return
-
-		selfLen = len( self )
-		if selfLen == 3:
-			vals.append( 1 )
-		else:
-			assert selfLen == 4
-
-		list.__init__( vals )
-
-
 class Colour(Vector):
 	NAMED_PRESETS = { "active": (0.26, 1, 0.64),
 	                  "black": (0, 0, 0),
@@ -434,17 +419,7 @@ class Axis(int):
 
 AX_X, AX_Y, AX_Z = map( Axis, range( 3 ) )
 
-"""
-class EulerRotation(Vector):
-	def __init__( self, vals, degrees=True ):
-		pass
-	def radians( self ):
-		return list( self )
-	def degrees( self ):
-		return list( map( math.degrees, self ) )
 
-
-"""
 class Quaternion(Vector):
 	def __init__( self, xyzw=(0,0,0,1) ):
 		'''
@@ -969,11 +944,15 @@ class Matrix(list):
 		if abs(det) < 1e-6: return True,0
 		return False,det
 	def isRotation( self ):
-		'''rotation matricies have a determinant of 1'''
+		'''
+		rotation matricies have a determinant of 1
+		'''
 		return ( abs(self.det()) - 1 < 1e-6 )
 	def inverse( self ):
-		'''Each element of the inverse is the determinant of its minor
-		divided by the determinant of the whole'''
+		'''
+		Each element of the inverse is the determinant of its minor
+		divided by the determinant of the whole
+		'''
 		isSingular,det = self.isSingular()
 		if isSingular: return self.copy()
 
@@ -1028,7 +1007,9 @@ class Matrix(list):
 
 		return new.transpose()
 	def ortho( self ):
-		'''return a matrix with orthogonal base vectors'''
+		'''
+		return a matrix with orthogonal base vectors
+		'''
 		x = Vector(self[0][:3])
 		y = Vector(self[1][:3])
 		z = Vector(self[2][:3])
@@ -1160,6 +1141,7 @@ class Matrix(list):
 			return map( math.degrees, angles )
 
 		return angles
+
 	#some conversion routines
 	def as_list( self ):
 		list = []

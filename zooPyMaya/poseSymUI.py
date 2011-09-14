@@ -1,10 +1,12 @@
 
-from baseMelUI import *
-from filesystem import Path
+import os
 
 import maya.cmds as cmd
+
+from baseMelUI import *
+from zooPy.path import Path
+
 import poseSym
-import os
 
 LabelledIconButton = labelledUIClassFactory( MelIconButton )
 

@@ -4,7 +4,7 @@ import sys
 import skeletonBuilder
 import baseRigPrimitive
 
-from filesystem import Path
+from zooPy.path import Path
 from skeletonBuilder import *
 from baseRigPrimitive import *
 

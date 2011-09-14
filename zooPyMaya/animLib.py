@@ -1,13 +1,15 @@
 
-from filesystem import *
-from melUtils import printInfoStr, printWarningStr, printErrorStr
-from mayaDecorators import d_unifyUndo, d_noAutoKey
-
 import maya.cmds as cmd
-import names
+
+from zooPy.names import Mapping
+from zooPy.path import Path
+from zooPy.presets import Preset, PresetManager
+
 import melUtils
 import apiExtensions
 
+from melUtils import printInfoStr, printWarningStr, printErrorStr
+from mayaDecorators import d_unifyUndo, d_noAutoKey
 
 __author__ = 'hamish@macaronikazoo.com'
 TOOL_NAME = 'animLib'
@@ -29,12 +31,9 @@ kDEFAULT_MAPPING_THRESHOLD = 1
 kICON_W_H = 60, 60
 
 mel = melUtils.mel
-Mapping = names.Mapping
 
 
-class AnimLibException(Exception):
-	def __init__( self, *args ):
-		Exception.__init__(self, *args)
+class AnimLibException(Exception): pass
 
 
 def getMostLikelyModelView():

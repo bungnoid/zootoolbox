@@ -9,19 +9,21 @@ http://www.macaronikazoo.com/?page_id=311
 '''
 
 import re
-import maya
-import names
-import melUtils
 import inspect
+
+import maya
 import maya.cmds as cmd
-import filesystem
-import typeFactories
 
 from maya.OpenMaya import MGlobal
 
-mayaVer = int( maya.mel.eval( 'getApplicationVersionAsFloat' ) )
+from zooPy import names
+from zooPy import typeFactories
+from zooPy.misc import removeDupes, Callback, iterBy
+from zooPy.path import Path
 
-removeDupes = filesystem.removeDupes
+import melUtils
+
+mayaVer = int( maya.mel.eval( 'getApplicationVersionAsFloat' ) )
 
 _DEBUG = True
 
@@ -33,44 +35,6 @@ except:
 
 
 class MelUIError(Exception): pass
-
-
-def iterBy( iterable, count ):
-	'''
-	returns an generator which will yield "chunks" of the iterable supplied of size "count".  eg:
-	for chunk in iterBy( range( 7 ), 3 ): print chunk
-
-	results in the following output:
-	[0, 1, 2]
-	[3, 4, 5]
-	[6]
-	'''
-	cur = 0
-	i = iter( iterable )
-	while True:
-		try:
-			toYield = []
-			for n in range( count ): toYield.append( i.next() )
-			yield toYield
-		except StopIteration:
-			if toYield: yield toYield
-			break
-
-
-class Callback(object):
-	'''
-	stupid little callable object for when you need to "bake" temporary args into a
-	callback - useful mainly when creating callbacks for dynamicly generated UI items
-	'''
-	def __init__( self, func, *a, **kw ):
-		self.f = func
-		self.a = a
-		self.kw = kw
-	def __call__( self, *a, **kw ):
-		args = self.a + a
-		kw.update( self.kw )
-
-		return self.f( *args, **kw )
 
 
 #this maps ui type strings to actual command objects - they're not always called the same
@@ -877,7 +841,7 @@ class MelPaneLayout(BaseMelLayout):
 		if self.PREF_OPTION_VAR:
 			if cmd.optionVar( ex=self.PREF_OPTION_VAR ):
 				storedSize = cmd.optionVar( q=self.PREF_OPTION_VAR )
-				for idx, size in enumerate( filesystem.iterBy( storedSize, 2 ) ):
+				for idx, size in enumerate( iterBy( storedSize, 2 ) ):
 					self.setPaneSize( idx, size )
 	def __getitem__( self, idx ):
 		idx += 1  #indices are 1-based...  fuuuuuuu alias!
@@ -2042,7 +2006,7 @@ class MelIteratorUI(object):
 def makePathSceneRelative( filepath ):
 		#make sure it is actually an absolute path...
 		if filepath.isAbs():
-			curSceneDir = filesystem.Path( cmd.file( q=True, sn=True ) ).up()
+			curSceneDir = Path( cmd.file( q=True, sn=True ) ).up()
 			filepath = filepath - curSceneDir
 
 		return filepath
@@ -2421,7 +2385,7 @@ class PyFuncLayout(MelColumnLayout):
 			labels.append( lbl )
 
 			ui = buildUIForObject( default, hLayout )
-			ui.setChangeCB( filesystem.Callback( self.changeCB, argName ) )
+			ui.setChangeCB( Callback( self.changeCB, argName ) )
 
 			hLayout.setWeight( lbl, 0 )
 			hLayout.layout()

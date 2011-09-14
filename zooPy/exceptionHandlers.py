@@ -1,9 +1,9 @@
+
 import os
 import sys
 import cgitb
 import inspect
 import traceback
-from filesystem import findMostRecentDefitionOf
 
 
 def printMsg( *args ):
@@ -16,6 +16,34 @@ def SHOW_IN_UI():
 
 
 DEFAULT_AUTHOR = 'mel@macaronikazoo.com'
+
+
+def findMostRecentDefitionOf( variableName ):
+	'''
+	'''
+	try:
+		fr = inspect.currentframe()
+		frameInfos = inspect.getouterframes( fr, 0 )
+
+		#in this case, walk up the caller tree and find the first occurance of the variable named <variableName>
+		for frameInfo in frameInfos:
+			frame = frameInfo[0]
+			var = None
+
+			if var is None:
+				try:
+					var = frame.f_locals[ variableName ]
+					return var
+				except KeyError: pass
+
+				try:
+					var = frame.f_globals[ variableName ]
+					return var
+				except KeyError: pass
+
+	#NOTE: this method should never ever throw an exception...
+	except: pass
+
 
 def exceptionHandler( *args ):
 	'''

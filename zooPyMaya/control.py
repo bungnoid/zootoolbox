@@ -1,23 +1,22 @@
 
 import os
 import sys
+import inspect
 
-from melUtils import mel
 from maya.cmds import *
-from filesystem import Path, removeDupes, BreakException, getArgDefault
-from vectors import Vector
-
 import maya.cmds as cmd
-import filesystem
+
+from zooPy.path import Path
+from zooPy.misc import removeDupes
+from zooPy.vectors import Vector
+from zooPy import colours
+
 import rigUtils
 import triggered
-import colours
-
 import meshUtils
-import profileDecorators
-from apiExtensions import asMObject, MObject
-from melUtils import printErrorStr
 
+from apiExtensions import asMObject, MObject
+from melUtils import mel, printErrorStr
 
 SPACE_WORLD = rigUtils.SPACE_WORLD
 SPACE_LOCAL = rigUtils.SPACE_LOCAL
@@ -59,6 +58,27 @@ AXIS_ROTATIONS = { AX_X: (0, 0, -90),
                    AX_X_NEG: (0, 0, 90),
                    AX_Y_NEG: (180, 0, 0),
                    AX_Z_NEG: (-90, 0, 0) }
+
+class BreakException(Exception): pass
+
+
+def getArgDefault( function, argName ):
+	'''
+	returns the default value of the given named arg.  if the arg doesn't exist,
+	or a NameError is raised.  if the given arg has no default an IndexError is
+	raised.
+	'''
+	args, va, vkw, defaults = inspect.getargspec( function )
+	if argName not in args:
+		raise NameError( "The given arg does not exist in the %s function" % function )
+
+	args.reverse()
+	idx = args.index( argName )
+
+	try:
+		return list( reversed( defaults ) )[ idx ]
+	except IndexError:
+		raise IndexError( "The function %s has no default for the %s arg" % (function, argName) )
 
 
 class ShapeDesc(object):
@@ -362,7 +382,8 @@ def buildControl( name,
 				verts = meshUtils.jointVerts( j, tolerance=DEFAULT_SKIN_EXTRACTION_TOLERANCE )
 
 				#if so throw a breakException to bail out of the loop
-				if verts: raise BreakException
+				if verts:
+					raise BreakException
 
 			#if we get this far that means none of the joints have geo skinned to them - so set the surface and curve types to their default values
 			shapeDesc.surfaceType = shapeDesc.curveType = ShapeDesc.DEFAULT_TYPE
@@ -709,14 +730,6 @@ for f in CONTROL_SHAPE_FILES:
 def getFileForShapeName( shapeName ):
 	theFile = CONTROL_SHAPE_DICT.get( shapeName.lower(), None )
 	return theFile
-
-
-@profileDecorators.d_profile
-def speedTest():
-	import time
-	start = time.clock()
-	for n in range( 100 ): buildControl( 'apples' )
-	print 'time taken %0.3f' % (time.clock()-start)
 
 
 #end

@@ -1,25 +1,22 @@
 
-from filesystem import Path, PresetManager, Preset, savePreset, readPreset, LOCAL, GLOBAL
 
-import skeletonBuilder
+import inspect
 
 from maya.cmds import *
-from baseSkeletonBuilder import SkeletonPart, setupAutoMirror, TOOL_NAME, buildSkeletonPartContainer
-from names import camelCaseToNice
-
 import maya.cmds as cmd
+
+from zooPy.path import Path
+from zooPy.presets import PresetManager, Preset, savePreset, readPreset, LOCAL, GLOBAL
+from zooPy.names import camelCaseToNice
+
 import apiExtensions
-import filesystem
-import inspect
+
+from baseSkeletonBuilder import SkeletonPart, setupAutoMirror, TOOL_NAME, buildSkeletonPartContainer
 
 XTN = 'skeleton'
 PRESET_MANAGER = PresetManager( TOOL_NAME, XTN )
 
 VERSION = 0
-
-buildSkeletonPartContainer = skeletonBuilder.buildSkeletonPartContainer
-SkeletonPart = skeletonBuilder.SkeletonPart
-setupAutoMirror = skeletonBuilder.setupAutoMirror
 
 eval = __builtins__[ 'eval' ]  #restore python's eval...
 
@@ -67,7 +64,7 @@ def writePreset( presetName ):
 		print "No parts found in the scene!"
 		return None
 
-	return savePreset( LOCAL, skeletonBuilder.TOOL_NAME, presetName, XTN, contents )
+	return savePreset( LOCAL, TOOL_NAME, presetName, XTN, contents )
 
 
 def writePresetToFile( presetFilepath ):
@@ -81,9 +78,9 @@ def writePresetToFile( presetFilepath ):
 
 
 def loadPreset( presetName ):
-	p = Preset( LOCAL, skeletonBuilder.TOOL_NAME, presetName, XTN )
+	p = Preset( LOCAL, TOOL_NAME, presetName, XTN )
 	if not p.exists():
-		p = Preset( GLOBAL, skeletonBuilder.TOOL_NAME, presetName, XTN )
+		p = Preset( GLOBAL, TOOL_NAME, presetName, XTN )
 
 	assert p.exists(), "Cannot find a %s preset called %s" % (XTN, presetName)
 

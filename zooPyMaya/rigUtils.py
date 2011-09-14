@@ -3,17 +3,19 @@ this module is simply a miscellaneous module for rigging support code - most of 
 for determining things like aimAxes, aimVectors, rotational offsets for controls etc...
 '''
 
+import random
+
+import maya.cmds as cmd
 from maya.cmds import *
-from vectors import *
+from maya import OpenMaya
+
+from zooPy.vectors import *
+from zooPy import vectors
+
 from melUtils import mel
 
 import apiExtensions
-import maya.cmds as cmd
 import meshUtils
-import vectors
-import random
-
-from maya import OpenMaya
 
 SPACES = SPACE_WORLD, SPACE_LOCAL, SPACE_OBJECT = range(3)
 

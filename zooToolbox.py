@@ -23,17 +23,17 @@ def setupPyPaths():
 		if p not in sysPathSet:
 			sys.path.append( p )
 
-setupPyPaths()
+#setupPyPaths()
 
 
 import re
-
-from baseMelUI import *
-from maya.mel import eval as evalMel
-from filesystem import Path, findFirstInEnv
-from melUtils import printErrorStr
-
 import maya
+
+from maya.mel import eval as evalMel
+
+from zooPy.path import Path, findFirstInEnv
+from zooPyMaya.baseMelUI import *
+from zooPyMaya.melUtils import printErrorStr
 
 
 def setupZooScriptPaths():
@@ -46,39 +46,31 @@ def setupZooScriptPaths():
 
 	if zooMelPath not in mayaScriptPathsSet:
 		mayaScriptPaths.append( zooMelPath )
-		newScriptPath = os.pathsep.join( map( str, mayaScriptPaths ) )
+		mayaScriptPaths.extend( zooMelPath.dirs( recursive=True ) )
+
+		mayaScriptPaths = removeDupes( mayaScriptPaths )
+		newScriptPath = os.pathsep.join( [ p.unresolved() for p in mayaScriptPaths ] )
+
 		maya.mel.eval( 'putenv MAYA_SCRIPT_PATH "%s"' % newScriptPath )
 
 
 def setupZooPlugins():
-	#all the files for zooToolBox should live in the same directory as this script, including plug-ins
 	thisFile = Path( __file__ )
 	thisPath = thisFile.up()
 
 	existingPlugPathStr = maya.mel.eval( 'getenv MAYA_PLUG_IN_PATH;' )
-	existingPlugPaths = existingPlugPathStr.split( os.pathsep )
+	existingPlugPaths = map( Path, existingPlugPathStr.split( os.pathsep ) )
+	existingPlugPathsSet = set( existingPlugPaths )
 
-	newPlugPaths = []
-	pathsAlreadyInList = set()
+	zooPyPath = thisPath / 'zooPyMaya'
 
-	zooPlugPathAdded = False
-	for path in existingPlugPaths:
-		path = Path( path )
-		if path in pathsAlreadyInList:
-			continue
+	if zooPyPath not in existingPlugPathsSet:
+		existingPlugPaths.append( zooPyPath )
 
-		pathsAlreadyInList.add( path )
-		newPlugPaths.append( path.unresolved() )
+		existingPlugPaths = removeDupes( existingPlugPaths )
+		newPlugPathStr = os.pathsep.join( [ p.unresolved() for p in existingPlugPaths ] )
 
-		if path == thisPath:
-			zooPlugPathAdded = True
-
-	if not zooPlugPathAdded:
-		newPlugPaths.append( thisPath )
-
-	newPlugPathStr = os.pathsep.join( newPlugPaths )
-
-	maya.mel.eval( 'putenv MAYA_PLUG_IN_PATH "%s";' % newPlugPathStr )
+		maya.mel.eval( 'putenv MAYA_PLUG_IN_PATH "%s";' % newPlugPathStr )
 
 
 def setupDagProcMenu():
@@ -143,17 +135,17 @@ def loadZooPlugin( pluginName ):
 
 
 def loadSkeletonBuilderUI( *a ):
-	import skeletonBuilderUI
+	from zooPyMaya import skeletonBuilderUI
 	skeletonBuilderUI.SkeletonBuilderWindow()
 
 
 def loadSkinPropagation( *a ):
-	import refPropagation
+	from zooPyMaya import refPropagation
 	refPropagation.propagateWeightChangesToModel_confirm()
 
 
 def loadPicker( *a ):
-	import picker
+	from zooPyMaya import picker
 	picker.PickerWindow()
 
 

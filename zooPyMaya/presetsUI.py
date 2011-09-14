@@ -1,12 +1,12 @@
 
+from zooPy import presets
+from zooPy.path import Path
+
 from baseMelUI import *
-from filesystem import *
 from fileUI import addExploreToMenuItems
 
 import maya.cmds as cmd
 
-
-ui = None
 
 class PresetOptionMenu(MelOptionMenu):
 	def __init__( self, parent, tool, extension, *a, **kw ):
@@ -14,7 +14,7 @@ class PresetOptionMenu(MelOptionMenu):
 
 		self.setChangeCB( self.on_change )
 
-		self._manager = PresetManager( tool, extension )
+		self._manager = presets.PresetManager( tool, extension )
 		self._presets = {}
 		self.update()
 	def update( self ):
@@ -37,13 +37,13 @@ class PresetLayout(MelFormLayout):
 
 	def __new__( cls, parent, *a, **kw ):
 		return MelForm.__new__( cls, parent )
-	def __init__( self, parent, tool, locale=LOCAL, ext=DEFAULT_XTN ):
+	def __init__( self, parent, tool, locale=presets.LOCAL, ext=presets.DEFAULT_XTN ):
 		MelForm.__init__( self, parent )
 
 		self.tool = tool
 		self.locale = locale
 		self.ext = ext
-		self.presetManager = PresetManager(tool, ext)
+		self.presetManager = presets.PresetManager(tool, ext)
 
 		self.populate()
 	def populate( self ):
@@ -99,7 +99,7 @@ class PresetLayout(MelFormLayout):
 		'''
 		returns the "other" locale
 		'''
-		return LOCAL if self.locale == GLOBAL else GLOBAL
+		return presets.LOCAL if self.locale == presets.GLOBAL else presets.GLOBAL
 	def updateList( self ):
 		'''
 		refreshes the preset list
@@ -200,10 +200,11 @@ class PresetLayout(MelFormLayout):
 		syncs to ALL global presets for the current tool - NOTE: this syncs to all global preset dirs in
 		the mod hierarchy...
 		'''
-		dirs = getPresetDirs(self.locale, self.tool)
-		for dir in dirs:
+		pass
+		#dirs = getPresetDirs(self.locale, self.tool)
+		#for dir in dirs:
 			#P4Data(dir).sync()
-			print 'syncing to %s...' % dir.resolve().asdir()
+			#print 'syncing to %s...' % dir.resolve().asdir()
 		self.updateList()
 	def on_notepad( self, filepath ):
 		filepath = Path( filepath )
@@ -231,12 +232,15 @@ class PresetLayout(MelFormLayout):
 			cmd.menuItem(l='delete', c=self.delete)
 
 		#if the file is a global file, display an option to sync to presets
-		if self.locale == GLOBAL:
-			if numItems: cmd.menuItem(d=True)
-			cmd.menuItem(l='sync to presets', c=self.syncall)
+		if self.locale == presets.GLOBAL:
+			if numItems:
+				cmd.menuItem(d=True)
+
+			#cmd.menuItem(l='sync to presets', c=self.syncall)
 
 		#if no files are selected, prompt the user to select files
-		if numItems == 0: cmd.menuItem(en=False, l='select a preset file')
+		if numItems == 0:
+			cmd.menuItem(en=False, l='select a preset file')
 
 PresetForm = PresetLayout
 
@@ -246,19 +250,16 @@ class PresetWindow(BaseMelWindow):
 	WINDOW_TITLE = 'Preset Manager'
 
 	DEFAULT_SIZE = 275, 325
-	DEFAULT_MENU = 'Perforce'
+	DEFAULT_MENU = None
 
 	FORCE_DEFAULT_SIZE = True
 
 	def __new__( cls, *a, **kw ):
 		return BaseMelWindow.__new__( cls )
-	def __init__( self, tool, locale=LOCAL, ext=DEFAULT_XTN ):
+	def __init__( self, tool, locale=presets.LOCAL, ext=presets.DEFAULT_XTN ):
 		BaseMelWindow.__init__( self )
 
 		self.editor = PresetForm( self, tool, locale, ext )
-
-		cmd.setParent( self.getMenu( self.DEFAULT_MENU ), m=True )
-		cmd.menuItem(l='Sync to Global Presets', c=lambda *a: self.editor.syncall())
 
 		self.show()
 	def presetsCopied( self, presets ):
@@ -269,16 +270,6 @@ class PresetWindow(BaseMelWindow):
 		pass
 	def presetRenamed( self, preset, renamedPreset ):
 		pass
-
-PresetUI = PresetWindow
-
-
-def load( tool, locale=LOCAL, ext=DEFAULT_XTN ):
-	'''
-	this needs to be called to load the ui properly in maya
-	'''
-	global ui
-	ui = PresetUI(tool, locale, ext)
 
 
 #end

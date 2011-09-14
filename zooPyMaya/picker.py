@@ -1,24 +1,30 @@
 
 from __future__ import with_statement
 
+import re
+
 from maya import mel
 from maya.cmds import *
+
+from zooPy import names
+from zooPy import colours
+
+from zooPy import presets
+from zooPy.path import Path
+from zooPy.vectors import Vector, Colour
+
 from baseMelUI import *
-from vectors import Vector, Colour
 from melUtils import printErrorStr, printWarningStr
 from mayaDecorators import d_unifyUndo
 from apiExtensions import asMObject, sortByHierarchy
 from triggered import resolveCmdStr, Trigger
 
-import re
-import names
-import colours
 import presetsUI
 
 eval = __builtins__[ 'eval' ]  #otherwise this gets clobbered by the eval in maya.cmds
 
 TOOL_NAME = 'zooPicker'
-TOOL_EXTENSION = filesystem.presets.DEFAULT_XTN
+TOOL_EXTENSION = presets.DEFAULT_XTN
 TOOL_CMD_EXTENSION = 'cmdPreset'
 VERSION = 0
 
@@ -559,7 +565,7 @@ class Character(object):
 		'''
 		stores this picker character out to disk
 		'''
-		filepath = filesystem.Path( filepath )
+		filepath = Path( filepath )
 		if filepath.exists():
 			filepath.editoradd()
 
@@ -595,7 +601,7 @@ class Character(object):
 	def LoadFromPreset( cls, filepath, namespaceHint=None ):
 		'''
 		'''
-		filepath = filesystem.Path( filepath )
+		filepath = Path( filepath )
 
 		#make sure the namespaceHint - if we have one - doesn't end in a semi-colon
 		if namespaceHint:
@@ -1076,7 +1082,7 @@ class CmdEditorLayout(MelVSingleStretchLayout):
 		MelMenuItem( menu, l='save preset', en=bool( self.UI_cmd.getValue() ), c=self.on_savePreset )
 		presetMenu = MelMenuItem( menu, l='load preset', sm=True )
 
-		presetManager = filesystem.PresetManager( TOOL_NAME, TOOL_CMD_EXTENSION )
+		presetManager = presets.PresetManager( TOOL_NAME, TOOL_CMD_EXTENSION )
 		for locale, presets in presetManager.listAllPresets().iteritems():
 			for p in presets:
 				MelMenuItem( presetMenu, l=p.name(), c=Callback( self.loadPreset, p ) )
@@ -1084,7 +1090,7 @@ class CmdEditorLayout(MelVSingleStretchLayout):
 		MelMenuItemDiv( menu )
 		MelMenuItem( menu, l='manage presets', c=lambda *a: presetsUI.load( TOOL_NAME, ext=TOOL_CMD_EXTENSION ) )
 	def loadPreset( self, preset, *a ):
-		cmdStrLines = filesystem.Path( preset ).read()
+		cmdStrLines = Path( preset ).read()
 		firstLine = cmdStrLines.pop( 0 )
 
 		cmdIsPython = 'python' in firstLine
@@ -1100,7 +1106,7 @@ class CmdEditorLayout(MelVSingleStretchLayout):
 				cmdStrLines = [ '//'+ ('python' if self.UI_isPython.getValue() else 'mel') ]
 				cmdStrLines.append( self.UI_cmd.getValue() )
 
-				preset = filesystem.Preset( filesystem.GLOBAL, TOOL_NAME, name, TOOL_CMD_EXTENSION )
+				preset = presets.Preset( presets.GLOBAL, TOOL_NAME, name, TOOL_CMD_EXTENSION )
 				preset.write( '\n'.join( cmdStrLines ) )
 	def setButtons( self, buttonUIs ):
 		self.buttonUIs = buttonUIs
@@ -1674,7 +1680,7 @@ class PickerWindow(BaseMelWindow):
 	def buildLoadablePresets( self, *a ):
 		menu = self.SUB_presets
 
-		man = filesystem.PresetManager( TOOL_NAME, TOOL_EXTENSION )
+		man = presets.PresetManager( TOOL_NAME, TOOL_EXTENSION )
 		presets = man.listAllPresets()
 		for loc, locPresets in presets.iteritems():
 			for p in locPresets:
@@ -1688,7 +1694,7 @@ class PickerWindow(BaseMelWindow):
 	def on_create( self, *a ):
 		BUTTONS = OK, CANCEL = 'Ok', 'Cancel'
 
-		defaultName = filesystem.Path( file( q=True, sn=True ) ).name()
+		defaultName = Path( file( q=True, sn=True ) ).name()
 		ret = promptDialog( t='Create Picker Tab', m='Enter a name for the new picker tab:', text=defaultName, b=BUTTONS, db=OK )
 
 		if ret == OK:
@@ -1731,7 +1737,7 @@ class PickerWindow(BaseMelWindow):
 			if ret == OK:
 				presetName = promptDialog( q=True, tx=True )
 				if presetName:
-					currentChar.character.saveToPreset( filesystem.Preset( filesystem.GLOBAL, TOOL_NAME, presetName, TOOL_EXTENSION ) )
+					currentChar.character.saveToPreset( presets.Preset( presets.GLOBAL, TOOL_NAME, presetName, TOOL_EXTENSION ) )
 	def on_loadPresetManager( self, *a ):
 		presetsUI.load( TOOL_NAME, ext=TOOL_EXTENSION )
 	def on_undoPrefChange( self, *a ):

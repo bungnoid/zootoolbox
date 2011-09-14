@@ -6,7 +6,7 @@ functionality that alleviates this somewhat...
 '''
 
 from maya.cmds import *
-from filesystem import Path
+from zooPy.path import Path
 
 
 def isFileReferenced( filepath ):

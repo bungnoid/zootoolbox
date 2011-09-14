@@ -1,12 +1,12 @@
 
-from filesystem import *
+from zooPy import names
+from zooPy.path import Path
+
+import presetsUI
+
 from baseMelUI import *
 from mappingUtils import *
 from melUtils import writeExportDict
-
-import names
-import presetsUI
-
 
 TOOL_NAME = 'zoo'
 TOOL_VER = 1

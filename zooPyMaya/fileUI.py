@@ -1,10 +1,12 @@
 
 from baseMelUI import *
 
-from filesystem import Path, Callback
-from melUtils import printWarningStr, openFile, importFile, referenceFile
+from zooPy.path import Path
+from zooPy.misc import Callback
 
 import presetsUI
+
+from melUtils import printWarningStr, openFile, importFile, referenceFile
 
 PRESET_ID_STR = 'zoo'
 PRESET_EXTENSION = 'filter'

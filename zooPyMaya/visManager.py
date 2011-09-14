@@ -1,8 +1,11 @@
 
-import exportManagerCore, filesystem, datetime, melUtils
-import maya.cmds as cmd
+import datetime
 
-from filesystem import resolvePath
+from zooPy import presets
+
+import maya.cmds as cmd
+import melUtils
+
 from mayaDecorators import d_showWaitCursor
 
 mel = melUtils.mel
@@ -10,8 +13,8 @@ melecho = melUtils.melecho
 
 TOOL_NAME = 'visManager'
 TOOL_VERSION = 1
-EXTENSION = filesystem.DEFAULT_XTN
-DEFAULT_LOCALE = filesystem.LOCAL
+EXTENSION = presets.DEFAULT_XTN
+DEFAULT_LOCALE = presets.LOCAL
 
 
 def exportPreset( presetName, visHierarchyTop, locale=DEFAULT_LOCALE ):
@@ -55,13 +58,13 @@ def exportPreset( presetName, visHierarchyTop, locale=DEFAULT_LOCALE ):
 		except IndexError: break
 
 	exportDict['preset'] = toExport
-	thePreset = filesystem.Preset(locale, TOOL_NAME, presetName, EXTENSION)
+	thePreset = presets.Preset(locale, TOOL_NAME, presetName, EXTENSION)
 	thePreset.pickle(exportDict)
 
 
 @d_showWaitCursor
 def importPreset( presetName, locale=DEFAULT_LOCALE, createSets=True, deleteAfterImport=True ):
-	thePreset = filesystem.Preset(locale, TOOL_NAME, presetName, EXTENSION)
+	thePreset = presets.Preset(locale, TOOL_NAME, presetName, EXTENSION)
 	presetData = thePreset.unpickle()
 	volumesList = presetData['preset']
 
@@ -87,7 +90,7 @@ def importPreset( presetName, locale=DEFAULT_LOCALE, createSets=True, deleteAfte
 
 		#build the volumes - place and parent them appropriately
 		for volume, type, pos, rot, scale in volumesData:
-			newVolume = exportManagerCore.createExportVolume( int(type) )
+			newVolume = createExportVolume( int(type) )
 			cmd.move(pos[0], pos[1], pos[2], newVolume, a=True, ws=True, rpr=True)
 			cmd.rotate(rot[0], rot[1], rot[2], newVolume, a=True, ws=True)
 			cmd.setAttr('%s.s' % newVolume, *scale)
@@ -101,7 +104,7 @@ def importPreset( presetName, locale=DEFAULT_LOCALE, createSets=True, deleteAfte
 			try: setParent = setDict[parent]
 			except KeyError: pass
 
-			for vol in volumes: items.extend( exportManagerCore.findFacesInVolumeForMaya(allMeshes, vol) )
+			for vol in volumes: items.extend( findFacesInVolumeForMaya(allMeshes, vol) )
 			newSet = mel.zooVisManCreateSet(setParent, node, items)
 			setDict[node] = newSet
 

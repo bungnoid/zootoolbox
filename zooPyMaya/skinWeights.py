@@ -1,8 +1,11 @@
 
-from skinWeightsBase import *
-from filesystem import removeDupes
 from maya.cmds import *
-from binarySearchTree import BinarySearchTree
+
+from zooPy.misc import removeDupes
+from zooPy.binarySearchTree import BinarySearchTree
+from zooPy import presets
+
+from skinWeightsBase import *
 from mayaDecorators import d_unifyUndo, d_progress, d_showWaitCursor
 from melUtils import mel, printWarningStr, writeExportDict
 
@@ -198,8 +201,8 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 
 
 	#see if the file versions match
-	if miscData[ filesystem.kEXPORT_DICT_TOOL_VER ] != TOOL_VERSION:
-		printWarningStr( "WARNING: the file being loaded was stored from an older version (%d) of the tool - please re-generate the file.  Current version is %d." % (miscData[ filesystem.kEXPORT_DICT_TOOL_VER ], TOOL_VERSION) )
+	if miscData[ presets.kEXPORT_DICT_TOOL_VER ] != TOOL_VERSION:
+		printWarningStr( "WARNING: the file being loaded was stored from an older version (%d) of the tool - please re-generate the file.  Current version is %d." % (miscData[ presets.kEXPORT_DICT_TOOL_VER ], TOOL_VERSION) )
 
 
 	#the miscData contains a dictionary with a bunch of data stored from when the weights was saved - do some

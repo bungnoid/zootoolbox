@@ -1,8 +1,8 @@
 
-from filesystem import P4File, P4Change, removeDupes
-from baseMelUI import *
+from zooPy.misc import removeDupes
+from zooPy.devTest import TEST_CASES, runTestCases
 
-from devTest import TEST_CASES, runTestCases
+from baseMelUI import *
 
 
 class DevTestLayout(MelVSingleStretchLayout):

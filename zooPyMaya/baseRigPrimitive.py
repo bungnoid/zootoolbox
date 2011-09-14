@@ -1,30 +1,29 @@
 
-import filesystem
-import typeFactories
+from zooPy import typeFactories
+from zooPy.path import Path
+from zooPy.vectors import Vector, Matrix, Axis
+from zooPy.names import Parity, Name, camelCaseToNice, stripParity
 
 from maya.cmds import *
 from maya import cmds as cmd
+
 from rigUtils import *
 from control import *
-from names import Parity, Name, camelCaseToNice, stripParity
 from skeletonBuilder import *
-from vectors import Vector, Matrix
 from mayaDecorators import d_unifyUndo, d_showWaitCursor
 from melUtils import printInfoStr, printWarningStr, printErrorStr, referenceFile
 
 import apiExtensions
 import skeletonBuilder
 import spaceSwitching
-import triggered
 import poseSym
-import vectors
 import control
+
+from triggered import Trigger, setKillState
 
 __author__ = 'hamish@macaronikazoo.com'
 
-Trigger = triggered.Trigger
 AXES = Axis.BASE_AXES
-Vector = vectors.Vector
 
 AIM_AXIS = AX_X
 ROT_AXIS = AX_Y
@@ -168,7 +167,7 @@ def buildContainer( typeClass, kwDict, nodes, controls, namedNodes=() ):
 
 		#set the kill state on the control if its a transform node
 		if objectType( control, isAType='transform' ):
-			triggered.setKillState( control, True )
+			setKillState( control, True )
 
 	#hook up all the named nodes
 	for idx, node in enumerate( namedNodes ):
@@ -1096,11 +1095,11 @@ def buildRigForModel( scene=None, referenceModel=True, deletePlacers=False ):
 
 	#if no scene was passed, assume we're acting on the current scene
 	if scene is None:
-		scene = filesystem.Path( cmd.file( q=True, sn=True ) )
+		scene = Path( cmd.file( q=True, sn=True ) )
 	#if the scene WAS passed in, open the desired scene if it isn't already open
 	else:
-		scene = filesystem.Path( scene )
-		curScene = filesystem.Path( cmd.file( q=True, sn=True ) )
+		scene = Path( scene )
+		curScene = Path( cmd.file( q=True, sn=True ) )
 		if curScene:
 			if scene != curScene:
 				mel.saveChanges( 'file -f -open "%s"' % scene )

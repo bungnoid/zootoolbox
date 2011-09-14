@@ -1,11 +1,13 @@
 
-import baseMelUI
-import visManager
-import melUtils
-import skinCluster
-import presetsUI
+from zooPy.misc import Callback
+
 import maya.cmds as cmd
-from filesystem import Callback
+
+import skinCluster
+import visManager
+import baseMelUI
+import presetsUI
+import melUtils
 
 mel = melUtils.mel
 melecho = melUtils.melecho

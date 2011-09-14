@@ -5,7 +5,9 @@ currently just contains a function to take skin weights from the current scene a
 '''
 
 from maya.cmds import *
-from filesystem import Path
+
+from zooPy.path import Path
+
 from melUtils import printWarningStr
 from referenceUtils import stripNamespaceFromNamePath
 

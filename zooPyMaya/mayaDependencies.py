@@ -1,19 +1,20 @@
 
-from filesystem import Path
-
 import os
 import sys
-import dependencies
+
+from zooPy import dependencies
+from zooPy.path import Path
+
+import maya
+import maya.cmds as cmd
 
 import melUtils
-import maya
 import baseMelUI
-import maya.cmds as cmd
 
 
 def flush():
 
-	pluginPaths = map( Path, melUtils.mel.eval( 'getenv MAYA_PLUG_IN_PATH' ).split( os.pathsep ) )  #NOTE: os.environ is different from the getenv call, and getenv isn't available via python...  yay!
+	pluginPaths = map( Path, melUtils.melEval( 'getenv MAYA_PLUG_IN_PATH' ).split( os.pathsep ) )  #NOTE: os.environ is different from the getenv call, and getenv isn't available via python...  yay!
 
 	#before we do anything we need to see if there are any plugins in use that are python scripts - if there are, we need to ask the user to close the scene
 	#now as you might expect maya is a bit broken here - querying the plugins in use doesn't return reliable information - instead we ask for all loaded

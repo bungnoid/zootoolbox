@@ -7,14 +7,16 @@ design this a little better
 
 from maya.cmds import *
 from maya.OpenMayaAnim import MFnSkinCluster
-from vectors import Vector, Matrix
-from filesystem import Path, BreakException
-from mayaDecorators import d_progress
 
 import maya.cmds as cmd
-import apiExtensions
 import maya.OpenMaya as OpenMaya
 
+from zooPy.vectors import Vector, Matrix
+from zooPy.path import Path
+
+from mayaDecorators import d_progress
+
+import apiExtensions
 
 kMAX_INF_PER_VERT = 3
 kMIN_SKIN_WEIGHT_VALUE = 0.05
@@ -355,9 +357,9 @@ def findVertsInVolume( meshes, volume ):
 	within the given <volume>
 	'''
 	#define a super simple vector class to additionally record vert id with position...
-	class VertPos(vectors.Vector):
+	class VertPos(Vector):
 		def __init__( self, x, y, z, vertIdx=None ):
-			vectors.Vector.__init__(self, [x, y, z])
+			Vector.__init__(self, [x, y, z])
 			self.id = vertIdx
 
 	#this dict provides the functions used to determine whether a point is inside a volume or not
@@ -370,7 +372,7 @@ def findVertsInVolume( meshes, volume ):
 									ExportManager.kVOLUME_CUBE: isPointInCube}
 
 	#grab any data we're interested in for the volume
-	volumePos = vectors.Vector( cmd.xform(volume, q=True, ws=True, rp=True) )
+	volumePos = Vector( cmd.xform(volume, q=True, ws=True, rp=True) )
 	volumeScale = map(abs, cmd.getAttr('%s.s' % volume)[0])
 	volumeBasis = rigUtils.getObjectBasisVectors( volume )
 
@@ -385,7 +387,7 @@ def findVertsInVolume( meshes, volume ):
 	isContainedMethod = insideDeterminationMethod[type]
 	print 'method for interior volume determination', isContainedMethod.__name__
 	sx = volumeScale[0]
-	if vectors.Vector(volumeScale).within((sx, sx, sx)):
+	if Vector(volumeScale).within((sx, sx, sx)):
 		try: isContainedMethod = insideDeterminationIfUniform[type]
 		except KeyError: pass
 

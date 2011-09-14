@@ -3,12 +3,14 @@ try:
 	import wingdbstub
 except ImportError: pass
 
-from filesystem import Path
-from unittest import TestCase, TestResult
-from maya import cmds as cmd
-
 import sys
 import inspect
+
+from unittest import TestCase, TestResult
+
+from maya import cmds as cmd
+
+from path import Path
 
 
 ### POPULATE THE LIST OF TEST SCRIPTS ###
