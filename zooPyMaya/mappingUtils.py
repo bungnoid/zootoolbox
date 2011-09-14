@@ -1,5 +1,5 @@
 
-from names import *
+from zooPy.names import *
 from apiExtensions import *
 
 

@@ -1,11 +1,10 @@
 
 from zooPy.vectors import *
 from zooPy.path import Path
+from zooPy import names
 
 import time
 import datetime
-
-import names
 
 
 TOOL_NAME = 'weightSaver'

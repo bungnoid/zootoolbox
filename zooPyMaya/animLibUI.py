@@ -1,7 +1,7 @@
 
 from baseMelUI import *
 from animLib import *
-from fileUI import addExploreToMenuItems
+from presetsUI import addExploreToMenuItems
 
 import presetsUI
 import xferAnimUI

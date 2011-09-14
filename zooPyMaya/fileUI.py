@@ -12,22 +12,6 @@ PRESET_ID_STR = 'zoo'
 PRESET_EXTENSION = 'filter'
 
 
-def addExploreToMenuItems( filepath ):
-	if filepath is None:
-		return
-
-	filepath = Path( filepath )
-	if not filepath.exists():
-		filepath = filepath.getClosestExisting()
-
-	if filepath is None:
-		return
-
-	cmd.menuItem(l="Explore to location...", c=lambda x: mel.zooExploreTo( filepath ), ann='open an explorer window to the location of this file/directory')
-
-	cmd.menuItem(l="CMD prompt to location...", c=lambda x: mel.zooCmdTo( filepath ), ann='open a command prompt to the location of this directory')
-
-
 class FileScrollList(MelObjectScrollList):
 	def __init__( self, parent, *a, **kw ):
 		self._rootDir = None
@@ -225,7 +209,7 @@ class FileListLayout(MelVSingleStretchLayout):
 				cmd.menuItem( l='reference file', c=lambda *x: self.on_reference( files[ 0 ] ) )
 
 			cmd.menuItem( d=True )
-			addExploreToMenuItems( files[ 0 ] )
+			presetsUI.addExploreToMenuItems( files[ 0 ] )
 		else:
 			cmd.menuItem( l="please select a single file" )
 

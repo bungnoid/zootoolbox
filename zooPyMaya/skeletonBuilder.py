@@ -13,27 +13,15 @@ _LOAD_ORDER = 'spine', 'head', 'arm', 'hand', 'leg'
 
 
 def _iterSkeletonPartScripts():
-	for p in sys.path:
-		p = Path( p )
-		if 'maya' in p:
-			for f in p.files():
-				if f.hasExtension( 'py' ):
-					if f.name().startswith( SKELETON_PART_SCRIPT_PREFIX ):
-						yield f
+	for f in Path( __file__ ).up().files():
+		if f.hasExtension( 'py' ):
+			if f.name().startswith( SKELETON_PART_SCRIPT_PREFIX ):
+				yield f
 
-partModuleNames = [ f.name() for f in _iterSkeletonPartScripts() ]
-for name in reversed( _LOAD_ORDER ):
-	name = SKELETON_PART_SCRIPT_PREFIX + name
-	if name in partModuleNames:
-		partModuleNames.remove( name )
-		partModuleNames.insert( 0, name )
+def _importSkeletonPartScripts():
+	for f in _iterSkeletonPartScripts():
+		execfile( f )
 
-for modName in partModuleNames:
-	__import__( modName )
-
-
-#import skeletonBuilderConversion
-#skeletonBuilderConversion.convertOldParts()
-
+_importSkeletonPartScripts()
 
 #end

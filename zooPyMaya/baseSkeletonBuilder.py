@@ -6,7 +6,6 @@ from maya.cmds import *
 
 from zooPy import names
 from zooPy import typeFactories
-from zooPy import profileDecorators
 from zooPy.names import Parity, Name, camelCaseToNice
 from zooPy.vectors import Vector, Colour, Axis
 from zooPy.path import Path

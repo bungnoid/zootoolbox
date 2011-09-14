@@ -1,11 +1,11 @@
 
-from vectors import Matrix, Vector, Axis
+from zooPy.vectors import Matrix, Vector, Axis
+from zooPy import vectors
 
 import maya.cmds as cmd
 import maya.OpenMaya as OpenMaya
 import maya.OpenMayaMPx as OpenMayaMPx
 
-import vectors
 import apiExtensions
 
 from maya.OpenMaya import MObject, MFnMatrixAttribute, MFnCompoundAttribute, MFnMessageAttribute, MGlobal, \

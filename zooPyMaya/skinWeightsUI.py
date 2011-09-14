@@ -8,7 +8,7 @@ from zooPy.names import getCommonPrefix
 
 from melUtils import mel
 from baseMelUI import *
-from fileUI import addExploreToMenuItems
+from presetsUI import addExploreToMenuItems
 
 import mappingEditor
 import skinWeights

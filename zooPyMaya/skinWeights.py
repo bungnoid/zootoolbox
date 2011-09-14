@@ -366,11 +366,9 @@ def loadWeights( objects, filepath=None, usePosition=True, tolerance=TOL, axisMu
 	print 'time for weight load %.02f secs' % (end-start)
 
 
-import profileDecorators
 from maya.OpenMayaAnim import MFnSkinCluster
 from maya.OpenMaya import MIntArray, MDagPathArray
 
-#@profileDecorators.d_profile
 @d_unifyUndo
 def setSkinWeights( skinCluster, vertJointWeightData ):
 	'''
