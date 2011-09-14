@@ -8,27 +8,17 @@ class ListStream(object):
 	def __str__( self ):
 		return ''.join( self._lines )
 	def __iter__( self ):
-		return iter( ''.join( self._lines ).split( '\n' ) )
+		blob = ''.join( self._lines )
+		for line in blob.split( '\n' ):
+			yield line + '\n'
 	def write( self, line ):
 		self._lines.append( line )
 
 
 class SObject(object):
 
-	#stores any types that have been registered with this class for serialization
-	__REGISTERED_TYPES = []
-
-	@classmethod
-	def RegisterType( cls, type ):
-		cls.__REGISTERED_TYPES.append( type )
-	@classmethod
-	def UnregisterType( cls, type ):
-		try:
-			cls.__REGISTERED_TYPES.remove( type )
-		except ValueError: pass
-	@classmethod
-	def IsTypeRegistered( cls, type ):
-		return type in cls.__REGISTERED_TYPES
+	#these are the types supported
+	__SUPPORTED_TYPES = str, unicode, int, float, str, bool, long
 
 	def __init__( self, *attrNameValuePairs, **kw ):
 
@@ -73,6 +63,12 @@ class SObject(object):
 	def __ne__( self, other ):
 		return not self.__eq__( other )
 	def __setattr__( self, attr, value ):
+		valueType = type( value )
+
+		#type check the value - only certain types are supported
+		if valueType is not SObject and valueType not in self.__SUPPORTED_TYPES:
+			raise TypeError( "Serialization of the type %s is not yet supported!" % type( value ) )
+
 		if attr not in self.__dict__:
 			self.__dict__[ '_attrNames' ].append( attr )
 
@@ -93,12 +89,13 @@ class SObject(object):
 
 		#write in the uuid for this SObject - we use the uuid for object referencing
 		depthPrefix = '\t' * depth
-		stream.write( '<%s>\n' % id( self ) )
 
 		#track SObjects serialized so we don't get infinite loops if objects self reference
 		if self in serializedObjects:
+			stream.write( '(%s)\n' % id( self ) )
 			return
 
+		stream.write( '<%s>\n' % id( self ) )
 		serializedObjects.add( self )
 
 		#grab data about the attributes - we need to do this first because we need string length
@@ -113,7 +110,7 @@ class SObject(object):
 
 			#escape newline characters
 			if valueType is str or valueType is unicode:
-				value = value.replace( '\n', '\\n' ).replace( '\r', '\\t' )
+				value = value.replace( '\n', '\\n' ).replace( '\r', '\\r' )
 
 			maxAttrNameLength = max( maxAttrNameLength, len( attr ) )
 			maxTypeNameLength = max( maxTypeNameLength, len( valueTypeName ) )
@@ -129,6 +126,8 @@ class SObject(object):
 			else:
 				attrNameAndTypeStr = '%s(%s)' % (attr, valueTypeName)
 				stream.write( '%s%s:%s\n' % (depthPrefix, attrNameAndTypeStr.ljust(attrNamePadding), value) )
+
+		stream.write( '%s</>\n' % depthPrefix )
 	def write( self, filepath ):
 		with open( filepath, 'w' ) as fStream:
 			self.serialize( fStream )
@@ -139,22 +138,31 @@ class SObject(object):
 			if typeCls is not None:
 				return typeCls
 
-			for typeCls in cls.__REGISTERED_TYPES:
-				if typeCls.__name__ == typeStr:
-					return typeCls
-
 			raise TypeError( "Unable to find the appropriate type for the type string %s" % typeStr )
 
 		lineIter = iter( stream )
 		objectStack = []
+		lineStack = []
 
 		serializedIdToObjDict = {}  #track objects
+
+		def getLineDepth( line ):
+			depth = 0
+			while line[depth] == '\t':
+				depth += 1
+
+			return depth
 
 		def objectParser( line, depth=0 ):
 			serializedId = int( line[1:-2] )  #-2 because we want to strip the newline character and the closing > character
 
 			#if an object has already been created for the given id, use it, otherwise construct a new object
 			newObj = serializedIdToObjDict.get( serializedId, SObject() )
+
+			#if the line starts with a * then the object has been seen before
+			if line[0] == '(':
+				assert serializedId in serializedIdToObjDict
+				return newObj
 
 			#append the new object to the stack
 			objectStack.append( newObj )
@@ -165,21 +173,25 @@ class SObject(object):
 				if not line:
 					continue
 
+				if line[depth:-1] == '</>':
+					return objectStack.pop()
+
 				idx_parenStart = line.find( '(' )
 				idx_parenEnd = line.find( ')', idx_parenStart )
 				idx_valueStart = line.find( ':', idx_parenEnd )
 
 				attrName = line[ depth:idx_parenStart ]
 				typeStr = line[ idx_parenStart+1:idx_parenEnd ]
-				valueStr = line[ idx_valueStart+1: ]
 
 				if typeStr == '*':
-					value = objectParser( valueStr, depth+1 )
+					value = objectParser( line[idx_valueStart+1:], depth+1 )
 				else:
+					valueStr = line[ idx_valueStart+1:-1 ]
 					typeCls = getTypeFromTypeStr( typeStr )
-					value = typeCls( valueStr )
 					if typeCls is str or typeCls is unicode:
-						value = value.replace( '\\n', '\n' ).replace( '\\r', '\r' )
+						value = valueStr.replace( '\\n', '\n' ).replace( '\\r', '\r' )
+					else:
+						value = typeCls( valueStr )
 
 				setattr( objectStack[-1], attrName, value )
 
@@ -210,8 +222,36 @@ class SObject(object):
 			setattr( obj, key, value )
 
 		return obj
-	def toDict( self ):
-		raise NotImplemented
+	def toDict( self, dictObjectMap=None ):
+		if dictObjectMap is None:
+			dictObjectMap = {}
+
+		if self in dictObjectMap:
+			return dictObjectMap[ self ]
+
+		thisDict = dictObjectMap[ self ] = {}
+		for key, value in self.iteritems():
+			if type( value ) is SObject:
+				thisDict[ key ] = value.toDict( dictObjectMap )
+			else:
+				thisDict[ key ] = value
+
+		return thisDict
+
+	#the following provide dictionary-like functionality
+	def iteritems( self ):
+		for attr in self.getAttrs():
+			yield attr, getattr( self, attr )
+	def items( self ):
+		return list( self.iteritems() )
+	def iterkeys( self ):
+		return iter( self.getAttrs() )
+	keys = getAttrs
+	def itervalues( self ):
+		for attr in self.getAttrs():
+			yield getattr( self, attr )
+	def values( self ):
+		return self.itervalues()
 
 
 #end

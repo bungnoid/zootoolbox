@@ -34,7 +34,8 @@ class SObjectTests(TestCase):
 		root.anotherStr = "bananas"
 		root.anInt = 12
 
-		s2 = SObject( ('some_float', 200.0), ('crazy_list', [1,2,3]), ('someBool', True), ('unicode_test', u'some unicode value "with crap in it"\nand a newline!') )
+		s2 = SObject( ('some_float', 200.0), ('someBool', True), ('unicode_test', u'some unicode value "with crap in it"\nand a newline!') )
+		#s2.crazy_list = [1,2,3]
 		root.aSubObject = s2
 
 		s3 = SObject( ('duplicate_ref_to_s2', s2), ('a_stupidly_long_attribute_name_to_test_whether_it_works_ok_with_serialization', 0x902) )
@@ -65,11 +66,12 @@ class SObjectTests(TestCase):
 		                'nestedDict': { 'bleargh': 111 }
 		                }
 
-		subDict = { 'cyclic_ref': nestedDicts }
-		nestedDicts[ 'cyclic_ref' ] = subDict
+		nestedDicts[ 'cyclic_ref' ] = nestedDicts
 
 		convertedFromDict = SObject.FromDict( nestedDicts )
-		assert convertedFromDict.toDict() == nestedDicts
+		convertedDict = convertedFromDict.toDict()
+		assert convertedDict['cyclic_ref'] is convertedDict
+		#assert convertedFromDict.toDict() == nestedDicts  #python doesn't like comparing cyclically nested dicts...
 
 SObjectTests().run()
 
