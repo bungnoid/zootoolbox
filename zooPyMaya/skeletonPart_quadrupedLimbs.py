@@ -123,7 +123,7 @@ class QuadrupedBackLeg(_QuadCommon, SkeletonPart.GetNamedSubclass( 'Arm' )):
 
 class SatyrLeg(_QuadCommon, SkeletonPart.GetNamedSubclass('Leg')):
 	AVAILABLE_IN_UI = True
-	PLACER_NAMES = QuadrupedFrontLeg.PLACER_NAMES
+	PLACER_NAMES = 'toeTip', 'innerRoll', 'outerRoll', 'heelRoll'
 
 	@property
 	def thigh( self ): return self[ 0 ]

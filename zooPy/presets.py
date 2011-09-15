@@ -253,8 +253,10 @@ class Preset(object):
 	FromPreset = FromFile
 	def getFilepath( self ):
 		return self._path
+	def path( self ):
+		return self._path
 	def up( self, levels=1 ):
-		return Path( self ).up( levels )
+		return self._path.up( levels )
 	def other( self ):
 		'''
 		returns the "other" locale - ie if teh current instance points to a GLOBAL preset, other()
@@ -262,7 +264,8 @@ class Preset(object):
 		'''
 		if self.locale == GLOBAL:
 			return LOCAL
-		else: return GLOBAL
+		else:
+			return GLOBAL
 	def copy( self ):
 		'''
 		copies the current instance from its current locale to the "other" locale. handles all
@@ -325,8 +328,8 @@ class Preset(object):
 			newName = '%s.%s' % (newName, self.extension)
 
 		return Path.rename(self, newName, True)
-	def getName( self ):
-		return Path(self).setExtension()[-1]
+	def name( self ):
+		return self._path.name()
 
 
 #end

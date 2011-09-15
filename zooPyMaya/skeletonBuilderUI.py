@@ -6,6 +6,7 @@ from maya import cmds as cmd
 
 from zooPy import names
 from zooPy.path import Path
+from zooPy.misc import Callback
 
 from baseMelUI import *
 from melUtils import mel
@@ -23,19 +24,6 @@ import rigUtils
 import control
 
 Axis = rigUtils.Axis
-
-
-class Callback(object):
-	'''
-	stupid little callable object for when you need to "bake" temporary args into a
-	callback - useful mainly when creating callbacks for dynamicly generated UI items
-	'''
-	def __init__( self, func, *args, **kwargs ):
-		self.func = func
-		self.args = args
-		self.kwargs = kwargs
-	def __call__( self, *args ):
-		return self.func( *self.args, **self.kwargs )
 
 
 #stores UI build methods keyed by arg name
@@ -984,7 +972,6 @@ class CreateEditRigTabLayout(MelTabLayout):
 		self.setLabel( 2, 'create rig' )
 
 		self.setSceneChangeCB( self.on_sceneOpen )
-		#rigPrimitives.skeletonBuilderConversion.convertOldParts()
 		self.setChangeCB( self.on_change )
 
 	### EVENT HANDLERS ###
@@ -1042,8 +1029,6 @@ class SkeletonBuilderWindow(BaseMelWindow):
 		MelMenuItem( menu, l='Mark Selected As User Aligned', c=self.on_markUserAligned )
 		MelMenuItem( menu, l='Clear User Aligned On Selected', c=self.on_clearUserAligned )
 		MelMenuItem( menu, l='User Aligned Editor', c=lambda *a: UserAlignListerWindow() )
-		#MelMenuItemDiv( menu )
-		#MelMenuItem( menu, l='Clean My Huge Rig', c=lambda *a: rigPrimitives.cleanMeshControls() )
 	def buildDevMenu( self, *a ):
 		menu = self.getMenu( 'Dev' )
 		menu.clear()
@@ -1192,11 +1177,6 @@ class UserAlignListerWindow(BaseMelWindow):
 		self.setSceneChangeCB( lambda: self.close() )  #close on scene load...
 		UserAlignListerLayout( self )
 		self.show()
-
-
-def load():
-	global ui
-	ui = SkeletonBuilderWindow()
 
 
 ##############################
