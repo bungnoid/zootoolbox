@@ -1,4 +1,6 @@
 
+import inspect
+
 
 def trackableTypeFactory( metaclassSuper=type ):
 	'''
@@ -64,6 +66,30 @@ def trackableTypeFactory( metaclassSuper=type ):
 	return _TrackableType
 
 
+def compareCallSignatures( func1, func2, matchDefaults=True ):
+	'''
+	given two function objects, this will compare the call signatures of each function and
+	return True if they match.  If matchDefaults is True, default argument values must match
+	'''
+	args1, vargs1, kwargs1, defaults1 = inspect.getargspec( func1 )
+	args2, vargs2, kwargs2, defaults2 = inspect.getargspec( func2 )
+
+	if args1 != args2:
+		return False
+
+	if bool( vargs1 ) != bool( vargs2 ):
+		return False
+
+	if bool( kwargs1 ) != bool( kwargs2 ):
+		return False
+
+	if matchDefaults:
+		if defaults1 != defaults2:
+			return False
+
+	return True
+
+
 def interfaceTypeFactory( metaclassSuper=type ):
 	'''
 	returns an "Interface" metaclass.  Interface classes work as you'd expect.  Every method implemented
@@ -113,12 +139,38 @@ def interfaceTypeFactory( metaclassSuper=type ):
 						#method, then the method hasn't been implemented.  Its done this way because
 						#the newCls may be inheriting from multiple classes, one of which satisfies
 						#the interface - so we can't just look up the methodName in the attrs dict
-						if getattr( newCls, methodName, None ).im_func is getattr( cls._INTERFACE_CLASS, methodName ).im_func:
+						methodImplementation = getattr( newCls, methodName, None )
+						methodAbstract = getattr( cls._INTERFACE_CLASS, methodName )
+						if methodImplementation.im_func is methodAbstract.im_func:
 							raise TypeError( "The class %s doesn't implement the required method %s!" % (name, methodName) )
+
+						if not compareCallSignatures( methodImplementation, methodAbstract ):
+							raise TypeError( "The call signature of %s.%s doesn't match the interface method!" % (name, methodName) )
 
 			return newCls
 
 	return _AbstractType
+
+
+def doesImplement( theCls, theInterfaceCls ):
+	'''
+	will test whether theCls implements the methods on theInterfaceCls
+	'''
+	for methodName in theInterfaceCls._METHODS_TO_IMPLEMENT:
+		methodAbstract = getattr( theInterfaceCls, methodName )
+		methodImplementation = getattr( theCls, methodName, None )
+
+		if methodImplementation is None:
+			return False
+
+		if type( methodImplementation ) is not type( methodAbstract ):
+			return False
+
+		#check function signature
+		if not compareCallSignatures( methodImplementation, methodAbstract ):
+			return False
+
+	return True
 
 
 def trackableClassFactory( superClass=object ):
