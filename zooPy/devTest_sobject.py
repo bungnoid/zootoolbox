@@ -17,7 +17,7 @@ class SObjectTests(TestCase):
 		return os.path.expanduser( self._TEST_FILE )
 	def tearDown( self ):
 		testFilepath = self.getTestFilepath()
-		os.rmdir( testFilepath )
+		os.remove( testFilepath )
 	def testGetAttr( self ):
 		attrNames = 'apple', 'banana', 'pears', 'orange', 'peach', 'nectarine', 'grape', 'watermelon'
 		attrValues = range( len( attrNames ) )

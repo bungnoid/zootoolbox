@@ -1,6 +1,6 @@
 
 from __future__ import with_statement
-
+from typeFactories import interfaceTypeFactory, doesImplement
 
 class ListStream(object):
 	def __init__( self ):
@@ -15,10 +15,25 @@ class ListStream(object):
 		self._lines.append( line )
 
 
+class ISerializer(object):
+	__metaclass__ = interfaceTypeFactory()
+	def serializer( self, stream, depth, value ):
+		'''
+		This method needs to handle serialization of the given value.  No return value is expected
+
+		stream must be a file-like object
+		depth is the current depth in the serialization stack
+		value is the actual instance currently being serialized
+		'''
+
+
 class SObject(object):
 
 	#these are the types supported
 	__SUPPORTED_TYPES = str, unicode, int, float, str, bool, long
+
+	#these are the user supported types - they need to be registered via the registerType method
+	__REGISTERED_TYPES = {}
 
 	def __init__( self, *attrNameValuePairs, **kw ):
 
@@ -83,6 +98,11 @@ class SObject(object):
 		returns a tuple of attributes present on this object
 		'''
 		return tuple( self._attrNames )
+	def registerType( self, type, serializer ):
+		if not doesImplement( serializer, ISerializer ):
+			raise TypeError( "The given serializer doesn't implement the required methods for serialization!" )
+
+		self.__REGISTERED_TYPES[ type ] = serializer
 	def serialize( self, stream, depth=0, serializedObjects=None ):
 		if serializedObjects is None:
 			serializedObjects = set()
@@ -92,10 +112,10 @@ class SObject(object):
 
 		#track SObjects serialized so we don't get infinite loops if objects self reference
 		if self in serializedObjects:
-			stream.write( '(%s)\n' % id( self ) )
+			stream.write( '%s\n' % id( self ) )
 			return
 
-		stream.write( '<%s>\n' % id( self ) )
+		stream.write( '%s {\n' % id( self ) )
 		serializedObjects.add( self )
 
 		#grab data about the attributes - we need to do this first because we need string length
@@ -119,15 +139,18 @@ class SObject(object):
 
 		attrNamePadding = maxAttrNameLength + maxTypeNameLength + 2
 		for attr, value, valueType, valueTypeName in attrNameValTypeAndTypeStr:
-			if issubclass( valueType, SObject ):
+			if valueType is SObject:
 				attrNameAndTypeStr = '%s(*)' % attr
 				stream.write( '%s%s:' % (depthPrefix, attrNameAndTypeStr.ljust( attrNamePadding )) )
 				value.serialize( stream, depth+1, serializedObjects )
-			else:
+			elif valueType in self.__SUPPORTED_TYPES:
 				attrNameAndTypeStr = '%s(%s)' % (attr, valueTypeName)
 				stream.write( '%s%s:%s\n' % (depthPrefix, attrNameAndTypeStr.ljust(attrNamePadding), value) )
+			elif valueType in self.__REGISTERED_TYPES:
+				serializer = self._getTypeSerializer( valueType )
+				serializer( stream, depth, value )
 
-		stream.write( '%s</>\n' % depthPrefix )
+		stream.write( '%s}\n' % depthPrefix )
 	def write( self, filepath ):
 		with open( filepath, 'w' ) as fStream:
 			self.serialize( fStream )
@@ -153,16 +176,23 @@ class SObject(object):
 
 			return depth
 
+		def findDigits( line ):
+			idx = 0
+			isdigit = str.isdigit
+			while isdigit( line[idx] ):
+				idx += 1
+
+			return line[ :idx ]
+
 		def objectParser( line, depth=0 ):
-			serializedId = int( line[1:-2] )  #-2 because we want to strip the newline character and the closing > character
+			serializedId = int( findDigits( line ) )
 
-			#if an object has already been created for the given id, use it, otherwise construct a new object
-			newObj = serializedIdToObjDict.get( serializedId, SObject() )
+			#check to see if the id has already been unserialized
+			if serializedId in serializedIdToObjDict:
+				return serializedIdToObjDict[ serializedId ]
 
-			#if the line starts with a * then the object has been seen before
-			if line[0] == '(':
-				assert serializedId in serializedIdToObjDict
-				return newObj
+			#otherwise, construct a new object
+			newObj = SObject()
 
 			#append the new object to the stack
 			objectStack.append( newObj )
@@ -173,20 +203,20 @@ class SObject(object):
 				if not line:
 					continue
 
-				if line[depth:-1] == '</>':
+				if line[depth:].strip() == '}':
 					return objectStack.pop()
 
 				idx_parenStart = line.find( '(' )
 				idx_parenEnd = line.find( ')', idx_parenStart )
 				idx_valueStart = line.find( ':', idx_parenEnd )
 
-				attrName = line[ depth:idx_parenStart ]
-				typeStr = line[ idx_parenStart+1:idx_parenEnd ]
+				attrName = line[ depth:idx_parenStart ].strip()
+				typeStr = line[ idx_parenStart+1:idx_parenEnd ].strip()
 
 				if typeStr == '*':
-					value = objectParser( line[idx_valueStart+1:], depth+1 )
+					value = objectParser( line[idx_valueStart+1:].lstrip(), depth+1 )
 				else:
-					valueStr = line[ idx_valueStart+1:-1 ]
+					valueStr = line[ idx_valueStart+1:-1 ].lstrip()
 					typeCls = getTypeFromTypeStr( typeStr )
 					if typeCls is str or typeCls is unicode:
 						value = valueStr.replace( '\\n', '\n' ).replace( '\\r', '\r' )
