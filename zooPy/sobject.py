@@ -1,39 +1,36 @@
 
 from __future__ import with_statement
-from typeFactories import interfaceTypeFactory, doesImplement
+from cStringIO import StringIO
 
-class ListStream(object):
-	def __init__( self ):
-		self._lines = []
-	def __str__( self ):
-		return ''.join( self._lines )
+
+class RewindableStreamIter(object):
+	def __init__( self, iterable ):
+		requiredMethodNames = 'tell', 'seek', 'readline'
+		for methodName in requiredMethodNames:
+			if not hasattr( iterable, methodName ):
+				raise TypeError( "The given iterable is missing the required method %s" % methodName )
+
+		self._iterable = iterable
+		self._lineStartIdxStack = []
 	def __iter__( self ):
-		blob = ''.join( self._lines )
-		for line in blob.split( '\n' ):
-			yield line + '\n'
-	def write( self, line ):
-		self._lines.append( line )
+		iterable = self._iterable
+		lineStartIdxStack = self._lineStartIdxStack
 
+		line = True
 
-class ISerializer(object):
-	__metaclass__ = interfaceTypeFactory()
-	def serializer( self, stream, depth, value ):
-		'''
-		This method needs to handle serialization of the given value.  No return value is expected
-
-		stream must be a file-like object
-		depth is the current depth in the serialization stack
-		value is the actual instance currently being serialized
-		'''
+		while line:
+			lineStartIdxStack.append( iterable.tell() )
+			yield iterable.readline()
+	def rewind( self ):
+		self._iterable.seek( self._lineStartIdxStack.pop() )
 
 
 class SObject(object):
 
 	#these are the types supported
-	__SUPPORTED_TYPES = str, unicode, int, float, str, bool, long
-
-	#these are the user supported types - they need to be registered via the registerType method
-	__REGISTERED_TYPES = {}
+	__SUPPORTED_TYPES = str, unicode, int, float, str, bool, long, list, tuple
+	__SUPPORTED_TYPE_DICT = dict( ((t.__name__, t) for t in __SUPPORTED_TYPES) )
+	__SUPPORTED_TYPES_SET = set( __SUPPORTED_TYPES )
 
 	def __init__( self, *attrNameValuePairs, **kw ):
 
@@ -52,24 +49,37 @@ class SObject(object):
 		if nodesCompared is None:
 			nodesCompared = set()
 
+		#if we've already visited this node then it must match - otherwise we'd have returned False already
 		if self in nodesCompared:
 			return True
 
+		#add this node to the list of nodes compared already - we do this before the comparison below so that cyclical references
+		#don't turn into infinite loops
 		nodesCompared.add( self )
+
+		#compare attribute lists - attribute counts must match
 		thisAttrNames, otherAttrNames = self.getAttrs(), other.getAttrs()
 		if len( thisAttrNames ) != len( otherAttrNames ):
 			return False
 
+		#now that we know the attribute counts are the same, zip them together and iterate over them to compare names and values
 		for thisAttrName, otherAttrName in zip( thisAttrNames, otherAttrNames ):
+
+			#attribute names must match - attribute ordering is important, so the attribute names must match exactly
 			if thisAttrName != otherAttrName:
 				return False
 
+			#grab the actual attribute values
 			thisAttrValue = getattr( self, thisAttrName )
 			otherAttrValue = getattr( self, otherAttrName )
 
-			if isinstance( thisAttrValue, SObject ):
+			#if the attribute is an SObject instance, recurse - we can't rely on __eq__ because we need to pass in the nodesCompared set
+			#so we don't get infinite recursion
+			if type( thisAttrValue ) is SObject:
 				if not thisAttrValue.__eq__( otherAttrValue, nodesCompared ):
 					return False
+
+			#otherwise just compare normally
 			else:
 				if thisAttrValue != otherAttrValue:
 					return False
@@ -93,16 +103,30 @@ class SObject(object):
 			return getattr( self, item )
 
 		raise KeyError( "Object contains no such key '%s'!" % item )
+	def __contains__( self, attr ):
+		return hasattr( self, attr )
+	def __str__( self ):
+		stringBuffer = StringIO()
+		self.serialize( stringBuffer )
+
+		return stringBuffer.getvalue()
+	def _roundTrip( self ):
+		'''
+		serialized the object to a string buffer and then unserializes from the same buffer - mainly
+		useful for testing purposes
+		'''
+		stringBuffer = StringIO()
+		self.serialize( stringBuffer )
+
+		#make sure to rewind the buffer!
+		stringBuffer.seek( 0 )
+
+		return self.Unserialize( stringBuffer )
 	def getAttrs( self ):
 		'''
 		returns a tuple of attributes present on this object
 		'''
 		return tuple( self._attrNames )
-	def registerType( self, type, serializer ):
-		if not doesImplement( serializer, ISerializer ):
-			raise TypeError( "The given serializer doesn't implement the required methods for serialization!" )
-
-		self.__REGISTERED_TYPES[ type ] = serializer
 	def serialize( self, stream, depth=0, serializedObjects=None ):
 		if serializedObjects is None:
 			serializedObjects = set()
@@ -118,37 +142,41 @@ class SObject(object):
 		stream.write( '%s {\n' % id( self ) )
 		serializedObjects.add( self )
 
-		#grab data about the attributes - we need to do this first because we need string length
-		#information for serialization formatting below
-		maxAttrNameLength = 0
-		maxTypeNameLength = 0
-		attrNameValTypeAndTypeStr = []
+		supportedTypes = self.__SUPPORTED_TYPES_SET
 		for attr in self.getAttrs():
 			value = getattr( self, attr )
 			valueType = type( value )
 			valueTypeName = valueType.__name__
 
-			#escape newline characters
-			if valueType is str or valueType is unicode:
-				value = value.replace( '\n', '\\n' ).replace( '\r', '\\r' )
-
-			maxAttrNameLength = max( maxAttrNameLength, len( attr ) )
-			maxTypeNameLength = max( maxTypeNameLength, len( valueTypeName ) )
-
-			attrNameValTypeAndTypeStr.append( (attr, value, valueType, valueTypeName) )
-
-		attrNamePadding = maxAttrNameLength + maxTypeNameLength + 2
-		for attr, value, valueType, valueTypeName in attrNameValTypeAndTypeStr:
 			if valueType is SObject:
-				attrNameAndTypeStr = '%s(*)' % attr
-				stream.write( '%s%s:' % (depthPrefix, attrNameAndTypeStr.ljust( attrNamePadding )) )
+				stream.write( '%s%s(*):' % (depthPrefix, attr) )
 				value.serialize( stream, depth+1, serializedObjects )
-			elif valueType in self.__SUPPORTED_TYPES:
+			else:
 				attrNameAndTypeStr = '%s(%s)' % (attr, valueTypeName)
-				stream.write( '%s%s:%s\n' % (depthPrefix, attrNameAndTypeStr.ljust(attrNamePadding), value) )
-			elif valueType in self.__REGISTERED_TYPES:
-				serializer = self._getTypeSerializer( valueType )
-				serializer( stream, depth, value )
+				if valueType in (list, tuple):
+
+					attrLine = '%s%s:\n' % (depthPrefix, attrNameAndTypeStr)
+					stream.write( attrLine )
+
+					valueDepthPrefix = '\t' + depthPrefix
+					for v in value:
+						vType = type( v )
+						if vType is SObject:
+							stream.write( '%s-(*):' % valueDepthPrefix )
+							v.serialize( stream, depth+1, serializedObjects )
+						elif vType in supportedTypes:
+							stream.write( '%s-(%s):%s\n' % (valueDepthPrefix, vType.__name__, v) )
+						else:
+							raise TypeError( "The type %s isn't supported!" % vType.__name__ )
+				elif valueType in supportedTypes:
+
+					#escape newline characters
+					if valueType is str or valueType is unicode:
+						value = value.replace( '\n', '\\n' ).replace( '\r', '\\r' )
+
+					stream.write( '%s%s:%s\n' % (depthPrefix, attrNameAndTypeStr, value) )
+				else:
+					raise TypeError( "The type %s isn't supported!" % valueTypeName )
 
 		stream.write( '%s}\n' % depthPrefix )
 	def write( self, filepath ):
@@ -157,34 +185,65 @@ class SObject(object):
 	@classmethod
 	def Unserialize( cls, stream ):
 		def getTypeFromTypeStr( typeStr ):
-			typeCls = __builtins__.get( typeStr, None )
+			typeCls = cls.__SUPPORTED_TYPE_DICT.get( typeStr, None )
 			if typeCls is not None:
 				return typeCls
 
-			raise TypeError( "Unable to find the appropriate type for the type string %s" % typeStr )
+			if typeStr is '*':
+				return SObject
 
-		lineIter = iter( stream )
+			raise TypeError( 'Unable to find the appropriate type for the type string "%s"' % typeStr )
+
+		lineIter = RewindableStreamIter( stream )
 		objectStack = []
-		lineStack = []
 
 		serializedIdToObjDict = {}  #track objects
-
-		def getLineDepth( line ):
-			depth = 0
-			while line[depth] == '\t':
-				depth += 1
-
-			return depth
 
 		def findDigits( line ):
 			idx = 0
 			isdigit = str.isdigit
-			while isdigit( line[idx] ):
+			for char in line:
+				if not isdigit( char ):
+					break
+
 				idx += 1
 
 			return line[ :idx ]
 
-		def objectParser( line, depth=0 ):
+		def getAttrDataFromLine( line ):
+			idx_parenStart = line.find( '(' )
+			idx_parenEnd = line.find( ')', idx_parenStart )
+			idx_valueStart = line.find( ':', idx_parenEnd )
+
+			attrName = line[ :idx_parenStart ].strip()
+			typeStr = line[ idx_parenStart+1:idx_parenEnd ].strip()
+			valueStr = line[ idx_valueStart+1:-1 ].lstrip()
+
+			return attrName, typeStr, valueStr
+
+		def listParser( line, depth, isTuple=False ):
+			value = []
+			for line in lineIter:
+				if not line:
+					continue
+
+				line = line.lstrip()
+				if line.startswith( '-' ):
+					_, typeStr, valueStr = getAttrDataFromLine( line )
+					typeCls = getTypeFromTypeStr( typeStr )
+					if typeCls is str or typeCls is unicode:
+						value.append( valueStr.replace( '\\n', '\n' ).replace( '\\r', '\r' ) )
+					elif typeCls is SObject:
+						value.append( objectParser( valueStr, depth+1 ) )
+					else:
+						value.append( typeCls( valueStr ) )
+
+				#we're done!
+				else:
+					lineIter.rewind()
+					return tuple( value ) if isTuple else value
+
+		def objectParser( line, depth ):
 			serializedId = int( findDigits( line ) )
 
 			#check to see if the id has already been unserialized
@@ -203,23 +262,20 @@ class SObject(object):
 				if not line:
 					continue
 
-				if line[depth:].strip() == '}':
+				if line.strip() == '}':
 					return objectStack.pop()
 
-				idx_parenStart = line.find( '(' )
-				idx_parenEnd = line.find( ')', idx_parenStart )
-				idx_valueStart = line.find( ':', idx_parenEnd )
-
-				attrName = line[ depth:idx_parenStart ].strip()
-				typeStr = line[ idx_parenStart+1:idx_parenEnd ].strip()
-
+				attrName, typeStr, valueStr = getAttrDataFromLine( line )
 				if typeStr == '*':
-					value = objectParser( line[idx_valueStart+1:].lstrip(), depth+1 )
+					value = objectParser( valueStr, depth+1 )
 				else:
-					valueStr = line[ idx_valueStart+1:-1 ].lstrip()
 					typeCls = getTypeFromTypeStr( typeStr )
 					if typeCls is str or typeCls is unicode:
 						value = valueStr.replace( '\\n', '\n' ).replace( '\\r', '\r' )
+					elif typeCls is list:
+						value = listParser( line, depth )
+					elif typeCls is tuple:
+						value = listParser( line, depth, True )
 					else:
 						value = typeCls( valueStr )
 
@@ -228,7 +284,7 @@ class SObject(object):
 			return objectStack.pop()
 
 		for line in lineIter:
-			return objectParser( line )
+			return objectParser( line, 0 )
 	@classmethod
 	def Load( cls, filepath ):
 		with open( filepath ) as fStream:
@@ -244,10 +300,25 @@ class SObject(object):
 
 		obj = cls()
 		dictObjectMap[ theDictId ] = obj
+		supportedTypes = cls.__SUPPORTED_TYPES_SET
 		for key, value in theDict.iteritems():
-			if isinstance( value, dict ):
-				valueId = id( value )
-				value = dictObjectMap[ valueId ] = cls.FromDict( value, dictObjectMap )
+			valueType = type( value )
+
+			if valueType is dict:
+				value = dictObjectMap[ id( value ) ] = cls.FromDict( value, dictObjectMap )
+			elif valueType is list or valueType is tuple:
+				isTuple = valueType is tuple
+				if isTuple:
+					value = list( value )
+
+				for n, v in enumerate( value ):
+					if type( v ) is dict:
+						value[n] = dictObjectMap[ id( v ) ] = cls.FromDict( v, dictObjectMap )
+
+				if isTuple:
+					value = tuple( value )
+			elif not valueType in supportedTypes:
+				raise TypeError( "The type %s isn't supported!" % valueType.__name__ )
 
 			setattr( obj, key, value )
 
@@ -268,7 +339,7 @@ class SObject(object):
 
 		return thisDict
 
-	#the following provide dictionary-like functionality
+	#the following provide the dictionary interface
 	def iteritems( self ):
 		for attr in self.getAttrs():
 			yield attr, getattr( self, attr )
