@@ -1,6 +1,8 @@
 
 from __future__ import with_statement
+
 from cStringIO import StringIO
+from functools import partial
 
 
 class RewindableStreamIter(object):
@@ -20,24 +22,60 @@ class RewindableStreamIter(object):
 
 		while line:
 			lineStartIdxStack.append( iterable.tell() )
-			yield iterable.readline()
+			line = iterable.readline()
+			if not line:
+				raise StopIteration
+
+			yield line
 	def rewind( self ):
 		self._iterable.seek( self._lineStartIdxStack.pop() )
+
+
+def getWhitespacePrefixLen( line, prefixType='\t' ):
+	count = 0
+	if not line:
+		return count
+
+	while line[count] == prefixType:
+		count += 1
+
+	return count
+
+
+def findDigits( line ):
+	idx = 0
+	isdigit = str.isdigit
+	for char in line:
+		if not isdigit( char ):
+			break
+
+		idx += 1
+
+	return line[ :idx ]
 
 
 class SObject(object):
 
 	#these are the types supported
-	__SUPPORTED_TYPES = str, unicode, int, float, str, bool, long, list, tuple
+	__SUPPORTED_TYPES = str, unicode, int, float, str, bool, long, list, tuple, dict, type(None)
 	__SUPPORTED_TYPE_DICT = dict( ((t.__name__, t) for t in __SUPPORTED_TYPES) )
 	__SUPPORTED_TYPES_SET = set( __SUPPORTED_TYPES )
+	__SUPPORTED_KEY_TYPES = bool, int, long, float, str, unicode
+	__SUPPORTED_TYPES_SET_SET = set( __SUPPORTED_KEY_TYPES )
 
-	def __init__( self, *attrNameValuePairs, **kw ):
+	def __init__( self, *orderedAttrValuePairs, **unorderedAttrValuePairs ):
+		'''
+		you can initialize with either a list of 2-tuples if attribute ordering is important, or you can just provide
+		key-value pairs if ordering is not important
+		'''
 
 		#for preserving attribute ordering
 		self.__dict__[ '_attrNames' ] = []
 
-		for attrName, attrValue in attrNameValuePairs:
+		for attrName, attrValue in orderedAttrValuePairs:
+			setattr( self, attrName, attrValue )
+
+		for attrName, attrValue in unorderedAttrValuePairs.iteritems():
 			setattr( self, attrName, attrValue )
 	def __hash__( self ):
 		return id( self )
@@ -121,13 +159,20 @@ class SObject(object):
 		#make sure to rewind the buffer!
 		stringBuffer.seek( 0 )
 
-		return self.Unserialize( stringBuffer )
+		return self.UnserializeStream( stringBuffer )
+	@classmethod
+	def IsValueSupported( cls, value ):
+		'''
+		returns whether the given value is supported by SObject.  Values that aren't supported will raise a TypeError when
+		they get set as a value
+		'''
+		return type( value ) in cls.__SUPPORTED_TYPES_SET
 	def getAttrs( self ):
 		'''
 		returns a tuple of attributes present on this object
 		'''
 		return tuple( self._attrNames )
-	def serialize( self, stream, depth=0, serializedObjects=None ):
+	def serialize( self, stream, depth=1, serializedObjects=None ):
 		if serializedObjects is None:
 			serializedObjects = set()
 
@@ -139,51 +184,72 @@ class SObject(object):
 			stream.write( '%s\n' % id( self ) )
 			return
 
-		stream.write( '%s {\n' % id( self ) )
+		stream.write( '%s:\n' % id( self ) )
 		serializedObjects.add( self )
 
+		def serializeContainer( value, valueType, depth ):
+			stream.write( '\n' )
+			depthPrefix = '\t' * depth
+			for v in value:
+				vType = type( v )
+				if vType is SObject:
+					stream.write( '%s(*):' % depthPrefix )
+					v.serialize( stream, depth+1, serializedObjects )
+				elif vType in supportedTypes:
+					stream.write( '%s(%s):' % (depthPrefix, vType.__name__) )
+					valueSerializerMap.get( vType, defaultSerializer )( v, vType, depth+1 )
+				else:
+					raise TypeError( "The type %s isn't supported!" % vType.__name__ )
+
+		def serializeDict( value, valueType, depth ):
+			stream.write( '\n' )
+			depthPrefix = '\t' * depth
+			for k, v in value.iteritems():
+				kType = type( k )
+				if kType not in supportedKeyTypes:
+					raise TypeError( '''The dict key type "%s" isn't supported!''' % kType )
+
+				kStr = '(%s)%s' % (kType.__name__, k)
+				vType = type( v )
+				if vType is SObject:
+					stream.write( '%s%s(*):' % (depthPrefix, kStr) )
+					v.serialize( stream, depth+1, serializedObjects )
+				elif vType in supportedTypes:
+					stream.write( '%s%s(%s):' % (depthPrefix, kStr, vType.__name__) )
+					valueSerializerMap.get( vType, defaultSerializer )( v, vType, depth+1 )
+				else:
+					raise TypeError( "The type %s isn't supported!" % vType.__name__ )
+
+		def defaultSerializer( value, valueType, depth ):
+
+			#escape newline characters
+			if valueType is str or valueType is unicode:
+				value = value.replace( '\n', '\\n' ).replace( '\r', '\\r' )
+
+			stream.write( '%s\n' % value )
+
+		valueSerializerMap = { list: serializeContainer, tuple: serializeContainer, dict: serializeDict }
 		supportedTypes = self.__SUPPORTED_TYPES_SET
+		supportedKeyTypes = self.__SUPPORTED_TYPES_SET
+
 		for attr in self.getAttrs():
 			value = getattr( self, attr )
 			valueType = type( value )
-			valueTypeName = valueType.__name__
 
 			if valueType is SObject:
 				stream.write( '%s%s(*):' % (depthPrefix, attr) )
 				value.serialize( stream, depth+1, serializedObjects )
 			else:
-				attrNameAndTypeStr = '%s(%s)' % (attr, valueTypeName)
-				if valueType in (list, tuple):
-
-					attrLine = '%s%s:\n' % (depthPrefix, attrNameAndTypeStr)
-					stream.write( attrLine )
-
-					valueDepthPrefix = '\t' + depthPrefix
-					for v in value:
-						vType = type( v )
-						if vType is SObject:
-							stream.write( '%s-(*):' % valueDepthPrefix )
-							v.serialize( stream, depth+1, serializedObjects )
-						elif vType in supportedTypes:
-							stream.write( '%s-(%s):%s\n' % (valueDepthPrefix, vType.__name__, v) )
-						else:
-							raise TypeError( "The type %s isn't supported!" % vType.__name__ )
-				elif valueType in supportedTypes:
-
-					#escape newline characters
-					if valueType is str or valueType is unicode:
-						value = value.replace( '\n', '\\n' ).replace( '\r', '\\r' )
-
-					stream.write( '%s%s:%s\n' % (depthPrefix, attrNameAndTypeStr, value) )
+				stream.write( '%s%s(%s):' % (depthPrefix, attr, valueType.__name__) )
+				if valueType in supportedTypes:
+					valueSerializerMap.get( valueType, defaultSerializer )( value, valueType, depth+1 )
 				else:
 					raise TypeError( "The type %s isn't supported!" % valueTypeName )
-
-		stream.write( '%s}\n' % depthPrefix )
-	def write( self, filepath ):
-		with open( filepath, 'w' ) as fStream:
-			self.serialize( fStream )
 	@classmethod
-	def Unserialize( cls, stream ):
+	def UnserializeStream( cls, stream ):
+		'''
+		expects a file-like object containing the serialized data to parse
+		'''
 		def getTypeFromTypeStr( typeStr ):
 			typeCls = cls.__SUPPORTED_TYPE_DICT.get( typeStr, None )
 			if typeCls is not None:
@@ -199,17 +265,6 @@ class SObject(object):
 
 		serializedIdToObjDict = {}  #track objects
 
-		def findDigits( line ):
-			idx = 0
-			isdigit = str.isdigit
-			for char in line:
-				if not isdigit( char ):
-					break
-
-				idx += 1
-
-			return line[ :idx ]
-
 		def getAttrDataFromLine( line ):
 			idx_parenStart = line.find( '(' )
 			idx_parenEnd = line.find( ')', idx_parenStart )
@@ -221,74 +276,115 @@ class SObject(object):
 
 			return attrName, typeStr, valueStr
 
-		def listParser( line, depth, isTuple=False ):
+		def getAttrDataFromDictLine( line ):
+			idx_parenEnd = line.find( ')' )
+			keyTypeStr = line[1:idx_parenEnd]
+			keyTypeCls = getTypeFromTypeStr( keyTypeStr )
+
+			keyValueStr, typeStr, valueStr = getAttrDataFromLine( line[idx_parenEnd+1:] )
+			key = keyTypeCls( keyValueStr )
+
+			return key, typeStr, valueStr
+
+		def listParser( valueStr, typeCls, depth, isTuple=False ):
 			value = []
 			for line in lineIter:
-				if not line:
-					continue
-
-				line = line.lstrip()
-				if line.startswith( '-' ):
-					_, typeStr, valueStr = getAttrDataFromLine( line )
-					typeCls = getTypeFromTypeStr( typeStr )
-					if typeCls is str or typeCls is unicode:
-						value.append( valueStr.replace( '\\n', '\n' ).replace( '\\r', '\r' ) )
-					elif typeCls is SObject:
-						value.append( objectParser( valueStr, depth+1 ) )
-					else:
-						value.append( typeCls( valueStr ) )
-
-				#we're done!
-				else:
+				lineDepth = getWhitespacePrefixLen( line )
+				if lineDepth != depth:
 					lineIter.rewind()
 					return tuple( value ) if isTuple else value
 
-		def objectParser( line, depth ):
+				line = line[ lineDepth: ]
+				assert not line[0].isspace()
+
+				_, typeStr, valueStr = getAttrDataFromLine( line )
+				if typeStr == '*':
+					value.append( objectParser( valueStr, depth+1 ) )
+				else:
+					typeCls = getTypeFromTypeStr( typeStr )
+					v = valueUnserializerMap.get( typeCls, defaultParser )( valueStr, typeCls, depth+1 )
+					value.append( v )
+
+			return value
+
+		def dictParser( valueStr, typeCls, depth ):
+			value = {}
+			for line in lineIter:
+				lineDepth = getWhitespacePrefixLen( line )
+				if lineDepth != depth:
+					lineIter.rewind()
+					return value
+
+				line = line[ lineDepth: ]
+				assert not line[0].isspace()
+
+				key, typeStr, valueStr = getAttrDataFromDictLine( line )
+				typeCls = getTypeFromTypeStr( typeStr )
+				if typeCls is SObject:
+					value[ key ] = objectParser( valueStr, depth+1 )
+				else:
+					value[ key ] = valueUnserializerMap.get( typeCls, defaultParser )( valueStr, typeCls, depth+1 )
+
+			return value
+
+		def noneParser( valueStr, typeCls, depth ):
+			return None
+
+		def defaultParser( valueStr, typeCls, depth ):
+			if typeCls is str or typeCls is unicode:
+				valueStr = valueStr.replace( '\\n', '\n' ).replace( '\\r', '\r' )
+
+			return typeCls( valueStr )
+
+		valueUnserializerMap = { list: listParser, tuple: partial( listParser, isTuple=True ), dict: dictParser, type(None): noneParser }
+
+		def objectParser( line, depth=1 ):
 			serializedId = int( findDigits( line ) )
 
 			#check to see if the id has already been unserialized
 			if serializedId in serializedIdToObjDict:
 				return serializedIdToObjDict[ serializedId ]
 
-			#otherwise, construct a new object
-			newObj = SObject()
+			#otherwise, construct a new object and track it
+			newObj = serializedIdToObjDict[ serializedId ] = SObject()
 
 			#append the new object to the stack
 			objectStack.append( newObj )
 
-			#track the object
-			serializedIdToObjDict[ serializedId ] = newObj
+			hasAttrs = False
 			for line in lineIter:
-				if not line:
-					continue
-
-				if line.strip() == '}':
+				lineDepth = getWhitespacePrefixLen( line )
+				if lineDepth != depth:
+					if hasAttrs: lineIter.rewind()
 					return objectStack.pop()
 
+				hasAttrs = True
 				attrName, typeStr, valueStr = getAttrDataFromLine( line )
 				if typeStr == '*':
 					value = objectParser( valueStr, depth+1 )
 				else:
 					typeCls = getTypeFromTypeStr( typeStr )
-					if typeCls is str or typeCls is unicode:
-						value = valueStr.replace( '\\n', '\n' ).replace( '\\r', '\r' )
-					elif typeCls is list:
-						value = listParser( line, depth )
-					elif typeCls is tuple:
-						value = listParser( line, depth, True )
-					else:
-						value = typeCls( valueStr )
+					value = valueUnserializerMap.get( typeCls, defaultParser )( valueStr, typeCls, depth+1 )
 
 				setattr( objectStack[-1], attrName, value )
 
 			return objectStack.pop()
 
 		for line in lineIter:
-			return objectParser( line, 0 )
+			return objectParser( line )
+	@classmethod
+	def Unserialize( cls, theStr ):
+		if not isinstance( theStr, basestring ):
+			raise TypeError( "Need to pass in a string object!" )
+
+		return cls.UnserializeStream( StringIO( theStr ) )
+	def write( self, filepath ):
+		with open( filepath, 'w' ) as fStream:
+			self.serialize( fStream )
 	@classmethod
 	def Load( cls, filepath ):
 		with open( filepath ) as fStream:
-			return self.Unserialize( fStream )
+			return cls.UnserializeStream( fStream )
 	@classmethod
 	def FromDict( cls, theDict, dictObjectMap=None ):
 		if dictObjectMap is None:
@@ -353,6 +449,71 @@ class SObject(object):
 			yield getattr( self, attr )
 	def values( self ):
 		return self.itervalues()
+
+
+def pickleToSObject( obj, pickledObjDict=None ):
+	'''
+	attempts to convert the given instance into an sobject.  This will suck all instance attributes from the object and put
+	them on an sobject instance.  You can use unpickleFromSObject to turn it back into an instance
+	'''
+	if pickledObjDict is None:
+		pickledObjDict = {}
+
+	objId = id( obj )
+	if objId in pickledObjDict:
+		return pickledObjDict[ objId ]
+
+	if type( obj ) is SObject:
+		pickledObjDict[ objId ] = obj
+
+		return obj
+
+	sobject = pickledObjDict[ objId ] = SObject()
+	for attrName, attrValue in obj.__dict__.iteritems():
+		if not SObject.IsValueSupported( attrValue ):
+			attrValue = pickleToSObject( attrValue )
+
+		setattr( sobject, attrName, attrValue )
+
+	for typeCls in (str, int, long, float, unicode, bool, list, tuple, dict):
+		if isinstance( obj, typeCls ):
+			sobject.__instance_value_sobject = typeCls( obj )
+			break
+
+	return sobject
+
+
+def unpickleFromSObject( sobject, instanceCls ):
+	'''
+	unpickles a pickled instance
+
+	example:
+	obj = SomeCls()
+	sobj = pickleToSObject( obj )
+	objCopy = unpickleFromSObject( sobj, SomeCls )
+	'''
+	base = None
+	hasBeenConstructed = False
+	for typeCls in (str, int, long, float, unicode, bool, list, tuple, dict):
+		if issubclass( instanceCls, typeCls ):
+			base = typeCls
+			break
+
+	if base is None:
+		base = object
+
+	cls = type( 'Temp', (base,), {} )
+	try:
+		new = cls( getattr( sobject, '__instance_value_sobject'  ) )
+	except AttributeError:
+		new = cls()
+
+	new.__class__ = instanceCls
+
+	for attr, value in sobject.iteritems():
+		new.__dict__[ attr ] = value
+
+	return new
 
 
 #end
